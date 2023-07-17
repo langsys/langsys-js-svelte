@@ -1,16 +1,15 @@
 # Langsys SDK - Svelte
+
+Langsys revolutionizes localization for apps with easy to integrate, realtime, continuous translations. Read more about Langsys Translation Manager [at the website](https://Langsys.dev/).
+
+Integrate the Langsys Translation Manager into your Svelte ***(not SvelteKit)*** applications using this SDK.
+
 [![GitHub Release](https://img.shields.io/github/release/langsys/langsys-js-svelte.svg?style=flat)]()
 [![GitHub last commit](https://img.shields.io/github/last-commit/langsys/langsys-js-svelte.svg?style=flat)]()
 [![GitHub pull requests](https://img.shields.io/github/issues-pr/cdnjs/cdnjs.svg?style=flat)]()
 [![PR's Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat)](http://makeapullrequest.com)
 [![NPM Version](https://img.shields.io/npm/v/npm.svg?style=flat)]()
 [![NPM License](https://img.shields.io/npm/l/all-contributors.svg?style=flat)](https://github.com/langsys/langsys-js-svelte/blob/master/LICENSE)
-
-
-Integrate the Langsys Translation Manager into your Svelte ***(not SvelteKit)*** applications using this SDK.
-
-Langsys revolutionizes localization for apps with easy to integrate, realtime, continuous translations. Read more about Langsys Translation Manager [at the website](https://Langsys.dev/).
-
 
 ## Creating a Langsys project
 
