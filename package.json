@@ -1,6 +1,6 @@
 {
     "name": "langsys-js-svelte",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "author": "Langsys",
     "license": "MIT",
     "homepage": "https://github.com/langsys/langsys-js-svelte",
@@ -35,7 +35,7 @@
         "!dist/**/*.spec.*"
     ],
     "peerDependencies": {
-        "svelte": "^3.53.0"
+        "svelte": "^3.3.0 || ^4.0.0"
     },
     "devDependencies": {
         "@sveltejs/adapter-auto": "^2.0.0",
