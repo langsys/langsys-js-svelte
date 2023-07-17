@@ -79,13 +79,13 @@ For a plain Svelte app, this might be in your app.svelte component onMount call
                 />
                 <Card style="margin: auto auto; max-width: 400px;">
                     <CardContent>
-                        {#if appinitError === false}
+                        {#if appInitError === false}
                             <Loader />
                         {:else}
                             <div class="is-notification is-danger is-light">
                                 <h5 class="mt-0 has-text-dark">Error during app init</h5>
-                                <p class="has-text-weight-bold">[{appinitError.code}] {appinitError.message}</p>
-                                <p class="is-italic has-text-dark">{appinitError.hint}</p>
+                                <p class="has-text-weight-bold">[{appInitError.code}] {appInitError.message}</p>
+                                <p class="is-italic has-text-dark">{appInitError.hint}</p>
                             </div>
                         {/if}
                     </CardContent>
