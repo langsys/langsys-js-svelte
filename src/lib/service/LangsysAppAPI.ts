@@ -3,6 +3,7 @@ import type { HttpResponse, ResponseObject } from '../interface/api.js';
 import { writable } from 'svelte/store';
 
 class LangsysAppAPIClass {
+    private apiurl = 'https://api.langsys.dev/api';
     private config: iLangsysConfig;
     headers: {
         'Content-Type': 'application/json; charset=utf-8';
@@ -46,7 +47,7 @@ class LangsysAppAPIClass {
 
     public async validate(config: iLangsysConfig) {
         this.setup(config);
-        const response = await this.get('authorize-project/[projectid]');
+        return await this.get('authorize-project/[projectid]');
     }
 
     public async getTranslations(locale: string) {
@@ -82,7 +83,7 @@ class LangsysAppAPIClass {
             let querystring = method === 'GET' ? new URLSearchParams(data).toString() : '';
             if (querystring) querystring = '?' + querystring;
 
-            const query = await fetch(`${this.config.url}/${path}${querystring}`, {
+            const query = await fetch(`${this.apiurl}/${path}${querystring}`, {
                 headers: this.headers,
                 method,
                 body: method === 'GET' ? undefined : JSON.stringify(data),
@@ -104,7 +105,7 @@ class LangsysAppAPIClass {
         } catch (err) {
             // messenger.alert("API Error", "Error communicating with API Server.");
             window.console.error('LangsysAppAPI Error');
-            window.console.error(err, `${this.config.url}/${path}`);
+            window.console.error(err, `${this.apiurl}/${path}`);
             return this.response({ status: false });
         }
     }
