@@ -4,7 +4,7 @@ import { writable } from 'svelte/store';
 
 class LangsysAppAPIClass {
     private apiurl = 'https://api.langsys.dev/api';
-    private config: iLangsysConfig;
+    public config: iLangsysConfig;
     headers: {
         'Content-Type': 'application/json; charset=utf-8';
         'x-Authorization': string;
@@ -26,7 +26,7 @@ class LangsysAppAPIClass {
         };
     }
 
-    private setup(config: iLangsysConfig) {
+    public setup(config: iLangsysConfig) {
         if (config?.key && config?.projectid) {
             this.config = config;
             this.headers['x-Authorization'] = this.config.key;
@@ -42,7 +42,7 @@ class LangsysAppAPIClass {
      * @returns
      */
     private response(response: ResponseObject): ResponseObject {
-        return response;
+        return response as ResponseObject;
     }
 
     public async validate(config: iLangsysConfig) {

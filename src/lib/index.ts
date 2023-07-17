@@ -1,5 +1,6 @@
 // Reexport your entry components here
 import type { iLangsysConfig } from './interface/config.js';
+import type { ResponseObject } from './interface/api.js';
 import LangsysAppAPI from './service/LangsysAppAPI.js';
 import Translations from './js/Translations.js';
 import { writable, type Writable } from 'svelte/store';
@@ -25,8 +26,9 @@ class LangsysAppClass {
      * @param key The API key associated to the configured projectid
      * @param UserLocaleStore A svelte-store Writable string with the user-selected locale
      * @param [baseLocale='en'] The base language/locale this app uses. ie: what language is put into the code?
+     * @param [debug=false] {boolean} Set true to enable console messages
      */
-    public async init(projectid: number, key: string, UserLocaleStore: Writable<string>, baseLocale = 'en') {
+    public async init(projectid: number, key: string, UserLocaleStore: Writable<string>, baseLocale = 'en', debug = false): Promise<ResponseObject> {
         if (!projectid) alert('LangsysApp.init missing projectid in configuration object!');
         else if (!key) alert('LangsysApp.init missing API key in configuration object!');
         else if (!UserLocaleStore?.subscribe) alert("LangsysApp.init missing UserLocaleStore, a svelte-store for the user's selected locale.");
@@ -36,11 +38,12 @@ class LangsysAppClass {
                 key,
                 sUserLocale: UserLocaleStore,
                 baseLocale: baseLocale,
+                debug,
             };
-        }
 
-        // initialize Translation methods
-        this.Translations = new Translations(this.config);
+            // initialize Translation methods
+            this.Translations.setup(this.config);
+        }
 
         // validate api key & projectid config
         return await LangsysAppAPI.validate(this.config);

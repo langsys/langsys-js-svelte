@@ -33,8 +33,8 @@ For a plain Svelte app, this might be in your app.svelte component onMount call
 ```html
 <script lang="ts">
     // ...
-    import LangsysApp from 'langsys-js-svelte';
-    import sUserLocale from '../stores/UserLocale';
+    import { LangsysApp } from 'langsys-js-svelte';
+    import sUserLocale from '../stores/UserLocale'; // wherever your store for your user locale is
     // ...
 
     let appInitError = false;
@@ -46,6 +46,7 @@ For a plain Svelte app, this might be in your app.svelte component onMount call
          * @param key The API key associated to the configured projectid
          * @param UserLocaleStore A svelte-store Writable string with the user-selected locale
          * @param [baseLocale='en'] The base language/locale this app uses. ie: what language is put into the code?
+         * @param [debug=false] {boolean} Set true to enable console messages
          */
         LangsysApp.init(env.projectid, env.apikey, sUserLocale, 'en').then((response) => {
             if (response.status) {
@@ -99,7 +100,7 @@ For a plain Svelte app, this might be in your app.svelte component onMount call
     {/if}
 </App>
 ```
-![image of integration code error](https://p-GKFQz2n.b2.n0.cdn.getcloudapp.com/items/9ZuymoAe/c1b84ac3-f07c-4539-bd84-24467d53caf6.jpg?v=b97a8771f23d926be947256ad8678d82)
+![image of integration code error](https://p-gkfqz2n.b2.n0.cdn.getcloudapp.com/items/9ZuymoAe/c1b84ac3-f07c-4539-bd84-24467d53caf6.jpg?source=viewer&v=214198bfd9215c42c09ad0427465f4fa)
 
 ### Implementation
 
