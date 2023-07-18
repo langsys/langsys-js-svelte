@@ -22,13 +22,13 @@ class LangsysAppClass {
 
     /**
      * Must be called once during app initialization before anything else!
-     * @param projectid The ID of the project created in Langsys for this app
+     * @param projectid The ID (UUID) of the project created in Langsys for this app
      * @param key The API key associated to the configured projectid
      * @param UserLocaleStore A svelte-store Writable string with the user-selected locale
      * @param [baseLocale='en'] The base language/locale this app uses. ie: what language is put into the code?
      * @param [debug=false] {boolean} Set true to enable console messages
      */
-    public async init(projectid: number, key: string, UserLocaleStore: Writable<string>, baseLocale = 'en', debug = false): Promise<ResponseObject> {
+    public async init(projectid: string, key: string, UserLocaleStore: Writable<string>, baseLocale = 'en', debug = false): Promise<ResponseObject> {
         if (!projectid) alert('LangsysApp.init missing projectid in configuration object!');
         else if (!key) alert('LangsysApp.init missing API key in configuration object!');
         else if (!UserLocaleStore?.subscribe) alert("LangsysApp.init missing UserLocaleStore, a svelte-store for the user's selected locale.");
