@@ -2,9 +2,9 @@ import type { Writable } from 'svelte/store';
 
 export interface iLangsysConfig {
     /**
-     * The ID of the project created in Langsys for this app
+     * The ID (UUID) of the project created in Langsys for this app
      */
-    projectid: number;
+    projectid: string;
     /**
      * The API key associated with the configured projectid
      */

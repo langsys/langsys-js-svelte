@@ -12,7 +12,7 @@ class LangsysAppClass {
 
     constructor() {
         this.config = {
-            projectid: 0,
+            projectid: '',
             key: '',
             sUserLocale: writable(''),
             baseLocale: 'en',

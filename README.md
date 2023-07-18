@@ -41,7 +41,7 @@ For a plain Svelte app, this might be in your app.svelte component onMount call
     onMount(() => {
         /**
          * Must be called once during app initialization before anything else!
-         * @param projectid The ID of the project created in Langsys for this app
+         * @param projectid The ID (UUID) of the project created in Langsys for this app
          * @param key The API key associated to the configured projectid
          * @param UserLocaleStore A svelte-store Writable string with the user-selected locale
          * @param [baseLocale='en'] The base language/locale this app uses. ie: what language is put into the code?
