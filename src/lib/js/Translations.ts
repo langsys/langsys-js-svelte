@@ -7,7 +7,7 @@ import type { iTranslations } from '../interface/translations.js';
 import type { ResponseObject } from '../interface/api.js';
 
 interface iTokenUpdate {
-    projectid: number;
+    projectid: string;
     category: string;
     token: string;
 }
@@ -155,6 +155,7 @@ class Translations {
                     if (response.errors) {
                         this.debug.log('TOKEN UPDATE FAIL', this.missingTokens);
                         this.debug.error('Error updating project tokens', response.errors);
+                        return false;
                     }
                 }
 

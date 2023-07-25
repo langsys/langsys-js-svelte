@@ -3,7 +3,27 @@ import type { iLangsysConfig } from './interface/config.js';
 import type { ResponseObject } from './interface/api.js';
 import LangsysAppAPI from './service/LangsysAppAPI.js';
 import Translations from './js/Translations.js';
-import { writable, type Writable } from 'svelte/store';
+import { get, writable, type Writable } from 'svelte/store';
+
+interface iLocaleFlat {
+    code: string;
+    title: string;
+}
+interface iLocaleData {
+    /** the locale code */
+    code: string;
+    /** full locale name */
+    locale_name: string;
+    /** language name only */
+    lang_name: string;
+}
+
+type LanguageName = string;
+
+/**
+ * { LanguageName: [{code,title},{code,title}] }
+ */
+type iLocaleDefault = Record<LanguageName, iLocaleFlat>;
 
 class LangsysAppClass {
     private config: iLangsysConfig;
@@ -47,6 +67,30 @@ class LangsysAppClass {
 
         // validate api key & projectid config
         return await LangsysAppAPI.validate(this.config);
+    }
+
+    /**
+     * Get list of all locale codes and names localized to inLocale or if not defined, sUserLocale, or if not defined, baseLocale
+     * sUserLocale and baseLocale are both defined during LangsysApp.init()
+     * @param [format='categorized'] 'categorized'|'flat'|'data' different data formats as documented
+     * @param inLocale define which language to translate the results to
+     * @returns iLocaleDefault | iLocaleFlat[] | iLocaleData[]
+     */
+    public async getLocales(format: '' | 'flat' | 'data' = '', inLocale?: string) {
+        const locale = inLocale || get(this.config.sUserLocale) || this.config.baseLocale;
+        const route = `locales/${locale}/${format}`;
+        const response = await LangsysAppAPI.get(route);
+
+        if (response.errors || !response.status) alert('LangsysApp.getLocales failed: ' + route);
+
+        switch (format) {
+            case 'flat':
+                return response.data as iLocaleFlat[];
+            case 'data':
+                return response.data as iLocaleData[];
+            default:
+                return response.data as iLocaleDefault;
+        }
     }
 }
 
