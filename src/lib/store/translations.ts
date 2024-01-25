@@ -1,11 +1,12 @@
-import type { iTranslations } from '$lib/interface/translations.js';
+import type { iCategories } from '$lib/interface/translations.js';
 import idbStore from '../js/idbStore.js';
 
 const initialValue = {
-    // example
-    Home: 'Inicio',
+    __uncategorized__: {
+        __category__: '__uncategorized__',
+    },
 };
 
-export const sTranslations = idbStore<iTranslations>('translations', initialValue);
+export const sTranslations = idbStore<iCategories>('translations', initialValue);
 
 export default sTranslations;

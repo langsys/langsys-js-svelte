@@ -3,32 +3,19 @@ import type { iLangsysConfig } from './interface/config.js';
 import type { ResponseObject } from './interface/api.js';
 import LangsysAppAPI from './service/LangsysAppAPI.js';
 import Translations from './js/Translations.js';
+// import Translate from '../components/Translate.svelte';
+// import { ComponentType, SvelteComponent } from 'svelte';
 import { get, writable, type Writable } from 'svelte/store';
+import type { iLocaleFlat, iLocaleData, iLocaleDefault } from './interface/locales.js';
 
-interface iLocaleFlat {
-    code: string;
-    title: string;
-}
-interface iLocaleData {
-    /** the locale code */
-    code: string;
-    /** full locale name */
-    locale_name: string;
-    /** language name only */
-    lang_name: string;
-}
-
-type LanguageName = string;
-
-/**
- * { LanguageName: [{code,title},{code,title}] }
- */
-type iLocaleDefault = Record<LanguageName, iLocaleFlat>;
+export type { iLocaleFlat, iLocaleData, iLocaleDefault, iLanguageName } from './interface/locales.js';
 
 class LangsysAppClass {
     private config: iLangsysConfig;
 
     public Translations: Translations;
+
+    private locales: iLocaleData[];
 
     constructor() {
         this.config = {
@@ -38,6 +25,13 @@ class LangsysAppClass {
             baseLocale: 'en',
         };
         this.Translations = new Translations(this.config);
+        this.locales = [];
+    }
+
+    public async refresh() {
+        const locale = get(this.config.sUserLocale);
+        this.locales = [];
+        return this.Translations.change(locale, true);
     }
 
     /**
@@ -78,7 +72,7 @@ class LangsysAppClass {
      */
     public async getLocales(format: '' | 'flat' | 'data' = '', inLocale?: string) {
         const locale = inLocale || get(this.config.sUserLocale) || this.config.baseLocale;
-        const route = `locales/${locale}/${format}`;
+        const route = `locales/${locale}` + (format ? `/${format}` : '');
         const response = await LangsysAppAPI.get(route);
 
         if (response.errors || !response.status) alert('LangsysApp.getLocales failed: ' + route);
@@ -91,6 +85,25 @@ class LangsysAppClass {
             default:
                 return response.data as iLocaleDefault;
         }
+    }
+
+    public async getLanguageName(forLocale: string, shortName = false, inLocale?: string) {
+        if (!forLocale) return '';
+        if (!this.locales.length) this.locales = (await this.getLocales('data', inLocale)) as iLocaleData[];
+
+        let name = '';
+        this.locales.every((locale) => {
+            // window.console.log(`checking ${forLocale} in ${locale.code}`, locale);
+            if (locale.code === forLocale) {
+                name = shortName ? locale.lang_name : locale.locale_name;
+                return false;
+            }
+            return true;
+        });
+
+        if (!name) window.console.warn('getLanguageName failed to match', forLocale);
+
+        return name;
     }
 }
 
@@ -111,3 +124,7 @@ export const LangsysApp = new LangsysAppClass();
  * Every matching content string & category will only ever be translated once.
  */
 export const { _ } = LangsysApp.Translations;
+
+// export default Translate__SvelteComponent_;
+
+export { default as Translate } from './components/Translate.svelte';

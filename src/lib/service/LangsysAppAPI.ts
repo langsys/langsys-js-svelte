@@ -51,7 +51,8 @@ class LangsysAppAPIClass {
     }
 
     public async getTranslations(locale: string) {
-        return await this.get(`projects/[projectid]/translations/${locale}`);
+        // return await this.get(`projects/[projectid]/translations/${locale}`);
+        return await this.get(`translations/${locale}/[projectid]`);
     }
 
     public async post(path: string, data = {}) {
