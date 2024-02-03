@@ -7,7 +7,8 @@ import Translations from './js/Translations.js';
 // import { ComponentType, SvelteComponent } from 'svelte';
 import { get, writable, type Writable } from 'svelte/store';
 import type { iLocaleFlat, iLocaleData, iLocaleDefault } from './interface/locales.js';
-
+import type { iCountryList } from './interface/countries.js';
+export type { iCountryList } from './interface/countries.js';
 export type { iLocaleFlat, iLocaleData, iLocaleDefault, iLanguageName } from './interface/locales.js';
 
 class LangsysAppClass {
@@ -61,6 +62,22 @@ class LangsysAppClass {
 
         // validate api key & projectid config
         return await LangsysAppAPI.validate(this.config);
+    }
+
+    /**
+     * Get list of all countries localized to inLocale or if not defined, sUserLocale, or if not defined, baseLocale
+     * sUserLocale and baseLocale are both defined during LangsysApp.init()
+     * @param inLocale define which language to translate the results to
+     * @returns iCountryList
+     */
+    public async getCountries(inLocale?: string) {
+        const locale = inLocale || get(this.config.sUserLocale) || this.config.baseLocale;
+        const route = `countries/${locale}`;
+        const response = await LangsysAppAPI.get(route);
+
+        if (response.errors || !response.status) alert('LangsysApp.getCountries failed: ' + route);
+
+        return response.data as iCountryList;
     }
 
     /**
