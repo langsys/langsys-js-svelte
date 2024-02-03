@@ -267,6 +267,8 @@ class Translations {
             if (!is_object(trans['__uncategorized__'])) trans['__uncategorized__'] = {};
 
             Object.keys(trans).forEach((cat) => {
+                // console.log('Category', cat, trans);
+                // if (!trans[cat]) trans[cat] = {};
                 trans[cat]['__category__'] = cat;
                 // if (isset(trans['__uncategorized__'][cat])) trans[cat]['__DirectToken__'] = { token: cat, trans: trans['__uncategorized__'][cat] };
 

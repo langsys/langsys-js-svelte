@@ -2,81 +2,92 @@
     import { _ } from '$lib/index.js';
     import strip_tags from '$lib/js/strip_tags.js';
     import persist from '$lib/js/store';
+    import LangsysAppAPI from '$lib/service/LangsysAppAPI.js';
+    import type { iContentBlock } from '$lib/interface/iContentBlock.js';
+    import { contentBlocks } from '$lib/store/contentBlocks.js';
+    import { inArray } from '$lib/js/util.js';
 
     let clazz: string = '';
     export { clazz as class };
     export let tag: string = 'translate';
     export let category: string = '';
 
-    let content;
-    // const allowedTags = '<b><strong><em><i><span><q><mark><a>';
+    let content: HTMLElement;
     const allowedTags = '';
 
     let tokens: string[] = [];
     let parseComplete = false;
+
     $: {
         if (!parseComplete && content?.innerHTML) {
-            console.log('CONTENT', content);
-            let nodes = [].slice.call(content.childNodes);
-            tokenize(nodes);
-            console.log('tokens', tokens);
-
-            // is plain token, not a content block, process the translation via normal token means
-            if (tokens.length === 1) {
-                content.innerText = $_[category][tokens[0]];
-            } else {
-                persist('contentblocks', [
-                    {
-                        category,
-                        content: content.outerHTML,
-                        tokens,
-                    },
-                ]);
-            }
-
-            parseComplete = true;
-            // setTimeout(() => {tokenize(nodes)}, 700);
+            tokenizeContent();
         }
     }
-    $: {
-        console.log('NODE TOKENS', tokens);
+
+    async function tokenizeContent() {
+        if (!content || !content.childNodes.length) {
+            parseComplete = true;
+            return false;
+        }
+        const nodes = Array.from(content.childNodes || []);
+        tokenize(nodes);
+
+        if (tokens.length === 1) {
+            content.innerText = $_[category][tokens[0]];
+        } else {
+            const contentBlock: iContentBlock = {
+                category,
+                content: content!.outerHTML,
+                tokens,
+            };
+            await handleContentBlock(contentBlock);
+        }
+
+        parseComplete = true;
     }
 
-    function tokenize(nodes) {
+    async function handleContentBlock(contentBlock: iContentBlock) {
+        console.log(contentBlock, $contentBlocks);
+        if (!inArray(contentBlock, $contentBlocks)) {
+            const response = await LangsysAppAPI.post('content-blocks/[projectid]', contentBlock);
+            if (!response.status) {
+                console.error('Could not save content block', response.errors);
+            } else {
+                $contentBlocks.push(contentBlock);
+                contentBlocks.set($contentBlocks);
+            }
+        }
+    }
+
+    function tokenize(nodes: Node[]) {
         nodes.forEach((node) => {
-            // IF THIS IS AN ELEMENT NODE, IT'LL HAVE CHILDREN OF ATLEAST TEXT
             if (node?.hasChildNodes()) {
-                var cssmap = window.getComputedStyle(node, null);
-                for (const key in cssmap) {
-                    const val = cssmap.getPropertyValue(key);
-                    if (cssmap[key] !== '' && (typeof cssmap[key] === 'string' || typeof cssmap[key] === 'number')) node.style.setProperty(key, val);
-                }
-                // CHROME BUG - BOX-SHADOW NOT IN CSSMAP
-                node.style.setProperty('box-shadow', cssmap.getPropertyValue('box-shadow'));
-                node.removeAttribute('class');
+                applyStylesToNode(node as HTMLElement);
             }
 
-            // console.log('NODE', node);
-
-            if (node.nodeType === node.TEXT_NODE && node.nodeValue.replace(/\s+/g, ' ').trim()) {
+            if (node?.nodeType === Node.TEXT_NODE && node.nodeValue?.replace(/\s+/g, ' ').trim()) {
                 tokens.push(node.nodeValue.replace(/\s+/g, ' ').trim());
                 return;
             }
 
-            // if (strip_tags(node.innerHTML, allowedTags) === node.innerHTML) {
-            //     node.setAttribute('contenteditable', 'true');
-            //     node.setAttribute('class', 'langsys-editable');
-            //     tokens.push(node.innerText);
-            //     return;
-            // }
-
             if (!node?.hasChildNodes()) {
-                // console.log('NO CHILD', node.nodeValue);
                 return;
             }
 
-            tokenize(node.childNodes);
+            tokenize(Array.from(node.childNodes));
         });
+    }
+
+    function applyStylesToNode(node: HTMLElement) {
+        const cssmap = window.getComputedStyle(node, null);
+        for (const key in cssmap) {
+            const val = cssmap.getPropertyValue(key);
+            if (cssmap[key] !== '' && (typeof cssmap[key] === 'string' || typeof cssmap[key] === 'number')) {
+                node.style.setProperty(key, val);
+            }
+        }
+        node.style.setProperty('box-shadow', cssmap.getPropertyValue('box-shadow'));
+        node.removeAttribute('class');
     }
 </script>
 
