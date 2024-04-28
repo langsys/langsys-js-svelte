@@ -11,9 +11,9 @@ interface iDirectTokenTranslations {
 
 export type iTranslations = iDirectTokenTranslations & {
     __category__: string;
-    __symbol__?: string;
+    __symbol__: string;
     // [key: string]: iTranslations | string | iDirectToken | undefined;
-    [key: string]: string | undefined;
+    [key: string]: string;
 };
 
 export type iCategories = {

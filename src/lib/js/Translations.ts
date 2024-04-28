@@ -18,7 +18,7 @@ function isset(test: any) {
 function is_object(test: any) {
     return typeof test === 'object' && !Array.isArray(test) && test !== null;
 }
-function in_array(array, selector) {
+function in_array(array: any[], selector: string | Record<string, any>) {
     if (typeof selector === 'string') return array.indexOf(selector) > -1 ? true : false;
     return (
         array.filter(function (e) {
@@ -37,7 +37,7 @@ class Translations {
     private locale: string;
     private lastLoaded: Record<string, number> = {}; // remember time when a local => wasLastLoaded
     private missingTokens: iTokenUpdate[];
-    private timer;
+    private timer: any;
 
     private debug = {
         debugEnabled: false,
@@ -66,7 +66,7 @@ class Translations {
                 get: (targetx: iCategories, cat: string): any => {
                     // this.debug.log('CATEGORY LOOKUP', [cat, targetx]);
 
-                    let target = structuredClone(targetx);
+                    const target = structuredClone(targetx);
 
                     // don't handle invalid tokens
                     if (cat === undefined || cat === '') return cat;
@@ -74,17 +74,17 @@ class Translations {
                     // this gets called when its the end of the line: ie: $_['Menu'] with no 2nd tier
                     // allows for uncategorized tokens
                     if (typeof cat === 'symbol' || cat === '__symbol__' || cat === 'constructor' || cat.indexOf('Symbol(Symbol') > -1) {
-                        const token = target.__symbol__;
+                        const token = target.__symbol__.toString();
                         this.debug.log('cat symbol call', [cat, target]);
 
-                        target = $trans.__uncategorized__;
+                        const newtarget = $trans.__uncategorized__;
 
                         let translation: string;
-                        if (!isset(target[token])) {
+                        if (!isset(newtarget[token])) {
                             this.missingToken('', token);
                             translation = token;
                         } else {
-                            translation = target[token] || token;
+                            translation = newtarget[token] || token;
                         }
 
                         // return translation;

@@ -18,6 +18,9 @@ class LangsysAppClass {
 
     private locales: iLocaleData[];
 
+    private countries: iCountryList;
+    private countriesLocale: string;
+
     constructor() {
         this.config = {
             projectid: '',
@@ -72,12 +75,31 @@ class LangsysAppClass {
      */
     public async getCountries(inLocale?: string) {
         const locale = inLocale || get(this.config.sUserLocale) || this.config.baseLocale;
+
+        if (this.countries && this.countriesLocale === locale) return this.countries;
+
         const route = `countries/${locale}`;
         const response = await LangsysAppAPI.get(route);
 
         if (response.errors || !response.status) alert('LangsysApp.getCountries failed: ' + route);
 
-        return response.data as iCountryList;
+        this.countries = response.data as iCountryList;
+        this.countriesLocale = locale;
+
+        return this.countries;
+    }
+
+    public async getCountryName(forCountryCode: string, inLocale?: string) {
+        if (!forCountryCode) return '';
+
+        const locale = inLocale || get(this.config.sUserLocale) || this.config.baseLocale;
+
+        if (!this.countries || this.countriesLocale !== locale || !Object.keys(this.countries).length) await this.getCountries(inLocale);
+
+        const country = this.countries.find((c) => c.code.toLowerCase() === forCountryCode.toLowerCase())?.label;
+        if (!country) window.console.warn('getCountryName failed to match', forCountryCode);
+
+        return country || forCountryCode;
     }
 
     /**
