@@ -1,10 +1,11 @@
-import { derived, get, writable, type Readable } from 'svelte/store';
-import sTranslations from '../store/translations.js';
-import type { tidbStore } from './idbStore.js';
-import LangsysAppAPI from '../service/LangsysAppAPI.js';
+import { derived, get, type Readable } from 'svelte/store';
+import type { ResponseObject } from '../interface/api.js';
 import type { iLangsysConfig } from '../interface/config.js';
 import type { iCategories, iTranslations } from '../interface/translations.js';
-import type { ResponseObject } from '../interface/api.js';
+import LangsysAppAPI from '../service/LangsysAppAPI.js';
+import sTranslations from '../store/translations.js';
+import echo from './echo.js';
+import type { tidbStore } from './idbStore.js';
 
 interface iTokenUpdate {
     projectid: string;
@@ -41,14 +42,24 @@ class Translations {
 
     private debug = {
         debugEnabled: false,
-        log(msg: any, context?: any) {
-            if (this.debugEnabled) window.console.log(...arguments);
+        log(...args: any[]) {
+            if (!this.debugEnabled) return;
+            echo.group('Langsys Debug');
+            echo.log(...args);
+            echo.groupEnd();
         },
-        warn(msg: any, context?: any) {
-            if (this.debugEnabled) window.console.warn(...arguments);
+        warn(...args: any[]) {
+            // if (!this.debugEnabled) return;
+            echo.group(echo.asWarning('Langsys Warning'));
+            echo.warn(...args);
+            echo.groupEnd();
         },
-        error(msg: any, context?: any) {
-            if (this.debugEnabled) window.console.error(...arguments);
+        error(...args: any[]) {
+            // always show errors
+            echo.group(echo.asAlert('Langsys Error'));
+            echo.error(...args);
+            echo.groupEnd();
+            // window.console.error(...args);
         },
     };
 
@@ -69,7 +80,10 @@ class Translations {
                     const target = structuredClone(targetx);
 
                     // don't handle invalid tokens
-                    if (cat === undefined || cat === '') return cat;
+                    if (cat === undefined || cat === '') {
+                        this.debug.warn(`Received empty category`, cat);
+                        return cat;
+                    }
 
                     // this gets called when its the end of the line: ie: $_['Menu'] with no 2nd tier
                     // allows for uncategorized tokens
@@ -110,6 +124,12 @@ class Translations {
                 get: (targetx: iTranslations, token: string) => {
                     this.debug.log('TRANSLATION LOOKUP', [token, targetx]);
                     let target = structuredClone(targetx);
+
+                    // don't handle invalid tokens
+                    if (token === undefined || token === '') {
+                        this.debug.warn(`Received empty token`, token);
+                        return token;
+                    }
 
                     // 2nd tier end of the line
                     // enables cases where a category and uncategorized token may be the same string ie:  $_['Menu']['Whatever'] & $_['Menu']
@@ -155,7 +175,10 @@ class Translations {
     }
 
     private missingToken(category: string, token: string) {
-        if (token === 'toJSON') return this.debug.error(`Received toJSON as token {category}:{token}`);
+        if (token === 'toJSON') return this.debug.error(`Received toJSON as token ${category}:${token}`, token);
+        // ignore empty tokens
+        if (token === '') return this.debug.warn(`Received empty token`, token);
+        // ignore if already in the array
         const missingToken = { category, token, projectid: this.config.projectid } as iTokenUpdate;
         if (!in_array(this.missingTokens, missingToken)) {
             this.debug.log('MISSING TOKEN LOOKUP FAILED', [missingToken, [...this.missingTokens], { ...get(sTranslations) }]);
