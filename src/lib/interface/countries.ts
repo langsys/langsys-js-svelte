@@ -3,3 +3,9 @@ export interface iCountry {
     code: string;
 }
 export type iCountryList = iCountry[];
+
+export interface iCountryDialCode {
+    country_code: string;
+    dial_code: string;
+    name: string;
+}

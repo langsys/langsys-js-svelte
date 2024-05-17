@@ -1,3 +1,4 @@
+import currentlyLoadedLocale from '$lib/store/currentlyLoadedLocale.js';
 import { derived, get, type Readable } from 'svelte/store';
 import type { ResponseObject } from '../interface/api.js';
 import type { iLangsysConfig } from '../interface/config.js';
@@ -40,11 +41,11 @@ class Translations {
     private missingTokens: iTokenUpdate[];
     private timer: any;
 
-    private debug = {
+    public debug = {
         debugEnabled: false,
         log(...args: any[]) {
             if (!this.debugEnabled) return;
-            echo.group('Langsys Debug');
+            echo.group(echo.asLog('Langsys Debug'));
             echo.log(...args);
             echo.groupEnd();
         },
@@ -311,6 +312,9 @@ class Translations {
             this.debug.log('GET TRANSLATIONS ' + this.locale, trans);
 
             sTranslations.set(trans);
+            setTimeout(() => {
+                currentlyLoadedLocale.set(this.locale);
+            }, 100);
             this.lastLoaded[this.locale] = new Date().getTime() / 1000;
         });
     }

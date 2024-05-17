@@ -1,3 +1,9 @@
+/**
+ * A wrapper around console.* functions that allows for custom formatting of the output.
+ * Taken and modified from https://www.bennadel.com/blog/3941-styling-console-log-output-formatting-with-css.htm
+ * MIT License
+ */
+
 const echo = (function () {
 
     var queue = [];
@@ -23,6 +29,18 @@ const echo = (function () {
         queue.push({
             value: value,
             css: "display: inline-block ; background-color: gold ; color: black ; font-weight: bold ; padding: 3px 7px 3px 7px ; border-radius: 3px 3px 3px 3px ;"
+        });
+
+        return (ECHO_TOKEN);
+
+
+    }
+    // Attach formatting utility method.
+    function logFormatting(value) {
+
+        queue.push({
+            value: value,
+            css: "display: inline-block ; background-color: rgb(239,239,244) ; color: black ; font-weight: bold ; padding: 3px 7px 3px 7px ; border-radius: 3px 3px 3px 3px ;"
         });
 
         return (ECHO_TOKEN);
@@ -107,7 +125,8 @@ const echo = (function () {
 
         // Formatting functions.
         asAlert: alertFormatting,
-        asWarning: warningFormatting
+        asWarning: warningFormatting,
+        asLog: logFormatting,
     });
 
 })();

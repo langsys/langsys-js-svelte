@@ -1,6 +1,6 @@
-import type { iLangsysConfig } from '../interface/config.js';
-import type { HttpResponse, ResponseObject } from '../interface/api.js';
 import { writable } from 'svelte/store';
+import type { HttpResponse, ResponseObject } from '../interface/api.js';
+import type { iLangsysConfig } from '../interface/config.js';
 
 class LangsysAppAPIClass {
     private apiurl = 'https://api.langsys.dev/api';
