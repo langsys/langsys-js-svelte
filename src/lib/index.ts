@@ -1,15 +1,16 @@
 // Reexport your entry components here
-import type { iLangsysConfig } from './interface/config.js';
 import type { ResponseObject } from './interface/api.js';
-import LangsysAppAPI from './service/LangsysAppAPI.js';
+import type { iLangsysConfig } from './interface/config.js';
 import Translations from './js/Translations.js';
+import LangsysAppAPI from './service/LangsysAppAPI.js';
 // import Translate from '../components/Translate.svelte';
 // import { ComponentType, SvelteComponent } from 'svelte';
-import { get, writable, type Writable } from 'svelte/store';
-import type { iLocaleFlat, iLocaleData, iLocaleDefault } from './interface/locales.js';
-import type { iCountryList } from './interface/countries.js';
-export type { iCountryList } from './interface/countries.js';
-export type { iLocaleFlat, iLocaleData, iLocaleDefault, iLanguageName } from './interface/locales.js';
+import { get, type Writable } from 'svelte/store';
+import type { iCountryDialCode, iCountryList } from './interface/countries.js';
+import type { iLocaleData, iLocaleDefault, iLocaleFlat } from './interface/locales.js';
+import config from './store/config.js';
+export type { iCountryDialCode, iCountryList } from './interface/countries.js';
+export type { iLanguageName, iLocaleData, iLocaleDefault, iLocaleFlat } from './interface/locales.js';
 
 class LangsysAppClass {
     private config: iLangsysConfig;
@@ -18,16 +19,14 @@ class LangsysAppClass {
 
     private locales: iLocaleData[];
 
-    private countries: iCountryList;
-    private countriesLocale: string;
+    private countries: iCountryList = [];
+    private countriesLocale: string = '';
+
+    private dialCodes: iCountryDialCode[] = [];
+    private dialCodesLocale: string = '';
 
     constructor() {
-        this.config = {
-            projectid: '',
-            key: '',
-            sUserLocale: writable(''),
-            baseLocale: 'en',
-        };
+        this.config = config;
         this.Translations = new Translations(this.config);
         this.locales = [];
     }
@@ -51,6 +50,9 @@ class LangsysAppClass {
         else if (!key) alert('LangsysApp.init missing API key in configuration object!');
         else if (!UserLocaleStore?.subscribe) alert("LangsysApp.init missing UserLocaleStore, a svelte-store for the user's selected locale.");
         else {
+            // make sure baselocale is lowercase
+            baseLocale = baseLocale.toLowerCase();
+
             this.config = {
                 projectid,
                 key,
@@ -58,6 +60,11 @@ class LangsysAppClass {
                 baseLocale: baseLocale,
                 debug,
             };
+            config.projectid = projectid;
+            config.key = key;
+            config.sUserLocale = UserLocaleStore;
+            config.baseLocale = baseLocale;
+            config.debug = debug;
 
             // initialize Translation methods
             this.Translations.setup(this.config);
@@ -65,6 +72,27 @@ class LangsysAppClass {
 
         // validate api key & projectid config
         return await LangsysAppAPI.validate(this.config);
+    }
+
+    /**
+     * Get localized list of all country dialCodes
+     * @param inLocale define which language to translate the results to
+     *
+     */
+    public async getDialCodes(inLocale?: string) {
+        const locale = inLocale || get(this.config.sUserLocale) || this.config.baseLocale;
+
+        if (this.dialCodes.length && this.dialCodesLocale === locale) return this.dialCodes;
+
+        const route = `countries/dial-code/${locale}`;
+        const response = await LangsysAppAPI.get(route);
+
+        if (response.errors || !response.status) alert('LangsysApp.getCountries failed: ' + route);
+
+        this.dialCodes = response.data as iCountryDialCode[];
+        this.dialCodesLocale = locale;
+
+        return this.dialCodes;
     }
 
     /**
@@ -76,7 +104,7 @@ class LangsysAppClass {
     public async getCountries(inLocale?: string) {
         const locale = inLocale || get(this.config.sUserLocale) || this.config.baseLocale;
 
-        if (this.countries && this.countriesLocale === locale) return this.countries;
+        if (this.countries.length && this.countriesLocale === locale) return this.countries;
 
         const route = `countries/${locale}`;
         const response = await LangsysAppAPI.get(route);
@@ -94,7 +122,7 @@ class LangsysAppClass {
 
         const locale = inLocale || get(this.config.sUserLocale) || this.config.baseLocale;
 
-        if (!this.countries || this.countriesLocale !== locale || !Object.keys(this.countries).length) await this.getCountries(inLocale);
+        if (!this.countries.length || this.countriesLocale !== locale) await this.getCountries(inLocale);
 
         const country = this.countries.find((c) => c.code.toLowerCase() === forCountryCode.toLowerCase())?.label;
         if (!country) window.console.warn('getCountryName failed to match', forCountryCode);
@@ -109,7 +137,7 @@ class LangsysAppClass {
      * @param inLocale define which language to translate the results to
      * @returns iLocaleDefault | iLocaleFlat[] | iLocaleData[]
      */
-    public async getLocales(format: '' | 'flat' | 'data' = '', inLocale?: string) {
+    public async getLocalesFormat(format: '' | 'flat' | 'data' = '', inLocale?: string) {
         const locale = inLocale || get(this.config.sUserLocale) || this.config.baseLocale;
         const route = `locales/${locale}` + (format ? `/${format}` : '');
         const response = await LangsysAppAPI.get(route);
@@ -126,9 +154,37 @@ class LangsysAppClass {
         }
     }
 
+    /**
+     * Returns translated locale list as array of objects with code and name
+     * @param inLocale
+     * @returns iLocaleFlat[]
+     */
+    public async getLocalesFlat(inLocale?: string) {
+        return (await this.getLocalesFormat('flat', inLocale)) as iLocaleFlat[];
+    }
+
+    /**
+     * Returns translated locale list as array of objects with code, locale_name, and lang_name
+     * @param inLocale
+     * @returns iLocaleData[]
+     */
+    public async getLocalesData(inLocale?: string) {
+        return (await this.getLocalesFormat('data', inLocale)) as iLocaleData[];
+    }
+    /**
+     * Get list of all locale codes, locale name, and language name
+     * Sorted alphabetically, grouped by language name
+     * good for optgroup in select dropdowns
+     * @param inLocale get list in this locale, default is sUserLocale
+     * @returns iLocalDefault
+     */
+    public async getLocales(inLocale?: string) {
+        return (await this.getLocalesFormat('', inLocale)) as iLocaleDefault;
+    }
+
     public async getLanguageName(forLocale: string, shortName = false, inLocale?: string) {
         if (!forLocale) return '';
-        if (!this.locales.length) this.locales = (await this.getLocales('data', inLocale)) as iLocaleData[];
+        if (!this.locales.length) this.locales = await this.getLocalesData(inLocale);
 
         let name = '';
         this.locales.every((locale) => {
