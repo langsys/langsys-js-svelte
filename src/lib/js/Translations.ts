@@ -1,4 +1,5 @@
 import currentlyLoadedLocale from '$lib/store/currentlyLoadedLocale.js';
+import structuredClone from '@ungap/structured-clone';
 import { derived, get, type Readable } from 'svelte/store';
 import type { ResponseObject } from '../interface/api.js';
 import type { iLangsysConfig } from '../interface/config.js';

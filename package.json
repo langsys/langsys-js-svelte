@@ -1,6 +1,6 @@
 {
     "name": "langsys-js-svelte",
-    "version": "1.1.6",
+    "version": "1.1.7",
     "author": "Langsys",
     "license": "MIT",
     "homepage": "https://github.com/langsys/langsys-js-svelte",
@@ -61,6 +61,7 @@
     "type": "module",
     "dependencies": {
         "@macfja/svelte-persistent-store": "^2.4.1",
+        "@ungap/structured-clone": "^1.2.0",
         "idb-keyval": "^6.2.1"
     }
 }
