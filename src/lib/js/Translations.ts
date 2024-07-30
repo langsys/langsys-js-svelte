@@ -1,5 +1,5 @@
 import currentlyLoadedLocale from '$lib/store/currentlyLoadedLocale.js';
-import structuredClone from '@ungap/structured-clone';
+// import structuredClone from '@ungap/structured-clone';
 import { derived, get, type Readable } from 'svelte/store';
 import type { ResponseObject } from '../interface/api.js';
 import type { iLangsysConfig } from '../interface/config.js';
@@ -29,6 +29,35 @@ function in_array(array: any[], selector: string | Record<string, any>) {
             return true;
         }).length > 0
     );
+}
+
+function deepClone(o) {
+    if (typeof o !== 'object') {
+        return o;
+    }
+    if (!o) {
+        return o;
+    }
+
+    // https://jsperf.com/deep-copy-vs-json-stringify-json-parse/25
+    if (Array.isArray(o)) {
+        const newO = [];
+        for (let i = 0; i < o.length; i += 1) {
+            const val = !o[i] || typeof o[i] !== 'object' ? o[i] : deepClone(o[i]);
+            newO[i] = val === undefined ? null : val;
+        }
+        return newO;
+    }
+
+    const newO = {};
+    for (const i of Object.keys(o)) {
+        const val = !o[i] || typeof o[i] !== 'object' ? o[i] : deepClone(o[i]);
+        if (val === undefined) {
+            continue;
+        }
+        newO[i] = val;
+    }
+    return newO;
 }
 
 class Translations {
@@ -79,7 +108,8 @@ class Translations {
                 get: (targetx: iCategories, cat: string): any => {
                     // this.debug.log('CATEGORY LOOKUP', [cat, targetx]);
 
-                    const target = structuredClone(targetx);
+                    // const target = structuredClone(targetx);
+                    const target = deepClone(targetx);
 
                     // don't handle invalid tokens
                     if (cat === undefined || cat === '') {
@@ -125,7 +155,8 @@ class Translations {
             const handlerTrans = {
                 get: (targetx: iTranslations, token: string) => {
                     this.debug.log('TRANSLATION LOOKUP', [token, targetx]);
-                    let target = structuredClone(targetx);
+                    // let target = structuredClone(targetx);
+                    let target = deepClone(targetx);
 
                     // don't handle invalid tokens
                     if (token === undefined || token === '') {
@@ -177,6 +208,10 @@ class Translations {
     }
 
     private missingToken(category: string, token: string) {
+        // ignore content id tokens (strings looking like 7a77d7a0d8a62a20984057e1cac8503e)
+        // these end up here because Translate component is looking for a content block id that doesn't exist
+        if (token.match(/^[0-9a-f]{32}$/)) return;
+        // ignore toJSON tokens
         if (token === 'toJSON') return this.debug.error(`Received toJSON as token ${category}:${token}`, token);
         // ignore empty tokens
         if (token === '') return this.debug.warn(`Received empty token`, token);
