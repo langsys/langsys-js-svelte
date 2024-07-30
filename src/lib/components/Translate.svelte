@@ -167,8 +167,8 @@
      * @param nodes
      */
     function translate(nodes: iNode[]) {
-        if ($currentlyLoadedLocale === config.baseLocale && (lastTranslatedLocale === '' || lastTranslatedLocale === config.baseLocale)) return;
         // console.log('translate run', $currentlyLoadedLocale, lastTranslatedLocale, config.baseLocale);
+        if ($currentlyLoadedLocale === config.baseLocale && (lastTranslatedLocale === '' || lastTranslatedLocale === config.baseLocale)) return;
 
         nodes.forEach((node) => {
             // if this isn't a text node, skip or go deeper

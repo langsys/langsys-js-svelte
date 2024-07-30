@@ -1,15 +1,14 @@
 // Reexport your entry components here
+import { get, type Writable } from 'svelte/store';
 import type { ResponseObject } from './interface/api.js';
 import type { iLangsysConfig } from './interface/config.js';
-import Translations from './js/Translations.js';
-import LangsysAppAPI from './service/LangsysAppAPI.js';
-// import Translate from '../components/Translate.svelte';
-// import { ComponentType, SvelteComponent } from 'svelte';
-import { get, type Writable } from 'svelte/store';
 import type { iCountryDialCode, iCountryList } from './interface/countries.js';
 import type { iLocaleData, iLocaleDefault, iLocaleFlat } from './interface/locales.js';
+import Translations from './js/Translations.js';
+import LangsysAppAPI from './service/LangsysAppAPI.js';
 import config from './store/config.js';
 export type { iCountryDialCode, iCountryList } from './interface/countries.js';
+export type { iProject } from './interface/iProject.js';
 export type { iLanguageName, iLocaleData, iLocaleDefault, iLocaleFlat } from './interface/locales.js';
 
 class LangsysAppClass {
@@ -17,7 +16,7 @@ class LangsysAppClass {
 
     public Translations: Translations;
 
-    private locales: iLocaleData[];
+    private locales: Record<string, iLocaleData[]>;
 
     private countries: iCountryList = [];
     private countriesLocale: string = '';
@@ -25,15 +24,15 @@ class LangsysAppClass {
     private dialCodes: iCountryDialCode[] = [];
     private dialCodesLocale: string = '';
 
-    constructor() {
+    constructor() { 
         this.config = config;
         this.Translations = new Translations(this.config);
-        this.locales = [];
+        this.locales = {};
     }
 
     public async refresh() {
         const locale = get(this.config.sUserLocale);
-        this.locales = [];
+        this.locales = {};
         return this.Translations.change(locale, true);
     }
 
@@ -184,13 +183,17 @@ class LangsysAppClass {
 
     public async getLanguageName(forLocale: string, shortName = false, inLocale?: string) {
         if (!forLocale) return '';
-        if (!this.locales.length) this.locales = await this.getLocalesData(inLocale);
+
+        const locale = inLocale || get(this.config.sUserLocale) || this.config.baseLocale;
+
+        if (!this.locales?.[locale]?.length) this.locales[locale] = await this.getLocalesData(locale);
 
         let name = '';
-        this.locales.every((locale) => {
-            // window.console.log(`checking ${forLocale} in ${locale.code}`, locale);
-            if (locale.code === forLocale) {
-                name = shortName ? locale.lang_name : locale.locale_name;
+        this.locales[locale]?.every((loc) => {
+            // window.console.log(`checking ${forLocale} against ${loc.code}`, locale);
+            if (loc.code === forLocale) {
+                // window.console.log('found', { locale, loc });
+                name = shortName ? loc.lang_name : loc.locale_name;
                 return false;
             }
             return true;
