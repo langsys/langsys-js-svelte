@@ -25,6 +25,7 @@
     let clazz: string = '';
     export { clazz as class };
     export let tag: string = 'translate';
+    export let label: string = '';
     export let category: string = '';
     export let custom_id: string = '';
 
@@ -79,7 +80,9 @@
             content.innerText = $_[category][tokens[0]]; // single token translation
         } else {
             const contentBlock: iContentBlock = {
+                custom_id: '', // to be filed by handleContentBlock
                 category,
+                label,
                 content: contentClone!.outerHTML,
                 tokens,
             };
