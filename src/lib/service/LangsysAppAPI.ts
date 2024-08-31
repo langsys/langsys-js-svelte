@@ -72,6 +72,20 @@ class LangsysAppAPIClass {
     }
 
     private async send(method: 'GET' | 'POST' | 'DELETE' | 'PATCH' | 'PUT', path: string, data = {}) {
+        // Check if config has projectid and key
+        if (!this.config.projectid || !this.config.key) {
+            return this.response({
+                status: false,
+                errors: ['Missing projectid or API key in configuration'],
+                http: {
+                    status: 0,
+                    statusText: 'Configuration Error',
+                    url: `${this.apiurl}/${path}`,
+                    data: JSON.stringify(data),
+                },
+            });
+        }
+
         // api calls shouldn't include the leading slash
         if (path.substring(0, 1) === '/') path = path.substring(1);
 
@@ -91,7 +105,6 @@ class LangsysAppAPIClass {
             });
 
             const responseData = await query.json();
-            // 422 = bad data passed to it, 401 = unauthorized
             const http: HttpResponse = {
                 status: query.status,
                 statusText: query.statusText,
@@ -100,14 +113,35 @@ class LangsysAppAPIClass {
             };
             responseData.http = http;
 
-            if (!query.ok) window.console.warn('LangsysAppAPI failed to query', responseData);
+            if (!query.ok) {
+                window.console.warn('LangsysAppAPI failed to query', responseData);
+                return this.response({
+                    status: false,
+                    errors: [`HTTP ${query.status}: ${query.statusText}`],
+                    data: responseData,
+                    http,
+                });
+            }
 
             return this.response(responseData);
         } catch (err) {
-            // messenger.alert("API Error", "Error communicating with API Server.");
-            window.console.error('LangsysAppAPI Error');
-            window.console.error(err, `${this.apiurl}/${path}`);
-            return this.response({ status: false });
+            const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+            window.console.error('LangsysAppAPI Error:', errorMessage);
+            window.console.error('Request details:', {
+                method,
+                url: `${this.apiurl}/${path}`,
+                data,
+            });
+            return this.response({
+                status: false,
+                errors: ['Error communicating with API Server', errorMessage],
+                http: {
+                    status: 0,
+                    statusText: 'Network Error',
+                    url: `${this.apiurl}/${path}`,
+                    data: JSON.stringify(data),
+                },
+            });
         }
     }
 }
