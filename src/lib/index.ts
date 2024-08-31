@@ -4,9 +4,11 @@ import type { ResponseObject } from './interface/api.js';
 import type { iLangsysConfig } from './interface/config.js';
 import type { iCountryDialCode, iCountryList } from './interface/countries.js';
 import type { iLocaleData, iLocaleDefault, iLocaleFlat } from './interface/locales.js';
+import echo from './js/echo.js';
 import Translations from './js/Translations.js';
 import LangsysAppAPI from './service/LangsysAppAPI.js';
 import config from './store/config.js';
+export type { ResponseObject as iLangsysResponse } from './interface/api.js';
 export type { iCountryDialCode, iCountryList } from './interface/countries.js';
 export type { iProject } from './interface/iProject.js';
 export type { iLanguageName, iLocaleData, iLocaleDefault, iLocaleFlat } from './interface/locales.js';
@@ -24,11 +26,34 @@ class LangsysAppClass {
     private dialCodes: iCountryDialCode[] = [];
     private dialCodesLocale: string = '';
 
-    constructor() { 
+    constructor() {
         this.config = config;
         this.Translations = new Translations(this.config);
         this.locales = {};
     }
+
+    public debug = {
+        debugEnabled: true,
+        log(...args: any[]) {
+            if (!this.debugEnabled) return;
+            echo.group(echo.asLog('Langsys Debug'));
+            echo.log(...args);
+            echo.groupEnd();
+        },
+        warn(...args: any[]) {
+            // if (!this.debugEnabled) return;
+            echo.group(echo.asWarning('Langsys Warning'));
+            echo.warn(...args);
+            echo.groupEnd();
+        },
+        error(...args: any[]) {
+            // always show errors
+            echo.group(echo.asAlert('Langsys Error'));
+            echo.error(...args);
+            echo.groupEnd();
+            // window.console.error(...args);
+        },
+    };
 
     public async refresh() {
         const locale = get(this.config.sUserLocale);
@@ -43,15 +68,33 @@ class LangsysAppClass {
      * @param UserLocaleStore A svelte-store Writable string with the user-selected locale
      * @param [baseLocale='en'] The base language/locale this app uses. ie: what language is put into the code?
      * @param [debug=false] {boolean} Set true to enable console messages
+     * @param [emulateFailureToLoad=false] {boolean} Set true to emulate Langsys failure to load
      */
-    public async init(projectid: string, key: string, UserLocaleStore: Writable<string>, baseLocale = 'en', debug = false): Promise<ResponseObject> {
-        if (!projectid) alert('LangsysApp.init missing projectid in configuration object!');
-        else if (!key) alert('LangsysApp.init missing API key in configuration object!');
-        else if (!UserLocaleStore?.subscribe) alert("LangsysApp.init missing UserLocaleStore, a svelte-store for the user's selected locale.");
-        else {
-            // make sure baselocale is lowercase
-            baseLocale = baseLocale.toLowerCase();
+    public async init(
+        projectid: string,
+        key: string,
+        UserLocaleStore: Writable<string>,
+        baseLocale = 'en',
+        debug = false,
+        emulateFailureToLoad = false
+    ): Promise<ResponseObject> {
+        if (!projectid) {
+            this.debug.error('LangsysApp.init missing projectid in configuration object!');
+            return { status: false, errors: ['Missing projectid'], data: null };
+        }
+        if (!key) {
+            this.debug.error('LangsysApp.init missing API key in configuration object!');
+            return { status: false, errors: ['Missing API key'], data: null };
+        }
+        if (!UserLocaleStore?.subscribe) {
+            this.debug.error("LangsysApp.init missing UserLocaleStore, a svelte-store for the user's selected locale.");
+            return { status: false, errors: ['Missing UserLocaleStore'], data: null };
+        }
 
+        // make sure baselocale is lowercase
+        baseLocale = baseLocale.toLowerCase();
+
+        if (!emulateFailureToLoad)
             this.config = {
                 projectid,
                 key,
@@ -59,15 +102,14 @@ class LangsysAppClass {
                 baseLocale: baseLocale,
                 debug,
             };
-            config.projectid = projectid;
-            config.key = key;
-            config.sUserLocale = UserLocaleStore;
-            config.baseLocale = baseLocale;
-            config.debug = debug;
+        // config.projectid = projectid;
+        // config.key = key;
+        // config.sUserLocale = UserLocaleStore;
+        // config.baseLocale = baseLocale;
+        // config.debug = debug;
 
-            // initialize Translation methods
-            this.Translations.setup(this.config);
-        }
+        // initialize Translation methods
+        this.Translations.setup(this.config);
 
         // validate api key & projectid config
         return await LangsysAppAPI.validate(this.config);
@@ -86,7 +128,10 @@ class LangsysAppClass {
         const route = `countries/dial-code/${locale}`;
         const response = await LangsysAppAPI.get(route);
 
-        if (response.errors || !response.status) alert('LangsysApp.getCountries failed: ' + route);
+        if (response.errors || !response.status) {
+            this.debug.error('LangsysApp.getCountries failed: ' + route);
+            return [];
+        }
 
         this.dialCodes = response.data as iCountryDialCode[];
         this.dialCodesLocale = locale;
@@ -108,7 +153,10 @@ class LangsysAppClass {
         const route = `countries/${locale}`;
         const response = await LangsysAppAPI.get(route);
 
-        if (response.errors || !response.status) alert('LangsysApp.getCountries failed: ' + route);
+        if (response.errors || !response.status) {
+            this.debug.error('LangsysApp.getCountries failed: ' + route);
+            return [];
+        }
 
         this.countries = response.data as iCountryList;
         this.countriesLocale = locale;
@@ -141,7 +189,10 @@ class LangsysAppClass {
         const route = `locales/${locale}` + (format ? `/${format}` : '');
         const response = await LangsysAppAPI.get(route);
 
-        if (response.errors || !response.status) alert('LangsysApp.getLocales failed: ' + route);
+        if (response.errors || !response.status) {
+            this.debug.error('LangsysApp.getLocales failed: ' + route);
+            return format === 'flat' ? [] : format === 'data' ? [] : {};
+        }
 
         switch (format) {
             case 'flat':
