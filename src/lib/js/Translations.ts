@@ -31,33 +31,32 @@ function in_array(array: any[], selector: string | Record<string, any>) {
     );
 }
 
-function deepClone(o) {
-    if (typeof o !== 'object') {
-        return o;
-    }
-    if (!o) {
-        return o;
+function structuredCloneShim<T>(obj: T): T {
+    if (typeof structuredClone === 'function') {
+        return (structuredClone as any)(obj);
     }
 
-    // https://jsperf.com/deep-copy-vs-json-stringify-json-parse/25
-    if (Array.isArray(o)) {
-        const newO = [];
-        for (let i = 0; i < o.length; i += 1) {
-            const val = !o[i] || typeof o[i] !== 'object' ? o[i] : deepClone(o[i]);
-            newO[i] = val === undefined ? null : val;
+    // Fallback implementation if native structuredClone is not available
+    function deepClone<T>(o: T): T {
+        if (typeof o !== 'object' || o === null) {
+            return o;
         }
-        return newO;
+
+        if (Array.isArray(o)) {
+            return o.map((item) => (typeof item === 'object' && item !== null ? deepClone(item) : item)) as T;
+        }
+
+        const newO: Record<string, any> = {};
+        for (const key in o) {
+            if (Object.prototype.hasOwnProperty.call(o, key)) {
+                const value = o[key];
+                newO[key] = typeof value === 'object' && value !== null ? deepClone(value) : value;
+            }
+        }
+        return newO as T;
     }
 
-    const newO = {};
-    for (const i of Object.keys(o)) {
-        const val = !o[i] || typeof o[i] !== 'object' ? o[i] : deepClone(o[i]);
-        if (val === undefined) {
-            continue;
-        }
-        newO[i] = val;
-    }
-    return newO;
+    return deepClone(obj);
 }
 
 class Translations {
@@ -109,7 +108,7 @@ class Translations {
                     // this.debug.log('CATEGORY LOOKUP', [cat, targetx]);
 
                     // const target = structuredClone(targetx);
-                    const target = deepClone(targetx);
+                    const target = structuredCloneShim(targetx);
 
                     // don't handle invalid tokens
                     if (cat === undefined || cat === '') {
@@ -156,7 +155,7 @@ class Translations {
                 get: (targetx: iTranslations, token: string) => {
                     this.debug.log('TRANSLATION LOOKUP', [token, targetx]);
                     // let target = structuredClone(targetx);
-                    let target = deepClone(targetx);
+                    let target = structuredCloneShim(targetx);
 
                     // don't handle invalid tokens
                     if (token === undefined || token === '') {
@@ -207,7 +206,12 @@ class Translations {
         if (config.key && config.projectid) this.setup(config);
     }
 
-    private missingToken(category: string, token: string) {
+    private missingToken(category: string, token: string | undefined | null) {
+        // Check if token is undefined or null
+        if (token === undefined || token === null) {
+            return this.debug.warn(`Received undefined or null token for category: ${category}`);
+        }
+
         // ignore content id tokens (strings looking like 7a77d7a0d8a62a20984057e1cac8503e)
         // these end up here because Translate component is looking for a content block id that doesn't exist
         if (token.match(/^[0-9a-f]{32}$/)) return;
