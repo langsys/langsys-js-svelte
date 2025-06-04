@@ -17,6 +17,7 @@ class LangsysAppClass {
     private config: iLangsysConfig;
 
     public Translations: Translations;
+    public translationsLoadingPromise: Promise<any> = Promise.resolve();
 
     private locales: Record<string, iLocaleData[]>;
 
@@ -28,6 +29,7 @@ class LangsysAppClass {
 
     constructor() {
         this.config = config;
+        this.debug.debugEnabled = this.config.debug ?? false;
         this.Translations = new Translations(this.config);
         this.locales = {};
     }
@@ -111,8 +113,24 @@ class LangsysAppClass {
         // initialize Translation methods
         this.Translations.setup(this.config);
 
+
+
         // validate api key & projectid config
-        return await LangsysAppAPI.validate(this.config);
+        const validateResponse = await LangsysAppAPI.validate(this.config);
+
+        // prefetch locale data for the user's current locale
+        this.config.sUserLocale.subscribe((locale) => {
+            if (validateResponse.status) {
+                this.getLocalesData(locale);
+                // subscribe to the user locale store so we can listen for change of locale
+                this.debug.log('SUBSCRIBING TO USER LOCALE STORE');
+                this.translationsLoadingPromise = this.Translations.change(locale);
+            }
+        });
+
+        // if (validateResponse.status) this.getLocalesData();
+
+        return validateResponse;
     }
 
     /**
@@ -190,6 +208,7 @@ class LangsysAppClass {
         const response = await LangsysAppAPI.get(route);
 
         if (response.errors || !response.status) {
+            this.debug.error(response.errors, response.status, response);
             this.debug.error('LangsysApp.getLocales failed: ' + route);
             return format === 'flat' ? [] : format === 'data' ? [] : {};
         }
@@ -218,8 +237,17 @@ class LangsysAppClass {
      * @param inLocale
      * @returns iLocaleData[]
      */
-    public async getLocalesData(inLocale?: string) {
-        return (await this.getLocalesFormat('data', inLocale)) as iLocaleData[];
+    public async getLocalesData(inLocale?: string, forceRefresh = false) {
+        // get locale from inLocale, sUserLocale, or baseLocale
+        const locale = inLocale || get(this.config.sUserLocale) || this.config.baseLocale;
+
+        // return cached data if available and forceRefresh is not true
+        if (this.locales?.[locale]?.length && !forceRefresh) return this.locales[locale];
+
+        // otherwise, get the data from the api
+        this.locales[locale] = (await this.getLocalesFormat('data', inLocale)) as iLocaleData[];
+
+        return this.locales[locale];
     }
     /**
      * Get list of all locale codes, locale name, and language name
@@ -232,12 +260,20 @@ class LangsysAppClass {
         return (await this.getLocalesFormat('', inLocale)) as iLocaleDefault;
     }
 
-    public async getLanguageName(forLocale: string, shortName = false, inLocale?: string) {
+    public async getLocaleNameWithLookup(forLocale: string, shortName = false, inLocale?: string) {
         if (!forLocale) return '';
 
         const locale = inLocale || get(this.config.sUserLocale) || this.config.baseLocale;
 
-        if (!this.locales?.[locale]?.length) this.locales[locale] = await this.getLocalesData(locale);
+        await this.getLocalesData(locale);
+
+        return this.getLocaleName(forLocale, shortName, locale);
+    }
+
+    public getLocaleName(forLocale: string, shortName = false, inLocale?: string) {
+        // assume the locale data is already loaded
+        // get locale from inLocale, sUserLocale, or baseLocale
+        const locale = inLocale || get(this.config.sUserLocale) || this.config.baseLocale;
 
         let name = '';
         this.locales[locale]?.every((loc) => {
@@ -250,9 +286,16 @@ class LangsysAppClass {
             return true;
         });
 
-        if (!name) window.console.warn('getLanguageName failed to match', forLocale);
+        if (!name) window.console.warn('getLocaleNameWithLookup failed to match', forLocale);
 
         return name;
+    }
+
+    /**
+     * @deprecated - use getLocaleNameWithLookup instead or getLocaleName for synchronous lookup on cached data from getLocalesData
+     */
+    public async getLanguageName(forLocale: string, shortName = false, inLocale?: string) {
+        return this.getLocaleNameWithLookup(forLocale, shortName, inLocale);
     }
 }
 

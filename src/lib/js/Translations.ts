@@ -119,7 +119,7 @@ class Translations {
                     // this gets called when its the end of the line: ie: $_['Menu'] with no 2nd tier
                     // allows for uncategorized tokens
                     if (typeof cat === 'symbol' || cat === '__symbol__' || cat === 'constructor' || cat.indexOf('Symbol(Symbol') > -1) {
-                        const token = target.__symbol__.toString();
+                        const token = target.__symbol__.toString().trim();
                         this.debug.log('cat symbol call', [cat, target]);
 
                         const newtarget = $trans.__uncategorized__;
@@ -139,6 +139,7 @@ class Translations {
                     }
 
                     // if the category does not yet exist, create it
+                    cat = cat.trim();
                     if (!is_object(target[cat])) {
                         target[cat] = {
                             __category__: cat, // reference to the key of this object
@@ -169,6 +170,7 @@ class Translations {
                         token = target.__symbol__ || target.__category__; // if this is 2nd tier, target will have a __symbol__ set by handlerCat
                         // this.debug.log('trans symbol call', [token, target, $trans]);
                         target = $trans.__uncategorized__;
+                        token = token.trim();
                         this.debug.log('trans symbol call', [token, target, $trans]);
 
                         let translation: string;
@@ -187,6 +189,7 @@ class Translations {
                         };
                     }
 
+                    token = token.trim();
                     if (isset(target[token])) {
                         this.debug.log('Token final lookup');
                         const translation = (target[token] as string) || token;
@@ -219,6 +222,7 @@ class Translations {
         if (token === 'toJSON') return this.debug.error(`Received toJSON as token ${category}:${token}`, token);
         // ignore empty tokens
         if (token === '') return this.debug.warn(`Received empty token`, token);
+
         // ignore if already in the array
         const missingToken = { category, token, projectid: this.config.projectid } as iTokenUpdate;
         if (!in_array(this.missingTokens, missingToken)) {
@@ -243,11 +247,7 @@ class Translations {
         this.timer = setInterval(this.updateTokens.bind(this), 3000);
         this.debug.log('UPDATE TOKEN INTERVAL', this.timer);
 
-        // subscribe to the user locale store so we can listen for change of locale
-        this.debug.log('SUBSCRIBING TO USER LOCALE STORE');
-        this.config.sUserLocale.subscribe((locale) => {
-            this.change(locale);
-        });
+
     }
 
     /**
@@ -282,8 +282,26 @@ class Translations {
         if (!Object.keys(this.missingTokens).length) return false;
         if (!this.config.projectid || !this.config.key) return false;
 
+        // Update missing tokens with project ID and remove any that already exist in translations
+        const currentData = get(sTranslations);
+        this.missingTokens = this.missingTokens.filter(tokenObj => {
+            tokenObj.projectid = this.config.projectid;
+
+            if (tokenObj.category in currentData && tokenObj.token in currentData[tokenObj.category]) {
+                this.debug.log('Missing token already exists! Skipping:', {
+                    category: tokenObj.category,
+                    token: tokenObj.token,
+                    existing: currentData[tokenObj.category][tokenObj.token]
+                });
+                return false;
+            }
+            return true;
+        });
+
+        if (!this.missingTokens.length) return false;
+
         this.debug.log('CREATE MISSING TOKENS', this.missingTokens);
-        LangsysAppAPI.post('tokens/[projectid]', { tokens: this.missingTokens })
+        LangsysAppAPI.post('projects/[projectid]/tokens', { tokens: this.missingTokens })
             .then((response: ResponseObject) => {
                 if (!response.status) {
                     if (response.errors) {
@@ -294,7 +312,6 @@ class Translations {
                     return false;
                 }
 
-                const currentData = get(sTranslations);
                 this.missingTokens.map((tokenObj) => {
                     if (!currentData[tokenObj.category]) currentData[tokenObj.category] = {};
                     currentData[tokenObj.category][tokenObj.token] = tokenObj.token;

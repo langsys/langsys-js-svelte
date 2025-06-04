@@ -1,6 +1,6 @@
 {
     "name": "langsys-js-svelte",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "author": "Langsys",
     "license": "MIT",
     "homepage": "https://github.com/langsys/langsys-js-svelte",
@@ -21,7 +21,9 @@
         "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
         "test": "vitest",
         "lint": "prettier --plugin-search-dir . --check . && eslint .",
-        "format": "prettier --plugin-search-dir . --write ."
+        "format": "prettier --plugin-search-dir . --write .",
+        "watch": "watch 'npm run package' ./src",
+        "release": "./_dev_/publish.sh"
     },
     "exports": {
         ".": {
@@ -41,7 +43,7 @@
         "@sveltejs/adapter-auto": "^3.3.1",
         "@sveltejs/kit": "^2.8.1",
         "@sveltejs/package": "^2.3.7",
-		"@sveltejs/vite-plugin-svelte": "^4.0.0",
+        "@sveltejs/vite-plugin-svelte": "^4.0.0",
         "@typescript-eslint/eslint-plugin": "^8.14.0",
         "@typescript-eslint/parser": "^8.14.0",
         "eslint": "^9.14.0",
@@ -55,7 +57,8 @@
         "tslib": "^2.8.1",
         "typescript": "^5.6.3",
         "vite": "^5.4.11",
-        "vitest": "^2.1.5"
+        "vitest": "^2.1.5",
+        "watch": "^1.0.2"
     },
     "svelte": "./dist/index.js",
     "types": "./dist/index.d.ts",

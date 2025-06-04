@@ -14,7 +14,7 @@
      *
      */
     import { _ } from '$lib/index.js';
-    import type { iContentBlock } from '$lib/interface/iContentBlock.js';
+    import { type iContentBlock } from '$lib/interface/iContentBlock.js';
     import echo from '$lib/js/echo.js';
     import { inArray, isEmpty, md5 } from '$lib/js/util.js';
     import LangsysAppAPI from '$lib/service/LangsysAppAPI.js';
@@ -105,7 +105,7 @@
             contentBlock.custom_id = custom_id;
 
             // save the content block to Langsys asyncronously
-            LangsysAppAPI.post('content-blocks/[projectid]', contentBlock).then((response) => {
+            LangsysAppAPI.post('projects/[projectid]/content-blocks', contentBlock).then((response) => {
                 if (!response.status) {
                     echo.group(echo.asAlert('Could not save content block'));
                     echo.error(response.errors);

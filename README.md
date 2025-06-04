@@ -181,6 +181,22 @@ Content that needs to be translated, we call "tokens". By simply adding it to yo
 ### Translation - Using the Translation Manager
 Your project can have translators assigned, so that when new tokens appear, they are notified and can quickly translate the new content for you, from any device.  You can also enable automatic machine translations or even AI translations.  All automatic translations are held as a special status in the Translation Manager, so if you want to have humans pass over and do editing/verifying, they'll know what new content needs done at all times automatically!
 
+### Translations Loading Promise
+Sometimes you'll want to re-render some content after translations have been loaded. For example, if some UI is generated with some functions, you'll want to wait for translations to load before calling those functions. This is something to consider, primarily, when a user changes their locale (sUserLocale) after your app is loaded.
+
+You can use the `translationsLoadingPromise` property of the LangsysApp class to wait for translations to load before re-rendering.
+```html
+<script lang="ts">
+    import { LangsysApp } from 'langsys-js-svelte';
+    // ...
+    $effect(() => {
+        LangsysApp.translationsLoadingPromise.then(() => {
+            // re-render content here
+        });
+    });
+</script>
+```
+
 ### Useful Utilities!
 In the course of your project you will often need localized country lists, country names, dial codes, and language names.  Generate them easily!
 ```html
