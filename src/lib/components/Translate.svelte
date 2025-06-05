@@ -22,32 +22,43 @@
     import { contentBlocks } from '$lib/store/contentBlocks.js';
     import currentlyLoadedLocale from '$lib/store/currentlyLoadedLocale.js';
 
-    let clazz: string = '';
-    export { clazz as class };
-    export let tag: string = 'translate';
-    export let label: string = '';
-    export let category: string = '';
-    export let custom_id: string = '';
+    import type { Snippet } from 'svelte';
 
-    let content: HTMLElement;
-    let contentClone: HTMLElement;
-    let lastTranslatedLocale: string = '';
+    interface Props {
+        class?: string;
+        tag?: string;
+        label?: string;
+        category?: string;
+        custom_id?: string;
+        children?: Snippet;
+    }
+
+    let { class: clazz = '', tag = 'translate', label = '', category = '', custom_id = '', children }: Props = $props();
+
+    let content = $state<HTMLElement>();
+    let contentClone = $state<HTMLElement>();
+    let lastTranslatedLocale = $state('');
     const allowedTags = '';
 
-    let tokens: string[] = [];
-    let parseComplete = false;
+    let tokens = $state<string[]>([]);
+    let parseComplete = $state(false);
+    let isTokenizing = $state(false);
 
     type iNode = Node & { originalNodeValue?: string | null };
 
     // on first load, tokenize the content and save to Langsys if necessary
-    $: {
-        if (!parseComplete && content?.innerHTML) {
+    $effect(() => {
+        if (!parseComplete && !isTokenizing && content?.innerHTML && !tokens.length) {
             tokenizeContent();
         }
-    }
+    });
 
     // after first load (parseComplete), retranslate the content if the locale changes
-    $: if ($currentlyLoadedLocale) translateUpdate();
+    $effect(() => {
+        if ($currentlyLoadedLocale && parseComplete) {
+            translateUpdate();
+        }
+    });
 
     function translateUpdate() {
         if (content?.innerHTML && parseComplete) {
@@ -66,10 +77,15 @@
      * Primary function to tokenize, save and translate the content of the element
      */
     async function tokenizeContent() {
+        if (isTokenizing) return; // Prevent multiple simultaneous tokenizations
+        
         if (!content || !content.childNodes.length) {
             parseComplete = true;
+            isTokenizing = false;
             return false;
         }
+        
+        isTokenizing = true;
         // we tokenize off a clone because part of the process is to move all styles inline, which we DONT want to do in the view
         // we only want that to happen for the html stored with the contentblock
         contentClone = content.cloneNode(true) as HTMLElement;
@@ -90,6 +106,7 @@
         }
 
         parseComplete = true;
+        isTokenizing = false;
     }
 
     /**
@@ -99,10 +116,13 @@
      * @param nodes
      */
     async function handleContentBlock(contentBlock: iContentBlock, nodes: Node[] = []) {
-        if (!inArray(contentBlock, $contentBlocks)) {
-            // determine custom id for translate fast lookup
-            if (isEmpty(custom_id)) custom_id = generateCustomId(contentBlock);
-            contentBlock.custom_id = custom_id;
+        // determine custom id for translate fast lookup
+        if (isEmpty(custom_id)) custom_id = generateCustomId(contentBlock);
+        contentBlock.custom_id = custom_id;
+        
+        // Check if we already have this content block by custom_id
+        const existingBlock = $contentBlocks.find(block => block.custom_id === custom_id);
+        if (!existingBlock) {
 
             // save the content block to Langsys asyncronously
             LangsysAppAPI.post('projects/[projectid]/content-blocks', contentBlock).then((response) => {
@@ -119,7 +139,7 @@
             });
 
             // translate the content block (blocking)
-            if (tokens.length > 1) {
+            if (tokens.length > 1 && content) {
                 translate(Array.from(content.childNodes));
                 lastTranslatedLocale = $currentlyLoadedLocale;
             }
@@ -194,16 +214,26 @@
 
             // this is only run after tokenize, so we know we have a custom_id,
             // and the origianlNodeValue is set. We create the token from the originalNodeValue
-            const contentToken = node.originalNodeValue.replace(/\s+/g, ' ').trim();
+            const contentToken = node.originalNodeValue?.replace(/\s+/g, ' ').trim();
             if (!contentToken) return;
 
-            const translation = $_[category][custom_id][contentToken]; // this will be null if we have no translation
+            // Get translation with proper type safety
+            let translation: string | null = null;
+            if (contentToken && $_[category] && $_[category][custom_id]) {
+                const categoryData = $_[category] as any;
+                const contentData = categoryData[custom_id] as any;
+                translation = contentData[contentToken] || null;
+            }
 
             // we do a replace here instead of just setting the value because the tokens are stripped of extra whitespace,
             // which we want to keep in the end user display
-            if (translation) node.nodeValue = node.originalNodeValue.replace(contentToken, translation);
+            if (translation && contentToken && node.originalNodeValue) {
+                node.nodeValue = node.originalNodeValue.replace(contentToken, translation);
+            }
             // if there's no translation, we revert back to originalContent
-            else node.nodeValue = node.originalNodeValue;
+            else if (node.originalNodeValue) {
+                node.nodeValue = node.originalNodeValue;
+            }
 
             // if (!node?.hasChildNodes()) {
             //     return;
@@ -226,6 +256,7 @@
      * @param node
      */
     function applyStylesToNode(node: HTMLElement, indices: number[]) {
+        if (!content) return;
         let domNode = findNode(Array.from(content.childNodes), indices);
         // let cloneFind = findNode(Array.from(contentClone.childNodes), indices);
         // console.log('applyStylesToNode', domNode, node, indices, cloneFind);
@@ -244,5 +275,7 @@
 </script>
 
 <svelte:element this={tag} class={clazz || ''} bind:this={content}>
-    <slot />
+    {#if children}
+        {@render children()}
+    {/if}
 </svelte:element>
