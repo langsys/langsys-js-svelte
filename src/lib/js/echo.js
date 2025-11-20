@@ -6,12 +6,16 @@
 
 const echo = (function () {
 
+    /** @type {Array<{value: any, css: string}>} */
     var queue = [];
     var ECHO_TOKEN = {};
     var RESET_INPUT = "%c ";
     var RESET_CSS = "";
 
     // Attach formatting utility method.
+    /**
+     * @param {any} value
+     */
     function alertFormatting(value) {
 
         queue.push({
@@ -24,6 +28,9 @@ const echo = (function () {
     }
 
     // Attach formatting utility method.
+    /**
+     * @param {any} value
+     */
     function warningFormatting(value) {
 
         queue.push({
@@ -36,6 +43,9 @@ const echo = (function () {
 
     }
     // Attach formatting utility method.
+    /**
+     * @param {any} value
+     */
     function logFormatting(value) {
 
         queue.push({
@@ -50,6 +60,9 @@ const echo = (function () {
     // I provide an echo-based proxy to the given Console Function. This uses an
     // internal queue to aggregate values before calling the given Console
     // Function with the desired formatting.
+    /**
+     * @param {Function} consoleFunction
+     */
     function using(consoleFunction) {
 
         function consoleFunctionProxy() {
@@ -74,8 +87,10 @@ const echo = (function () {
 
                     var item = queue.shift();
 
-                    inputs.push(("%c" + item.value), RESET_INPUT);
-                    modifiers.push(item.css, RESET_CSS);
+                    if (item) {
+                        inputs.push(("%c" + item.value), RESET_INPUT);
+                        modifiers.push(item.css, RESET_CSS);
+                    }
 
                     // For every other argument type, output the value directly.
                 } else {

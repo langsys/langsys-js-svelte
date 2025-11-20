@@ -3,7 +3,7 @@
  * @param obj
  * @returns Map
  */
-export const objectToMap = (obj) => {
+export const objectToMap = (obj: any) => {
     const keys = Object.keys(obj);
     const map = new Map();
     for (let i = 0; i < keys.length; i++) {
@@ -13,7 +13,7 @@ export const objectToMap = (obj) => {
     return map;
 };
 
-export const isNumeric = (num) => {
+export const isNumeric = (num: any) => {
     return !isNaN(num);
 };
 
@@ -106,15 +106,15 @@ export function inArray(obj: any, arr: any[]): boolean {
 export function md5(inputString:string) {
     if (typeof inputString !== "string") inputString = JSON.stringify(inputString);
     const hc="0123456789abcdef";
-    function rh(n) {let j,s="";for(j=0;j<=3;j++) s+=hc.charAt((n>>(j*8+4))&0x0F)+hc.charAt((n>>(j*8))&0x0F);return s;}
-    function ad(x,y) {const l=(x&0xFFFF)+(y&0xFFFF);const m=(x>>16)+(y>>16)+(l>>16);return (m<<16)|(l&0xFFFF);}
-    function rl(n,c)            {return (n<<c)|(n>>>(32-c));}
-    function cm(q,a,b,x,s,t)    {return ad(rl(ad(ad(a,q),ad(x,t)),s),b);}
-    function ff(a,b,c,d,x,s,t)  {return cm((b&c)|((~b)&d),a,b,x,s,t);}
-    function gg(a,b,c,d,x,s,t)  {return cm((b&d)|(c&(~d)),a,b,x,s,t);}
-    function hh(a,b,c,d,x,s,t)  {return cm(b^c^d,a,b,x,s,t);}
-    function ii(a,b,c,d,x,s,t)  {return cm(c^(b|(~d)),a,b,x,s,t);}
-    function sb(x) {
+    function rh(n: number) {let j,s="";for(j=0;j<=3;j++) s+=hc.charAt((n>>(j*8+4))&0x0F)+hc.charAt((n>>(j*8))&0x0F);return s;}
+    function ad(x: number,y: number) {const l=(x&0xFFFF)+(y&0xFFFF);const m=(x>>16)+(y>>16)+(l>>16);return (m<<16)|(l&0xFFFF);}
+    function rl(n: number,c: number)            {return (n<<c)|(n>>>(32-c));}
+    function cm(q: number,a: number,b: number,x: number,s: number,t: number)    {return ad(rl(ad(ad(a,q),ad(x,t)),s),b);}
+    function ff(a: number,b: number,c: number,d: number,x: number,s: number,t: number)  {return cm((b&c)|((~b)&d),a,b,x,s,t);}
+    function gg(a: number,b: number,c: number,d: number,x: number,s: number,t: number)  {return cm((b&d)|(c&(~d)),a,b,x,s,t);}
+    function hh(a: number,b: number,c: number,d: number,x: number,s: number,t: number)  {return cm(b^c^d,a,b,x,s,t);}
+    function ii(a: number,b: number,c: number,d: number,x: number,s: number,t: number)  {return cm(c^(b|(~d)),a,b,x,s,t);}
+    function sb(x: string) {
         let i;const nblk=((x.length+8)>>6)+1;const blks=new Array(nblk*16);for(i=0;i<nblk*16;i++) blks[i]=0;
         for(i=0;i<x.length;i++) blks[i>>2]|=x.charCodeAt(i)<<((i%4)*8);
         blks[i>>2]|=0x80<<((i%4)*8);blks[nblk*16-2]=x.length*8;return blks;

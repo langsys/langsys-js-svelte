@@ -1,3 +1,7 @@
+/**
+ * @param {any} input
+ * @param {any} allowed
+ */
 function strip_tags_phpport(input, allowed) { // eslint-disable-line camelcase
     //  discuss at: https://locutus.io/php/strip_tags/
     // original by: Kevin van Zonneveld (https://kvz.io)
@@ -119,18 +123,24 @@ function strip_tags_dom(input, allowed = '') {
         const allowedTags = new Set((allowed.toLowerCase().match(/<[a-z][a-z0-9]*>/g) || []).map(tag => tag.slice(1, -1)));
 
         // Recursive function to process nodes
-        const processNode = (node: Node) => {
+        /** @param {Node} node */
+        const processNode = (node) => {
             if (node.nodeType === Node.ELEMENT_NODE) {
-                if (!allowedTags.has((node as Element).tagName.toLowerCase())) {
+                const element = /** @type {Element} */ (node);
+                if (!allowedTags.has(element.tagName.toLowerCase())) {
                     // Replace this element with its text content
-                    node.parentNode!.replaceChild(document.createTextNode(node.textContent || ''), node);
+                    if (node.parentNode) {
+                        node.parentNode.replaceChild(document.createTextNode(node.textContent || ''), node);
+                    }
                 } else {
                     // Process child nodes
                     Array.from(node.childNodes).forEach(processNode);
                 }
             } else if (node.nodeType === Node.COMMENT_NODE || node.nodeType === Node.PROCESSING_INSTRUCTION_NODE) {
                 // Remove comment and processing instruction nodes
-                node.parentNode!.removeChild(node);
+                if (node.parentNode) {
+                    node.parentNode.removeChild(node);
+                }
             }
         };
 

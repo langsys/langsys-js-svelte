@@ -16,7 +16,7 @@
     import { _ } from '$lib/index.js';
     import { type iContentBlock } from '$lib/interface/iContentBlock.js';
     import echo from '$lib/js/echo.js';
-    import { inArray, isEmpty, md5 } from '$lib/js/util.js';
+    import { isEmpty, md5 } from '$lib/js/util.js';
     import LangsysAppAPI from '$lib/service/LangsysAppAPI.js';
     import config from '$lib/store/config.js';
     import { contentBlocks } from '$lib/store/contentBlocks.js';
@@ -30,7 +30,7 @@
         label?: string;
         category?: string;
         custom_id?: string;
-        children?: Snippet;
+        children: Snippet;
     }
 
     let { class: clazz = '', tag = 'translate', label = '', category = '', custom_id = '', children }: Props = $props();
@@ -38,7 +38,6 @@
     let content = $state<HTMLElement>();
     let contentClone = $state<HTMLElement>();
     let lastTranslatedLocale = $state('');
-    const allowedTags = '';
 
     let tokens = $state<string[]>([]);
     let parseComplete = $state(false);
@@ -48,7 +47,7 @@
 
     // on first load, tokenize the content and save to Langsys if necessary
     $effect(() => {
-        if (!parseComplete && !isTokenizing && content?.innerHTML && !tokens.length) {
+        if (!parseComplete && !isTokenizing && content?.innerHTML) {
             tokenizeContent();
         }
     });
@@ -65,7 +64,16 @@
             if (lastTranslatedLocale === $currentlyLoadedLocale) return;
 
             if (tokens.length === 1) {
-                content.innerText = $_[category][tokens[0]];
+                // Check if category exists in translations before accessing
+                if (category && $_[category] && $_[category][tokens[0]]) {
+                    content.innerText = $_[category][tokens[0]];
+                } else if (!category && $_.__uncategorized__ && $_.__uncategorized__[tokens[0]]) {
+                    // When no category, use uncategorized translations
+                    content.innerText = $_.__uncategorized__[tokens[0]];
+                } else {
+                    // Keep original content if no translation available
+                    content.innerText = tokens[0];
+                }
             } else {
                 translate(Array.from(content.childNodes));
                 lastTranslatedLocale = $currentlyLoadedLocale;
@@ -78,13 +86,13 @@
      */
     async function tokenizeContent() {
         if (isTokenizing) return; // Prevent multiple simultaneous tokenizations
-        
+
         if (!content || !content.childNodes.length) {
             parseComplete = true;
             isTokenizing = false;
             return false;
         }
-        
+
         isTokenizing = true;
         // we tokenize off a clone because part of the process is to move all styles inline, which we DONT want to do in the view
         // we only want that to happen for the html stored with the contentblock
@@ -93,7 +101,16 @@
         tokenize(nodes);
 
         if (tokens.length === 1) {
-            content.innerText = $_[category][tokens[0]]; // single token translation
+            // Check if category exists in translations before accessing
+            if (category && $_[category] && $_[category][tokens[0]]) {
+                content.innerText = $_[category][tokens[0]]; // single token translation
+            } else if (!category && $_.__uncategorized__ && $_.__uncategorized__[tokens[0]]) {
+                // When no category, use uncategorized translations
+                content.innerText = $_.__uncategorized__[tokens[0]];
+            } else {
+                // Keep original content if no translation available
+                content.innerText = tokens[0];
+            }
         } else {
             const contentBlock: iContentBlock = {
                 custom_id: '', // to be filed by handleContentBlock
@@ -102,7 +119,7 @@
                 content: contentClone!.outerHTML,
                 tokens,
             };
-            await handleContentBlock(contentBlock, nodes);
+            await handleContentBlock(contentBlock);
         }
 
         parseComplete = true;
@@ -113,30 +130,33 @@
      * With iContentBlock now assembled, we make sure it has a custom_id then we save it to Langsys
      * After custom_id is set we run a translate on the elements, assumes we have the translation data already
      * @param contentBlock
-     * @param nodes
      */
-    async function handleContentBlock(contentBlock: iContentBlock, nodes: Node[] = []) {
+    async function handleContentBlock(contentBlock: iContentBlock) {
         // determine custom id for translate fast lookup
         if (isEmpty(custom_id)) custom_id = generateCustomId(contentBlock);
         contentBlock.custom_id = custom_id;
-        
-        // Check if we already have this content block by custom_id
-        const existingBlock = $contentBlocks.find(block => block.custom_id === custom_id);
-        if (!existingBlock) {
 
-            // save the content block to Langsys asyncronously
-            LangsysAppAPI.post('projects/[projectid]/content-blocks', contentBlock).then((response) => {
-                if (!response.status) {
-                    echo.group(echo.asAlert('Could not save content block'));
-                    echo.error(response.errors);
-                    echo.groupEnd();
-                    // console.error('Could not save content block', response.errors);
-                } else {
-                    // local store so we know we don't have to save it again
-                    $contentBlocks.push(contentBlock);
-                    contentBlocks.set($contentBlocks);
-                }
-            });
+        // Check if we already have this content block by custom_id
+        const existingBlock = $contentBlocks.find((block) => block.custom_id === custom_id);
+        if (!existingBlock) {
+            // Only save content blocks if API key has write permissions
+            if (config.key_type === 'write') {
+                // save the content block to Langsys asyncronously
+                LangsysAppAPI.post('projects/[projectid]/content-blocks', contentBlock).then((response) => {
+                    if (!response.status) {
+                        echo.group(echo.asAlert('Could not save content block'));
+                        echo.error(response.errors);
+                        echo.groupEnd();
+                        // console.error('Could not save content block', response.errors);
+                    } else {
+                        // local store so we know we don't have to save it again
+                        $contentBlocks.push(contentBlock);
+                        contentBlocks.set($contentBlocks);
+                    }
+                });
+            } else {
+                echo.log(`Skipping content block save (API key is ${config.key_type || 'unknown'})`);
+            }
 
             // translate the content block (blocking)
             if (tokens.length > 1 && content) {
@@ -223,6 +243,11 @@
                 const categoryData = $_[category] as any;
                 const contentData = categoryData[custom_id] as any;
                 translation = contentData[contentToken] || null;
+            } else if (!category && contentToken && $_.__uncategorized__ && $_.__uncategorized__[custom_id]) {
+                // Handle uncategorized translations
+                const uncategorizedData = $_.__uncategorized__ as any;
+                const contentData = uncategorizedData[custom_id] as any;
+                translation = contentData[contentToken] || null;
             }
 
             // we do a replace here instead of just setting the value because the tokens are stripped of extra whitespace,
@@ -275,7 +300,5 @@
 </script>
 
 <svelte:element this={tag} class={clazz || ''} bind:this={content}>
-    {#if children}
-        {@render children()}
-    {/if}
+    {@render children?.()}
 </svelte:element>

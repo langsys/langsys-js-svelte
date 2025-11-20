@@ -25,4 +25,10 @@ export interface iLangsysConfig {
      * Enable debug console messages
      */
     debug?: boolean;
+
+    /**
+     * The permission level of the API key ('read' or 'write')
+     * This is set automatically after successful authorization
+     */
+    key_type?: 'read' | 'write';
 }

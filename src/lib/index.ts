@@ -82,15 +82,15 @@ class LangsysAppClass {
     ): Promise<ResponseObject> {
         if (!projectid) {
             this.debug.error('LangsysApp.init missing projectid in configuration object!');
-            return { status: false, errors: ['Missing projectid'], data: null };
+            return { status: false, errors: ['Missing projectid'] };
         }
         if (!key) {
             this.debug.error('LangsysApp.init missing API key in configuration object!');
-            return { status: false, errors: ['Missing API key'], data: null };
+            return { status: false, errors: ['Missing API key'] };
         }
         if (!UserLocaleStore?.subscribe) {
             this.debug.error("LangsysApp.init missing UserLocaleStore, a svelte-store for the user's selected locale.");
-            return { status: false, errors: ['Missing UserLocaleStore'], data: null };
+            return { status: false, errors: ['Missing UserLocaleStore'] };
         }
 
         // make sure baselocale is lowercase
@@ -110,13 +110,23 @@ class LangsysAppClass {
         // config.baseLocale = baseLocale;
         // config.debug = debug;
 
-        // initialize Translation methods
-        this.Translations.setup(this.config);
-
-
 
         // validate api key & projectid config
         const validateResponse = await LangsysAppAPI.validate(this.config);
+
+        // Store the key_type from the authorization response
+        if (validateResponse.status && validateResponse.data) {
+            const authData = validateResponse.data as any;
+            if (authData.key_type) {
+                this.config.key_type = authData.key_type;
+                config.key_type = authData.key_type;
+                this.debug.log('API Key Type:', this.config.key_type);
+                echo.log(`API Key Type:`, this.config.key_type);
+            }
+        }
+
+        // initialize Translation methods
+        this.Translations.setup(this.config);
 
         // prefetch locale data for the user's current locale
         this.config.sUserLocale.subscribe((locale) => {

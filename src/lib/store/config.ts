@@ -7,6 +7,7 @@ export const config: iLangsysConfig = {
     sUserLocale: writable(''),
     baseLocale: 'en',
     debug: false,
+    key_type: 'read',
 };
 
 export default config;

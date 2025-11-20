@@ -7,7 +7,7 @@ import type { iCategories, iTranslations } from '../interface/translations.js';
 import LangsysAppAPI from '../service/LangsysAppAPI.js';
 import sTranslations from '../store/translations.js';
 import echo from './echo.js';
-import type { tidbStore } from './idbStore.js';
+import type { PersistentStore } from './store.js';
 
 interface iTokenUpdate {
     projectid: string;
@@ -62,7 +62,7 @@ function structuredCloneShim<T>(obj: T): T {
 class Translations {
     private config: iLangsysConfig;
 
-    public data: tidbStore<iCategories>;
+    public data!: PersistentStore<iCategories>; // Note: This property appears to be unused
     public _: Readable<iCategories>;
 
     private locale: string;
@@ -215,6 +215,12 @@ class Translations {
             return this.debug.warn(`Received undefined or null token for category: ${category}`);
         }
 
+        // Don't collect missing tokens if API key is read-only
+        if (this.config.key_type !== 'write') {
+            this.debug.log(`Skipping missing token collection (API key is ${this.config.key_type || 'unknown'}):`, { category, token });
+            return;
+        }
+
         // ignore content id tokens (strings looking like 7a77d7a0d8a62a20984057e1cac8503e)
         // these end up here because Translate component is looking for a content block id that doesn't exist
         if (token.match(/^[0-9a-f]{32}$/)) return;
@@ -281,6 +287,12 @@ class Translations {
     private async updateTokens() {
         if (!Object.keys(this.missingTokens).length) return false;
         if (!this.config.projectid || !this.config.key) return false;
+        
+        // Don't send missing tokens if API key is read-only
+        if (this.config.key_type !== 'write') {
+            this.debug.log(`Skipping token updates (API key is ${this.config.key_type || 'unknown'})`);
+            return false;
+        }
 
         // Update missing tokens with project ID and remove any that already exist in translations
         const currentData = get(sTranslations);
@@ -343,9 +355,14 @@ class Translations {
                 return;
             }
 
-            const trans = response.data as iTranslations;
+            const trans = response.data as iCategories;
 
-            if (!is_object(trans['__uncategorized__'])) trans['__uncategorized__'] = {};
+            if (!is_object(trans['__uncategorized__'])) {
+                trans['__uncategorized__'] = {
+                    __category__: '__uncategorized__',
+                    __symbol__: '__uncategorized__'
+                } as iTranslations;
+            }
 
             Object.keys(trans).forEach((cat) => {
                 // console.log('Category', cat, trans);
