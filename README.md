@@ -2,7 +2,13 @@
 
 Langsys revolutionizes localization for apps with easy to integrate, realtime, continuous translations. Read more about Langsys Translation Manager [at the website](https://Langsys.dev/).
 
-Integrate the Langsys Translation Manager into your Svelte applications using this SDK.
+Integrate the Langsys Translation Manager into your Svelte and SvelteKit applications using this SDK.
+
+## Requirements
+
+- **Svelte 5** - This SDK requires Svelte 5 and is fully compatible with SSR (Server-Side Rendering) in SvelteKit applications.
+
+> **Note for Svelte 3/4 users:** The last version supporting Svelte 3 and 4 (client-side only) is available at tag `v-last-svelte4-compat`. Use that version if you need compatibility with older Svelte versions.
 
 [![GitHub Release](https://img.shields.io/github/release/langsys/langsys-js-svelte.svg?style=flat)]()
 [![GitHub last commit](https://img.shields.io/github/last-commit/langsys/langsys-js-svelte.svg?style=flat)]()
@@ -13,6 +19,15 @@ Integrate the Langsys Translation Manager into your Svelte applications using th
 ## Creating a Langsys project
 
 Visit [Langsys.dev](https://Langsys.dev/) to create your account, and then create your project. Take note your project ID and API key.
+
+### API Key Permissions
+
+The SDK now automatically detects and respects API key permissions:
+
+- **Write Permission**: Allows automatic creation of new translation tokens and content blocks. Recommended for development environments.
+- **Read-only Permission**: Only fetches existing translations. Recommended for production environments to prevent accidental token creation.
+
+The SDK will automatically skip token collection and content block creation when using a read-only key.
 
 From within your Svelte project:
 
@@ -26,38 +41,80 @@ npm install langsys-js-svelte
 ### Initialization
 Once you've installed the SDK in your project with `npm install` (or `pnpm install` or `yarn`), you are ready to initialize Langsys, which needs to be done before the rest of your app.
 
+#### Modern Configuration (Recommended)
+
+```typescript
+import { LangsysApp, type iLangsysInitConfig } from 'langsys-js-svelte';
+import sUserLocale from './stores/UserLocale';
+
+const config: iLangsysInitConfig = {
+    projectid: env.LANGSYS_PROJECT_ID,
+    key: env.LANGSYS_API_KEY,
+    UserLocaleStore: sUserLocale,
+    baseLocale: 'en-us',
+    debug: false,
+    ssrTokenStrategy: 'client' // Optional: 'client' | 'server' | 'auto'
+};
+
+await LangsysApp.init(config);
+```
+
+#### Legacy Initialization (Deprecated)
+
+> ⚠️ **DEPRECATED**: The parameter-based approach is deprecated and will be removed in a future version. Please migrate to the config object approach above.
+
+```typescript
+// ⚠️ DEPRECATED - DO NOT USE FOR NEW CODE
+await LangsysApp.init(
+    projectid,
+    apikey,
+    sUserLocale,
+    'en-us',
+    false, // debug
+    false  // emulateFailureToLoad
+);
+```
+
+#### SSR Token Strategy
+
+**Available strategies for `ssrTokenStrategy`:**
+- `'client'` (default): Tokens discovered during SSR are queued and sent from the client after hydration. Best for performance.
+- `'server'`: Tokens are sent immediately from the server during SSR. Best for reliability and immediate registration.
+- `'auto'`: Small batches (≤5 tokens) sent from server, larger batches queued for client. Balanced approach.
+
 For a plain Svelte app, this might be in your app.svelte component onMount call
 
 ```html
 <script lang="ts">
     // ...
-    import { LangsysApp } from 'langsys-js-svelte';
+    import { LangsysApp, type iLangsysInitConfig } from 'langsys-js-svelte';
     import sUserLocale from '../stores/UserLocale'; // wherever your store for your user locale is
     // ...
 
     let appInitError = false;
 
-    onMount(() => {
-        /**
-         * Must be called once during app initialization before anything else!
-         * @param projectid The ID (UUID) of the project created in Langsys for this app
-         * @param key The API key associated to the configured projectid
-         * @param UserLocaleStore A svelte-store Writable string with the user-selected locale
-         * @param [baseLocale='en-us'] The base language/locale this app uses. ie: what language is put into the code?
-         * @param [debug=false] {boolean} Set true to enable console logs (errors and warnings will ignore this setting)
-         */
-        LangsysApp.init(env.projectid, env.apikey, sUserLocale, 'en-us').then((response) => {
-            if (response.status) {
-                appInit();
-            } else {
-                appInitError = {
-                    code: 'LS-PK404',
-                    details: null,
-                    message: `Could not find matching project and key.`,
-                    hint: `${config.langsys.projectid} | ${config.langsys.key.substring(0, 10)}{...}`,
-                };
-            }
-        });
+    onMount(async () => {
+        const config: iLangsysInitConfig = {
+            projectid: env.LANGSYS_PROJECT_ID,
+            key: env.LANGSYS_API_KEY,
+            UserLocaleStore: sUserLocale,
+            baseLocale: 'en-us',
+            debug: false,
+            ssrTokenStrategy: 'client' // Optional for SSR apps
+        };
+
+        const response = await LangsysApp.init(config);
+
+        if (response.status) {
+            appInit();
+        } else {
+            appInitError = {
+                code: 'LS-PK404',
+                details: null,
+                message: `Could not find matching project and key.`,
+                hint: `${config.projectid} | ${config.key.substring(0, 10)}{...}`,
+            };
+        }
     });
 
     function appInit() {
@@ -176,7 +233,13 @@ In using the Translate Component, you will automatically generate what we call `
 ![Translation Manager Content Block UI](https://p-GKFQz2n.b2.n0.cdn.zight.com/items/z8uo8Gq8/3c5ec3fd-253b-42db-8b33-da9b60aa84ec.png?v=25bd11b616dafeb31c15ae6e72613689)
 
 ### Creating translation tokens
-Content that needs to be translated, we call "tokens". By simply adding it to your app, then running your app, a token will automatically be created in your Translation Manager if it does not yet exist. This will only happen if you have enabled `write` permissions on your API key.  `Write` allows automatic inserts of new tokens, nothing else, and can be toggled off at any time. It is highly recommended to use an API key with `write` permission on your development app, but switch to a read-only key for your production app.
+Content that needs to be translated, we call "tokens". By simply adding it to your app, then running your app, a token will automatically be created in your Translation Manager if it does not yet exist.
+
+**Important:** Token creation only occurs when using an API key with `write` permissions. The SDK automatically detects your key's permission level and will:
+- With write permission: Automatically create new tokens and content blocks as they're discovered
+- With read-only permission: Only fetch existing translations, skip all token creation
+
+It is highly recommended to use an API key with `write` permission on your development app, but switch to a read-only key for your production app.
 
 ### Translation - Using the Translation Manager
 Your project can have translators assigned, so that when new tokens appear, they are notified and can quickly translate the new content for you, from any device.  You can also enable automatic machine translations or even AI translations.  All automatic translations are held as a special status in the Translation Manager, so if you want to have humans pass over and do editing/verifying, they'll know what new content needs done at all times automatically!

@@ -69,6 +69,8 @@ class Translations {
     private lastLoaded: Record<string, number> = {}; // remember time when a local => wasLastLoaded
     private missingTokens: iTokenUpdate[];
     private timer: any;
+    private flushScheduled: boolean = false;
+    private isFirstClientRun: boolean = true;
 
     public debug = {
         debugEnabled: false,
@@ -234,6 +236,62 @@ class Translations {
         if (!in_array(this.missingTokens, missingToken)) {
             this.debug.log('MISSING TOKEN LOOKUP FAILED', [missingToken, [...this.missingTokens], { ...get(sTranslations) }]);
             this.missingTokens.push(missingToken);
+
+            // Schedule token flush based on environment and strategy
+            this.scheduleTokenFlush();
+        }
+    }
+
+    private scheduleTokenFlush() {
+        const strategy = this.config.ssrTokenStrategy || 'client';
+        const isSSR = typeof window === 'undefined';
+
+        if (isSSR) {
+            // SSR environment
+            switch (strategy) {
+                case 'server':
+                    // Always send from server
+                    if (!this.flushScheduled) {
+                        this.flushScheduled = true;
+                        queueMicrotask(() => {
+                            this.updateTokens().then(() => {
+                                this.flushScheduled = false;
+                            });
+                        });
+                    }
+                    break;
+
+                case 'auto':
+                    // Send from server if few tokens, otherwise queue for client
+                    if (this.missingTokens.length <= 5 && !this.flushScheduled) {
+                        this.flushScheduled = true;
+                        queueMicrotask(() => {
+                            this.updateTokens().then(() => {
+                                this.flushScheduled = false;
+                            });
+                        });
+                    }
+                    // Otherwise tokens will be sent from client after hydration
+                    break;
+
+                case 'client':
+                default:
+                    // Just collect, will be sent from client after hydration
+                    this.debug.log('SSR: Queuing tokens for client-side transmission');
+                    break;
+            }
+        } else {
+            // Client environment - always send from client
+            if (!this.flushScheduled && !this.timer) {
+                // Early in lifecycle, use microtask batching
+                this.flushScheduled = true;
+                queueMicrotask(() => {
+                    this.updateTokens().then(() => {
+                        this.flushScheduled = false;
+                    });
+                });
+            }
+            // Otherwise let the regular timer handle it
         }
     }
 
@@ -248,10 +306,31 @@ class Translations {
         // post missing tokens back to translation server so they can become translatable tokens
         this.debug.log('TRANSLATION SETUP INITIATED', this.config);
 
-        // here we run an update on the missingTokens every 3 seconds
-        if (this.timer) clearInterval(this.timer);
-        this.timer = setInterval(this.updateTokens.bind(this), 3000);
-        this.debug.log('UPDATE TOKEN INTERVAL', this.timer);
+        // Set up token handling based on environment
+        if (typeof window !== 'undefined') {
+            // CLIENT ENVIRONMENT
+
+            // Check if we just hydrated and have SSR-collected tokens
+            if (this.isFirstClientRun && this.missingTokens.length > 0) {
+                this.isFirstClientRun = false;
+                const strategy = this.config.ssrTokenStrategy || 'client';
+
+                // If strategy was 'client' or 'auto' with many tokens, flush now
+                if (strategy === 'client' || (strategy === 'auto' && this.missingTokens.length > 5)) {
+                    this.debug.log(`Post-hydration: Flushing ${this.missingTokens.length} SSR-collected tokens`);
+                    queueMicrotask(() => this.updateTokens());
+                }
+            }
+
+            // Set up regular interval for future tokens
+            if (this.timer) clearInterval(this.timer);
+            this.timer = setInterval(this.updateTokens.bind(this), 3000);
+            this.debug.log('UPDATE TOKEN INTERVAL', this.timer);
+        } else {
+            // SSR ENVIRONMENT
+            const strategy = this.config.ssrTokenStrategy || 'client';
+            this.debug.log(`SSR environment detected - using '${strategy}' token strategy`);
+        }
 
 
     }
@@ -287,11 +366,16 @@ class Translations {
     private async updateTokens() {
         if (!Object.keys(this.missingTokens).length) return false;
         if (!this.config.projectid || !this.config.key) return false;
-        
+
         // Don't send missing tokens if API key is read-only
         if (this.config.key_type !== 'write') {
             this.debug.log(`Skipping token updates (API key is ${this.config.key_type || 'unknown'})`);
             return false;
+        }
+
+        const isSSR = typeof window === 'undefined';
+        if (isSSR) {
+            this.debug.log(`Sending ${this.missingTokens.length} tokens from SSR`);
         }
 
         // Update missing tokens with project ID and remove any that already exist in translations

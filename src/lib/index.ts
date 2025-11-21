@@ -1,7 +1,7 @@
 // Reexport your entry components here
 import { get, type Writable } from 'svelte/store';
 import type { ResponseObject } from './interface/api.js';
-import type { iLangsysConfig } from './interface/config.js';
+import type { iLangsysConfig, iLangsysInitConfig } from './interface/config.js';
 import type { iCountryDialCode, iCountryList } from './interface/countries.js';
 import type { iLocaleData, iLocaleDefault, iLocaleFlat } from './interface/locales.js';
 import echo from './js/echo.js';
@@ -9,6 +9,7 @@ import Translations from './js/Translations.js';
 import LangsysAppAPI from './service/LangsysAppAPI.js';
 import config from './store/config.js';
 export type { ResponseObject as iLangsysResponse } from './interface/api.js';
+export type { iLangsysInitConfig } from './interface/config.js';
 export type { iCountryDialCode, iCountryList } from './interface/countries.js';
 export type { iProject } from './interface/iProject.js';
 export type { iLanguageName, iLocaleData, iLocaleDefault, iLocaleFlat } from './interface/locales.js';
@@ -64,22 +65,83 @@ class LangsysAppClass {
     }
 
     /**
-     * Must be called once during app initialization before anything else!
+     * Initialize Langsys - Modern config object approach
+     * @param config Configuration object for initialization
+     */
+    public async init(config: iLangsysInitConfig): Promise<ResponseObject>;
+
+    /**
+     * Initialize Langsys - Legacy parameter approach
+     * @deprecated This method signature is deprecated and will be removed in a future version. Use the config object approach instead.
      * @param projectid The ID (UUID) of the project created in Langsys for this app
      * @param key The API key associated to the configured projectid
      * @param UserLocaleStore A svelte-store Writable string with the user-selected locale
-     * @param [baseLocale='en'] The base language/locale this app uses. ie: what language is put into the code?
-     * @param [debug=false] {boolean} Set true to enable console messages
-     * @param [emulateFailureToLoad=false] {boolean} Set true to emulate Langsys failure to load
+     * @param [baseLocale='en'] The base language/locale this app uses
+     * @param [debug=false] Set true to enable console messages
+     * @param [emulateFailureToLoad=false] Set true to emulate Langsys failure to load
+     * @param [extraConfig] Additional configuration options
      */
     public async init(
         projectid: string,
         key: string,
         UserLocaleStore: Writable<string>,
-        baseLocale = 'en',
-        debug = false,
-        emulateFailureToLoad = false
+        baseLocale?: string,
+        debug?: boolean,
+        emulateFailureToLoad?: boolean,
+        extraConfig?: Partial<iLangsysConfig>
+    ): Promise<ResponseObject>;
+
+    public async init(
+        configOrProjectid: iLangsysInitConfig | string,
+        keyParam?: string,
+        UserLocaleStoreParam?: Writable<string>,
+        baseLocaleParam = 'en',
+        debugParam = false,
+        emulateFailureToLoadParam = false,
+        extraConfig?: Partial<iLangsysConfig>
     ): Promise<ResponseObject> {
+        // Handle both new config object and legacy parameters
+        let initConfig: iLangsysInitConfig;
+
+        if (typeof configOrProjectid === 'object') {
+            // New way: config object
+            initConfig = configOrProjectid;
+        } else {
+            // Legacy way: individual parameters (deprecated)
+            console.warn(
+                'LangsysApp.init(): Using deprecated parameter-based initialization. ' +
+                'Please migrate to the config object approach. ' +
+                'The legacy method will be removed in a future version.'
+            );
+
+            if (!keyParam || !UserLocaleStoreParam) {
+                this.debug.error('Missing required parameters for legacy init');
+                return { status: false, errors: ['Missing required parameters'] };
+            }
+
+            initConfig = {
+                projectid: configOrProjectid,
+                key: keyParam,
+                UserLocaleStore: UserLocaleStoreParam,
+                baseLocale: baseLocaleParam,
+                debug: debugParam,
+                emulateFailureToLoad: emulateFailureToLoadParam,
+                ...extraConfig
+            };
+        }
+
+        // Extract config with defaults
+        const projectid = initConfig.projectid;
+        const key = initConfig.key;
+        const UserLocaleStore = initConfig.UserLocaleStore;
+        let baseLocale = initConfig.baseLocale || 'en';
+        const debug = initConfig.debug || false;
+        const emulateFailureToLoad = initConfig.emulateFailureToLoad || false;
+        const ssrTokenStrategy = initConfig.ssrTokenStrategy || 'client';
+
+        // Set debug mode immediately so all subsequent debug messages work
+        this.debug.debugEnabled = debug;
+
         if (!projectid) {
             this.debug.error('LangsysApp.init missing projectid in configuration object!');
             return { status: false, errors: ['Missing projectid'] };
@@ -96,19 +158,16 @@ class LangsysAppClass {
         // make sure baselocale is lowercase
         baseLocale = baseLocale.toLowerCase();
 
-        if (!emulateFailureToLoad)
+        if (!emulateFailureToLoad) {
             this.config = {
                 projectid,
                 key,
                 sUserLocale: UserLocaleStore,
                 baseLocale: baseLocale,
                 debug,
+                ssrTokenStrategy
             };
-        // config.projectid = projectid;
-        // config.key = key;
-        // config.sUserLocale = UserLocaleStore;
-        // config.baseLocale = baseLocale;
-        // config.debug = debug;
+        }
 
 
         // validate api key & projectid config
@@ -121,7 +180,6 @@ class LangsysAppClass {
                 this.config.key_type = authData.key_type;
                 config.key_type = authData.key_type;
                 this.debug.log('API Key Type:', this.config.key_type);
-                echo.log(`API Key Type:`, this.config.key_type);
             }
         }
 

@@ -1,5 +1,49 @@
 import type { Writable } from 'svelte/store';
 
+/**
+ * Configuration object for LangsysApp.init()
+ */
+export interface iLangsysInitConfig {
+    /**
+     * The ID (UUID) of the project created in Langsys
+     */
+    projectid: string;
+
+    /**
+     * The API key associated with the project
+     */
+    key: string;
+
+    /**
+     * A Svelte store for the user's selected locale
+     */
+    UserLocaleStore: Writable<string>;
+
+    /**
+     * The base language/locale this app uses (what language is in the code)
+     * @default 'en'
+     */
+    baseLocale?: string;
+
+    /**
+     * Enable debug console messages
+     * @default false
+     */
+    debug?: boolean;
+
+    /**
+     * Emulate Langsys failure to load (for testing error handling)
+     * @default false
+     */
+    emulateFailureToLoad?: boolean;
+
+    /**
+     * Token creation behavior during SSR
+     * @default 'client'
+     */
+    ssrTokenStrategy?: 'client' | 'server' | 'auto';
+}
+
 export interface iLangsysConfig {
     /**
      * The ID (UUID) of the project created in Langsys for this app
@@ -31,4 +75,13 @@ export interface iLangsysConfig {
      * This is set automatically after successful authorization
      */
     key_type?: 'read' | 'write';
+
+    /**
+     * Token creation behavior during SSR
+     * - 'client': Queue tokens for client-side sending (default, best for performance)
+     * - 'server': Send tokens immediately from server (best for reliability)
+     * - 'auto': Send from server if few tokens, queue if many
+     * @default 'client'
+     */
+    ssrTokenStrategy?: 'client' | 'server' | 'auto';
 }
