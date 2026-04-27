@@ -31,34 +31,6 @@ function in_array(array: any[], selector: string | Record<string, any>) {
     );
 }
 
-function structuredCloneShim<T>(obj: T): T {
-    if (typeof structuredClone === 'function') {
-        return (structuredClone as any)(obj);
-    }
-
-    // Fallback implementation if native structuredClone is not available
-    function deepClone<T>(o: T): T {
-        if (typeof o !== 'object' || o === null) {
-            return o;
-        }
-
-        if (Array.isArray(o)) {
-            return o.map((item) => (typeof item === 'object' && item !== null ? deepClone(item) : item)) as T;
-        }
-
-        const newO: Record<string, any> = {};
-        for (const key in o) {
-            if (Object.prototype.hasOwnProperty.call(o, key)) {
-                const value = o[key];
-                newO[key] = typeof value === 'object' && value !== null ? deepClone(value) : value;
-            }
-        }
-        return newO as T;
-    }
-
-    return deepClone(obj);
-}
-
 class Translations {
     private config: iLangsysConfig;
 
@@ -106,13 +78,7 @@ class Translations {
         this._ = derived(sTranslations, ($trans) => {
             // handler for the first tier call ie: $_['Menu']
             const handlerCat = {
-                get: (targetx: iCategories, cat: string): any => {
-                    // this.debug.log('CATEGORY LOOKUP', [cat, targetx]);
-
-                    // const target = structuredClone(targetx);
-                    const target = structuredCloneShim(targetx);
-
-                    // don't handle invalid tokens
+                get: (target: iCategories, cat: string): any => {
                     if (cat === undefined || cat === '') {
                         this.debug.warn(`Received empty category`, cat);
                         return cat;
@@ -129,43 +95,35 @@ class Translations {
                         const token = target.__symbol__.toString().trim();
                         this.debug.log('cat symbol call', [cat, target]);
 
-                        const newtarget = $trans.__uncategorized__;
+                        const uncategorized = $trans.__uncategorized__;
 
                         let translation: string;
-                        if (!isset(newtarget[token])) {
+                        if (!isset(uncategorized[token])) {
                             this.missingToken('', token);
                             translation = token;
                         } else {
-                            translation = newtarget[token] || token;
+                            translation = uncategorized[token] || token;
                         }
 
-                        // return translation;
-                        return () => {
-                            return translation;
-                        };
+                        return () => translation;
                     }
 
-                    // if the category does not yet exist, create it
                     cat = cat.trim();
-                    if (!is_object(target[cat])) {
-                        target[cat] = {
-                            __category__: cat, // reference to the key of this object
-                            __symbol__: cat, // reference to the token in the case this is a 1 tier call, is used by symbol logic above
-                        } as iTranslations;
-                    }
+                    // synthetic category object for unknown categories — kept local so
+                    // we never write back into the live $trans store
+                    const catObj: iTranslations = is_object(target[cat])
+                        ? (target[cat] as iTranslations)
+                        : ({ __category__: cat, __symbol__: cat } as iTranslations);
 
-                    return new Proxy(target[cat], handlerTrans);
+                    return new Proxy(catObj, handlerTrans);
                 },
             };
 
             // handler for the 2nd tier call ie: $_['Menu']['Dashboard']
             const handlerTrans = {
-                get: (targetx: iTranslations, token: string) => {
-                    this.debug.log('TRANSLATION LOOKUP', [token, targetx]);
-                    // let target = structuredClone(targetx);
-                    let target = structuredCloneShim(targetx);
+                get: (target: iTranslations, token: string) => {
+                    this.debug.log('TRANSLATION LOOKUP', [token, target]);
 
-                    // don't handle invalid tokens
                     if (token === undefined || token === '') {
                         this.debug.warn(`Received empty token`, token);
                         return token;
@@ -174,26 +132,22 @@ class Translations {
                     // 2nd tier end of the line
                     // enables cases where a category and uncategorized token may be the same string ie:  $_['Menu']['Whatever'] & $_['Menu']
                     if (typeof token === 'symbol' || token === '__symbol__' || token === 'constructor' || token.indexOf('Symbol(Symbol') > -1) {
-                        token = target.__symbol__ || target.__category__; // if this is 2nd tier, target will have a __symbol__ set by handlerCat
-                        // this.debug.log('trans symbol call', [token, target, $trans]);
-                        target = $trans.__uncategorized__;
-                        token = token.trim();
-                        this.debug.log('trans symbol call', [token, target, $trans]);
+                        // 2nd-tier symbol resolution: $_['Cat'] without 2nd index — fall back to uncategorized lookup
+                        token = (target.__symbol__ || target.__category__).trim();
+                        const uncategorized = $trans.__uncategorized__;
+                        this.debug.log('trans symbol call', [token, uncategorized, $trans]);
 
                         let translation: string;
-                        const category: string = target.__category__ || '';
-                        if (!isset(target[token])) {
+                        const category = uncategorized.__category__ || '';
+                        if (!isset(uncategorized[token])) {
                             this.missingToken(category, token);
                             translation = token;
                         } else {
-                            translation = (target[token] as string) || token;
+                            translation = (uncategorized[token] as string) || token;
                             this.debug.log('translation found', translation);
                         }
 
-                        // return translation;
-                        return () => {
-                            return translation;
-                        };
+                        return () => translation;
                     }
 
                     token = token.trim();
