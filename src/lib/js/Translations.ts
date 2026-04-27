@@ -76,36 +76,41 @@ class Translations {
         // this magic tidbit here makes a readonly copy of translations and combines it with a magic get Proxy method
         // enables us to use $_[token] in the code while handling tokens that do not exist as well
         this._ = derived(sTranslations, ($trans) => {
+            // Engine introspection traps fire on Symbol.toPrimitive (string coercion),
+            // Symbol.iterator, .constructor, etc. Detect them in one place.
+            const isIntrospection = (prop: string | symbol): prop is symbol | 'constructor' =>
+                typeof prop === 'symbol' || prop === 'constructor';
+
+            // Resolves an uncategorized 1-tier token via $_['Token'] coercion path.
+            // Returns a thunk because Symbol.toPrimitive must yield a callable.
+            const resolveUncategorized = (token: string, category: string) => {
+                const uncategorized = $trans.__uncategorized__;
+                let translation: string;
+                if (!isset(uncategorized[token])) {
+                    this.missingToken(category, token);
+                    translation = token;
+                } else {
+                    translation = (uncategorized[token] as string) || token;
+                    this.debug.log('translation found', translation);
+                }
+                return () => translation;
+            };
+
             // handler for the first tier call ie: $_['Menu']
             const handlerCat = {
-                get: (target: iCategories, cat: string): any => {
-                    if (cat === undefined || cat === '') {
-                        this.debug.warn(`Received empty category`, cat);
-                        return cat;
-                    }
-
-                    // this gets called when its the end of the line: ie: $_['Menu'] with no 2nd tier
-                    // allows for uncategorized tokens
-                    if (typeof cat === 'symbol' || cat === '__symbol__' || cat === 'constructor' || cat.indexOf('Symbol(Symbol') > -1) {
-                        // Guard against undefined __symbol__ (happens during JS introspection like console.log)
-                        if (!target.__symbol__) {
-                            return undefined;
-                        }
-
+                get: (target: iCategories, cat: string | symbol): any => {
+                    if (isIntrospection(cat)) {
+                        // String coercion of a synthetic 1-tier proxy: yield uncategorized lookup.
+                        // For real category proxies (no __symbol__), let the engine see the real prop.
+                        if (!target.__symbol__) return Reflect.get(target, cat);
                         const token = target.__symbol__.toString().trim();
                         this.debug.log('cat symbol call', [cat, target]);
+                        return resolveUncategorized(token, '');
+                    }
 
-                        const uncategorized = $trans.__uncategorized__;
-
-                        let translation: string;
-                        if (!isset(uncategorized[token])) {
-                            this.missingToken('', token);
-                            translation = token;
-                        } else {
-                            translation = uncategorized[token] || token;
-                        }
-
-                        return () => translation;
+                    if (cat === '') {
+                        this.debug.warn('Received empty category', cat);
+                        return cat;
                     }
 
                     cat = cat.trim();
@@ -121,33 +126,20 @@ class Translations {
 
             // handler for the 2nd tier call ie: $_['Menu']['Dashboard']
             const handlerTrans = {
-                get: (target: iTranslations, token: string) => {
+                get: (target: iTranslations, token: string | symbol): any => {
                     this.debug.log('TRANSLATION LOOKUP', [token, target]);
 
-                    if (token === undefined || token === '') {
-                        this.debug.warn(`Received empty token`, token);
-                        return token;
+                    if (isIntrospection(token)) {
+                        // 2nd-tier coercion: $_['Cat'] used as a string — fall back to uncategorized
+                        const symbolToken = (target.__symbol__ || target.__category__ || '').trim();
+                        if (!symbolToken) return Reflect.get(target, token);
+                        this.debug.log('trans symbol call', [token, symbolToken, $trans]);
+                        return resolveUncategorized(symbolToken, $trans.__uncategorized__?.__category__ || '');
                     }
 
-                    // 2nd tier end of the line
-                    // enables cases where a category and uncategorized token may be the same string ie:  $_['Menu']['Whatever'] & $_['Menu']
-                    if (typeof token === 'symbol' || token === '__symbol__' || token === 'constructor' || token.indexOf('Symbol(Symbol') > -1) {
-                        // 2nd-tier symbol resolution: $_['Cat'] without 2nd index — fall back to uncategorized lookup
-                        token = (target.__symbol__ || target.__category__).trim();
-                        const uncategorized = $trans.__uncategorized__;
-                        this.debug.log('trans symbol call', [token, uncategorized, $trans]);
-
-                        let translation: string;
-                        const category = uncategorized.__category__ || '';
-                        if (!isset(uncategorized[token])) {
-                            this.missingToken(category, token);
-                            translation = token;
-                        } else {
-                            translation = (uncategorized[token] as string) || token;
-                            this.debug.log('translation found', translation);
-                        }
-
-                        return () => translation;
+                    if (token === '') {
+                        this.debug.warn('Received empty token', token);
+                        return token;
                     }
 
                     token = token.trim();
@@ -155,12 +147,11 @@ class Translations {
                         this.debug.log('Token final lookup');
                         const translation = (target[token] as string) || token;
                         if (target[token] !== null) this.debug.log('TRANSLATION FOUND', translation);
-
                         return translation;
-                    } else {
-                        this.missingToken(target.__category__ || '', token);
-                        return token;
                     }
+
+                    this.missingToken(target.__category__ || '', token);
+                    return token;
                 },
             };
 
