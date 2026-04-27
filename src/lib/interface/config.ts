@@ -1,4 +1,5 @@
 import type { Writable } from 'svelte/store';
+import type { iCategories } from './translations.js';
 
 /**
  * Configuration object for LangsysApp.init()
@@ -42,6 +43,18 @@ export interface iLangsysInitConfig {
      * @default 'client'
      */
     ssrTokenStrategy?: 'client' | 'server' | 'auto';
+
+    /**
+     * Pre-fetched translation data to bypass initial API call
+     * Useful for SSR scenarios to avoid duplicate fetches
+     */
+    initialTranslations?: iCategories;
+
+    /**
+     * The locale that initialTranslations data corresponds to
+     * Required when initialTranslations is provided
+     */
+    initialTranslationsLocale?: string;
 }
 
 export interface iLangsysConfig {

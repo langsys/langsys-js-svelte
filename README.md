@@ -82,6 +82,24 @@ await LangsysApp.init(
 - `'server'`: Tokens are sent immediately from the server during SSR. Best for reliability and immediate registration.
 - `'auto'`: Small batches (≤5 tokens) sent from server, larger batches queued for client. Balanced approach.
 
+### Server-Side Rendering (SSR) Support
+
+This SDK fully supports SSR with SvelteKit and other SSR frameworks. Key features include:
+
+- **Eliminate duplicate API calls** by passing pre-fetched translations from server to client
+- **Faster initial render** with translations ready immediately on hydration
+- **Better SEO** with server-rendered translated content
+- **Configurable token strategies** for different SSR environments
+
+📖 **For detailed SSR implementation guide, see [README-SSR.md](./README-SSR.md)**
+
+The SSR guide includes:
+- Complete SvelteKit implementation example
+- How to pass translations from server to client
+- Plain Node.js SSR setup
+- Configuration options and best practices
+- Troubleshooting common SSR issues
+
 For a plain Svelte app, this might be in your app.svelte component onMount call
 
 ```html
@@ -265,17 +283,60 @@ In the course of your project you will often need localized country lists, count
 ```html
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { LangsysApp, type iCountryList, type iCountryDialCode, type iLocaleDefault } from 'langsys-js-svelte';
+    import { LangsysApp, type iCountryList, type iCountryDialCode, type iCurrencyList, type iLocaleDefault } from 'langsys-js-svelte';
 
     let countries: iCountryList;
     let dialCodes: iCountryDialCode[];
+    let currencies: iCurrencyList;
     let locales: iLocaleDefault;
     let singleLanguageName:string;
     onMount( async () => {
-        countries = await LangsysApp.getCountries();
-        dialCodes = await LangsysApp.getDialCodes();
-        locales = await LangsysApp.getLocales();
+        countries = await LangsysApp.getCountries();      // [{ code: "US", label: "United States" }, ...]
+        dialCodes = await LangsysApp.getDialCodes();      // [{ country_code: "US", dial_code: "+1", name: "United States" }, ...]
+        currencies = await LangsysApp.getCurrencies();    // [{ code: "USD", name: "US Dollar", symbol: "$", ... }, ...]
+        locales = await LangsysApp.getLocales();          // { "English": [{ code: "en-US", name: "English (US)" }, ...], ... }
         singleLanguageName = await LangsysApp.getLanguageName('es-es', true, 'fr-fr'); // espagnol
     });
 </script>
+```
+
+#### Detecting User's Preferred Locale
+Detect the end-user's preferred locale from the browser or SSR request headers:
+
+```typescript
+// Browser: uses navigator.languages (full preference array) with fallback to navigator.language
+const locale = LangsysApp.detectPreferredLocale();
+// Returns: 'en-US', 'fr', etc. or false if not detected
+
+// SSR (SvelteKit hooks.server.ts or +page.server.ts):
+const locale = LangsysApp.detectPreferredLocale(request.headers.get('Accept-Language'));
+// Parses "en-US,en;q=0.9,fr;q=0.8" and returns highest priority: 'en-US'
+```
+
+**Matching against supported locales:** Pass an optional array of supported locale codes to find the best match:
+
+```typescript
+// Get your app's supported locales and find the best match
+const supportedLocales = (await LangsysApp.getLocalesFlat()).map(l => l.code);
+const locale = LangsysApp.detectPreferredLocale(
+    request.headers.get('Accept-Language'),
+    supportedLocales
+);
+// If user prefers 'en-US' but you only support 'en-GB', it matches via language code 'en'
+```
+
+This is useful for setting an initial locale before the user makes a selection:
+
+```typescript
+// In your +layout.server.ts
+export const load = async ({ request }) => {
+    const supportedLocales = (await LangsysApp.getLocalesFlat()).map(l => l.code);
+    const detectedLocale = LangsysApp.detectPreferredLocale(
+        request.headers.get('Accept-Language'),
+        supportedLocales
+    );
+    return {
+        initialLocale: detectedLocale || 'en' // fallback to 'en' if not detected
+    };
+};
 ```

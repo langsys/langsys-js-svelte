@@ -44,6 +44,31 @@
     let isTokenizing = $state(false);
 
     type iNode = Node & { originalNodeValue?: string | null };
+    type iElement = HTMLElement & { originalAttributes?: Record<string, string> };
+
+    /**
+     * Translatable HTML attributes that should be extracted and stored as translation entries.
+     * These attributes contain user-facing text that needs localization.
+     */
+    const TRANSLATABLE_ATTRIBUTES = [
+        'placeholder', // <input>, <textarea>
+        'alt', // <img>, <input>
+        'title', // Any element - tooltip text
+        'aria-label', // Any element - accessibility label
+        'aria-placeholder', // Any element - ARIA placeholder text
+        'data-error', // Validation error message
+        'data-error-message', // Validation error message
+        'data-validation-message', // Validation hint
+        'data-invalid-message', // Validation hint
+        'data-required-message', // Required field message
+        'data-pattern-message', // Pattern validation message
+    ];
+
+    /**
+     * Elements where the 'value' attribute should be translated (display-only buttons, not form data)
+     */
+    const VALUE_TRANSLATABLE_ELEMENTS = ['button'];
+    const VALUE_TRANSLATABLE_INPUT_TYPES = ['submit', 'button'];
 
     // on first load, tokenize the content and save to Langsys if necessary
     $effect(() => {
@@ -155,7 +180,9 @@
                     }
                 });
             } else {
-                echo.log(`Skipping content block save (API key is ${config.key_type || 'unknown'})`);
+                if (config.debug) {
+                    echo.log(`Skipping content block save (API key is ${config.key_type || 'unknown'})`);
+                }
             }
 
             // translate the content block (blocking)
@@ -167,13 +194,28 @@
     }
 
     /**
-     * Tokenize the content of the element and store them in the tokens array
+     * Tokenize the content of the element and store them in the tokens array.
+     * This includes both text nodes and translatable attributes on elements.
+     * Respects the HTML translate="no" attribute to skip elements and their children.
      * @param nodes
      */
     function tokenize(nodes: iNode[], indices: number[] = []) {
         nodes.forEach((node, index) => {
+            // Respect translate="no" attribute - skip this element and all its children
+            if (node?.nodeType === Node.ELEMENT_NODE) {
+                const element = node as HTMLElement;
+                if (element.getAttribute('translate') === 'no') {
+                    return;
+                }
+            }
+
             if (node?.hasChildNodes()) {
                 applyStylesToNode(node as HTMLElement, [...indices, index]);
+            }
+
+            // Extract translatable attributes from element nodes
+            if (node?.nodeType === Node.ELEMENT_NODE) {
+                tokenizeAttributes(node as HTMLElement);
             }
 
             const contentToken = node.nodeValue?.replace(/\s+/g, ' ').trim();
@@ -191,6 +233,62 @@
             tokenize(Array.from(node.childNodes), [...indices, index]);
         });
     }
+
+    /**
+     * Extract translatable attribute values from an element and add them to the tokens array.
+     * Also normalizes image src attributes to fully qualified URLs.
+     * @param element - The element to extract attributes from
+     */
+    function tokenizeAttributes(element: HTMLElement) {
+        const tagName = element.tagName.toLowerCase();
+
+        // For images, convert relative src to fully qualified URL
+        if (tagName === 'img') {
+            const img = element as HTMLImageElement;
+            if (img.src) {
+                // img.src returns the fully qualified URL even if the attribute is relative
+                element.setAttribute('src', img.src);
+            }
+        }
+
+        // Check standard translatable attributes
+        for (const attr of TRANSLATABLE_ATTRIBUTES) {
+            const value = element.getAttribute(attr)?.trim();
+            if (value) {
+                tokens.push(value);
+            }
+        }
+
+        // Check 'value' attribute for button-like elements
+        if (VALUE_TRANSLATABLE_ELEMENTS.includes(tagName)) {
+            const value = element.getAttribute('value')?.trim();
+            if (value) {
+                tokens.push(value);
+            }
+        }
+
+        // Check 'value' attribute for input[type="submit"] and input[type="button"]
+        if (tagName === 'input') {
+            const inputType = element.getAttribute('type')?.toLowerCase();
+            if (inputType && VALUE_TRANSLATABLE_INPUT_TYPES.includes(inputType)) {
+                const value = element.getAttribute('value')?.trim();
+                if (value) {
+                    tokens.push(value);
+                }
+            }
+        }
+
+        // Handle <option> elements within <select>
+        if (tagName === 'select') {
+            const options = element.querySelectorAll('option');
+            options.forEach((option) => {
+                const optionText = option.textContent?.trim();
+                if (optionText) {
+                    tokens.push(optionText);
+                }
+            });
+        }
+    }
     function findNode(nodes: iNode[], indices: number[]): Element | undefined {
         let currentNode = nodes[indices[0]];
 
@@ -206,7 +304,9 @@
     }
 
     /**
-     * Translate the content of the element using the scoped custom_id varible
+     * Translate the content of the element using the scoped custom_id variable.
+     * This handles both text nodes and translatable attributes on elements.
+     * Respects the HTML translate="no" attribute to skip elements and their children.
      * @param nodes
      */
     function translate(nodes: iNode[]) {
@@ -214,6 +314,19 @@
         if ($currentlyLoadedLocale === config.baseLocale && (lastTranslatedLocale === '' || lastTranslatedLocale === config.baseLocale)) return;
 
         nodes.forEach((node) => {
+            // Respect translate="no" attribute - skip this element and all its children
+            if (node?.nodeType === Node.ELEMENT_NODE) {
+                const element = node as HTMLElement;
+                if (element.getAttribute('translate') === 'no') {
+                    return;
+                }
+            }
+
+            // Handle element nodes - translate their attributes
+            if (node?.nodeType === Node.ELEMENT_NODE) {
+                translateAttributes(node as iElement);
+            }
+
             // if this isn't a text node, skip or go deeper
             if (node?.nodeType !== Node.TEXT_NODE) {
                 if (!node?.hasChildNodes()) return;
@@ -237,18 +350,7 @@
             const contentToken = node.originalNodeValue?.replace(/\s+/g, ' ').trim();
             if (!contentToken) return;
 
-            // Get translation with proper type safety
-            let translation: string | null = null;
-            if (contentToken && $_[category] && $_[category][custom_id]) {
-                const categoryData = $_[category] as any;
-                const contentData = categoryData[custom_id] as any;
-                translation = contentData[contentToken] || null;
-            } else if (!category && contentToken && $_.__uncategorized__ && $_.__uncategorized__[custom_id]) {
-                // Handle uncategorized translations
-                const uncategorizedData = $_.__uncategorized__ as any;
-                const contentData = uncategorizedData[custom_id] as any;
-                translation = contentData[contentToken] || null;
-            }
+            const translation = getTranslation(contentToken);
 
             // we do a replace here instead of just setting the value because the tokens are stripped of extra whitespace,
             // which we want to keep in the end user display
@@ -259,13 +361,109 @@
             else if (node.originalNodeValue) {
                 node.nodeValue = node.originalNodeValue;
             }
-
-            // if (!node?.hasChildNodes()) {
-            //     return;
-            // }
-
-            // translate(Array.from(node.childNodes));
         });
+    }
+
+    /**
+     * Get translation for a given token from the translations store.
+     * @param token - The original text to translate
+     * @returns The translated text or null if not found
+     */
+    function getTranslation(token: string): string | null {
+        if (token && $_[category] && $_[category][custom_id]) {
+            const categoryData = $_[category] as any;
+            const contentData = categoryData[custom_id] as any;
+            return contentData[token] || null;
+        } else if (!category && token && $_.__uncategorized__ && $_.__uncategorized__[custom_id]) {
+            // Handle uncategorized translations
+            const uncategorizedData = $_.__uncategorized__ as any;
+            const contentData = uncategorizedData[custom_id] as any;
+            return contentData[token] || null;
+        }
+        return null;
+    }
+
+    /**
+     * Translate translatable attributes on an element.
+     * @param element - The element to translate attributes on
+     */
+    function translateAttributes(element: iElement) {
+        const tagName = element.tagName.toLowerCase();
+
+        // Initialize originalAttributes storage if needed
+        if (!element.originalAttributes) {
+            element.originalAttributes = {};
+        }
+
+        // Translate standard translatable attributes
+        for (const attr of TRANSLATABLE_ATTRIBUTES) {
+            translateAttribute(element, attr);
+        }
+
+        // Translate 'value' attribute for button-like elements
+        if (VALUE_TRANSLATABLE_ELEMENTS.includes(tagName)) {
+            translateAttribute(element, 'value');
+        }
+
+        // Translate 'value' attribute for input[type="submit"] and input[type="button"]
+        if (tagName === 'input') {
+            const inputType = element.getAttribute('type')?.toLowerCase();
+            if (inputType && VALUE_TRANSLATABLE_INPUT_TYPES.includes(inputType)) {
+                translateAttribute(element, 'value');
+            }
+        }
+
+        // Handle <option> elements within <select>
+        if (tagName === 'select') {
+            const options = element.querySelectorAll('option');
+            options.forEach((option) => {
+                const optionEl = option as iElement;
+                if (!optionEl.originalAttributes) {
+                    optionEl.originalAttributes = {};
+                }
+
+                // Store original text content
+                if (optionEl.originalAttributes['textContent'] === undefined) {
+                    optionEl.originalAttributes['textContent'] = option.textContent || '';
+                }
+
+                const originalText = optionEl.originalAttributes['textContent'].trim();
+                if (originalText) {
+                    const translation = getTranslation(originalText);
+                    if (translation) {
+                        option.textContent = translation;
+                    } else {
+                        option.textContent = optionEl.originalAttributes['textContent'];
+                    }
+                }
+            });
+        }
+    }
+
+    /**
+     * Translate a single attribute on an element.
+     * @param element - The element containing the attribute
+     * @param attr - The attribute name to translate
+     */
+    function translateAttribute(element: iElement, attr: string) {
+        const currentValue = element.getAttribute(attr);
+        if (!currentValue) return;
+
+        // Store original value on first translation
+        if (element.originalAttributes![attr] === undefined) {
+            element.originalAttributes![attr] = currentValue;
+        }
+
+        const originalValue = element.originalAttributes![attr].trim();
+        if (!originalValue) return;
+
+        const translation = getTranslation(originalValue);
+        if (translation) {
+            element.setAttribute(attr, translation);
+        } else {
+            // Revert to original if no translation
+            element.setAttribute(attr, element.originalAttributes![attr]);
+        }
     }
 
     /**
@@ -277,24 +475,106 @@
     }
 
     /**
-     * Apply the styles of the node to the element for display reproduction in Translation Manager
-     * @param node
+     * Semantically meaningful CSS properties to capture for Translation Manager rendering.
+     * These are properties that typically define the visual appearance of content,
+     * excluding layout properties that depend on container context.
+     */
+    const SEMANTIC_STYLE_PROPERTIES = [
+        // Typography (excluding font-family - controlled by Translation Manager)
+        'font-size',
+        'font-weight',
+        'font-style',
+        'font-variant',
+        'line-height',
+        'letter-spacing',
+        'word-spacing',
+        'text-align',
+        'text-decoration',
+        'text-transform',
+        'text-indent',
+        'text-shadow',
+        'white-space',
+        '-webkit-font-smoothing',
+
+        // Colors
+        'color',
+        'background-color',
+        'background-image',
+        'background-position',
+        'background-size',
+        'background-repeat',
+
+        // Borders
+        'border',
+        'border-top',
+        'border-right',
+        'border-bottom',
+        'border-left',
+        'border-radius',
+        'border-color',
+        'border-width',
+        'border-style',
+
+        // Spacing (margins and padding)
+        'margin',
+        'margin-top',
+        'margin-right',
+        'margin-bottom',
+        'margin-left',
+        'padding',
+        'padding-top',
+        'padding-right',
+        'padding-bottom',
+        'padding-left',
+
+        // Visual effects
+        'box-shadow',
+        'opacity',
+        'filter',
+
+        // Display & visibility
+        'display',
+        'visibility',
+        'list-style',
+        'list-style-type',
+
+        // Cursor
+        'cursor',
+    ];
+
+    /**
+     * Apply only semantically meaningful styles to the node for display reproduction in Translation Manager.
+     * Instead of capturing ALL computed styles, we only capture styles that differ from browser defaults
+     * and are visually meaningful. Translation Manager renders content in Shadow DOM for style isolation.
+     * @param node - The cloned node to apply styles to
+     * @param indices - Path indices to find the corresponding DOM node
      */
     function applyStylesToNode(node: HTMLElement, indices: number[]) {
         if (!content) return;
-        let domNode = findNode(Array.from(content.childNodes), indices);
-        // let cloneFind = findNode(Array.from(contentClone.childNodes), indices);
-        // console.log('applyStylesToNode', domNode, node, indices, cloneFind);
+        const domNode = findNode(Array.from(content.childNodes), indices);
         if (!domNode) return;
-        const cssmap = window.getComputedStyle(domNode, null);
-        for (const key in cssmap) {
-            const val = cssmap.getPropertyValue(key);
-            if (cssmap[key] !== '' && (typeof cssmap[key] === 'string' || typeof cssmap[key] === 'number')) {
-                if (['width', 'height'].includes(key)) continue;
-                node.style.setProperty(key, val);
+
+        // Create a reference element of the same tag to get browser defaults
+        const tagName = domNode.tagName.toLowerCase();
+        const reference = document.createElement(tagName);
+        reference.style.visibility = 'hidden';
+        reference.style.position = 'absolute';
+        document.body.appendChild(reference);
+
+        const computed = window.getComputedStyle(domNode);
+        const defaults = window.getComputedStyle(reference);
+
+        // Only capture semantic styles that differ from defaults
+        for (const prop of SEMANTIC_STYLE_PROPERTIES) {
+            const value = computed.getPropertyValue(prop);
+            const defaultValue = defaults.getPropertyValue(prop);
+
+            if (value && value !== defaultValue) {
+                node.style.setProperty(prop, value);
             }
         }
-        node.style.setProperty('box-shadow', cssmap.getPropertyValue('box-shadow'));
+
+        document.body.removeChild(reference);
         node.removeAttribute('class');
     }
 </script>

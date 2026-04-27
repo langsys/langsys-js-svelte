@@ -1,4 +1,3 @@
-import currentlyLoadedLocale from '$lib/store/currentlyLoadedLocale.js';
 // import structuredClone from '@ungap/structured-clone';
 import { derived, get, type Readable } from 'svelte/store';
 import type { ResponseObject } from '../interface/api.js';
@@ -6,6 +5,7 @@ import type { iLangsysConfig } from '../interface/config.js';
 import type { iCategories, iTranslations } from '../interface/translations.js';
 import LangsysAppAPI from '../service/LangsysAppAPI.js';
 import sTranslations from '../store/translations.js';
+import currentlyLoadedLocale from '../store/currentlyLoadedLocale.js';
 import echo from './echo.js';
 import type { PersistentStore } from './store.js';
 
@@ -121,6 +121,11 @@ class Translations {
                     // this gets called when its the end of the line: ie: $_['Menu'] with no 2nd tier
                     // allows for uncategorized tokens
                     if (typeof cat === 'symbol' || cat === '__symbol__' || cat === 'constructor' || cat.indexOf('Symbol(Symbol') > -1) {
+                        // Guard against undefined __symbol__ (happens during JS introspection like console.log)
+                        if (!target.__symbol__) {
+                            return undefined;
+                        }
+
                         const token = target.__symbol__.toString().trim();
                         this.debug.log('cat symbol call', [cat, target]);
 
@@ -303,7 +308,6 @@ class Translations {
         if (this.config?.debug) this.debug.debugEnabled = this.config.debug;
         if (config.baseLocale) this.locale = config.baseLocale;
 
-        // post missing tokens back to translation server so they can become translatable tokens
         this.debug.log('TRANSLATION SETUP INITIATED', this.config);
 
         // Set up token handling based on environment
@@ -338,11 +342,22 @@ class Translations {
     /**
      * Listener for the sUser.locale change, fires getTranslations if needed
      * @param locale
+     * @param force - Force a fetch even if cached
+     * @param skipFetch - Skip fetching (used when initial data is provided)
      * @returns boolean
      */
-    public async change(locale: string, force = false) {
+    public async change(locale: string, force = false, skipFetch = false) {
         if (!locale) return false;
         if (!this.config.projectid || !this.config.key) return false;
+
+        // Skip fetch if caller indicates data is already loaded (e.g., from SSR initial translations)
+        if (skipFetch) {
+            this.debug.log('Using pre-fetched translations for locale', locale);
+            this.locale = locale;
+            this.lastLoaded[locale] = new Date().getTime() / 1000;
+            return true;
+        }
+
         const currentTime = new Date().getTime() / 1000;
 
         // if we've loaded this locale in the last 60 seconds don't do it again
@@ -476,6 +491,7 @@ class Translations {
             this.lastLoaded[this.locale] = new Date().getTime() / 1000;
         });
     }
+
 }
 
 // const _ = instance.data.trans;
