@@ -1,4 +1,3 @@
-// import structuredClone from '@ungap/structured-clone';
 import { derived, get, type Readable } from 'svelte/store';
 import type { ResponseObject } from '../interface/api.js';
 import type { iLangsysConfig } from '../interface/config.js';
@@ -368,12 +367,10 @@ class Translations {
                     return false;
                 }
 
-                this.missingTokens.map((tokenObj) => {
+                this.missingTokens.forEach((tokenObj) => {
                     if (!currentData[tokenObj.category]) currentData[tokenObj.category] = {};
                     currentData[tokenObj.category][tokenObj.token] = tokenObj.token;
                     currentData[tokenObj.category]['__category__'] = tokenObj.category;
-                    // const tokenKey = tokenObj.category ? `{[${tokenObj.category}]} ${tokenObj.token}` : tokenObj.token;
-                    // currentData[tokenKey] = null;
                 });
                 sTranslations.set(currentData);
                 this.missingTokens = [];
@@ -409,22 +406,7 @@ class Translations {
             }
 
             Object.keys(trans).forEach((cat) => {
-                // console.log('Category', cat, trans);
-                // if (!trans[cat]) trans[cat] = {};
                 trans[cat]['__category__'] = cat;
-                // if (isset(trans['__uncategorized__'][cat])) trans[cat]['__DirectToken__'] = { token: cat, trans: trans['__uncategorized__'][cat] };
-
-                // const match = token.match(/^{\[([a-z0-9\s_\-.]*)\]}\s?/i);
-                // if (match) {
-                //     const category = match[1];
-                //     token = token.replace(match[0], '');
-                //     const existing = (typeof trans[category] === 'string' || trans[category] === null) ? trans[category] : undefined;
-                //     this.debug.log(existing, category);
-                //     if (trans[category] === null || typeof trans[category] !== 'object') trans[category] = {} as iTranslations;
-                //     trans[category][token] = val;
-                //     if (existing !== undefined && trans[category]['__DirectToken__'] === undefined)
-                //         trans[category]['__DirectToken__'] = {token: category, trans: existing};
-                // }
             });
 
             this.debug.log('GET TRANSLATIONS ' + this.locale, trans);
@@ -436,9 +418,6 @@ class Translations {
             this.lastLoaded[this.locale] = new Date().getTime() / 1000;
         });
     }
-
 }
-
-// const _ = instance.data.trans;
 
 export default Translations;
