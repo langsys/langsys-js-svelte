@@ -1,4 +1,140 @@
-<h1>Langsys Svelte SDK</h1>
-<p>Created with @sveltejs/package</p>
-<p>Visit <a href="https://docs.langsys.dev/">docs.langsys.dev</a> to read the documentation.</p>
-<p>Visit <a href="https://kit.svelte.dev">kit.svelte.dev</a> learn more about Svelte.</p>
+<script lang="ts">
+    import { writable } from 'svelte/store';
+    import { onMount } from 'svelte';
+    import { LangsysApp, t, currentlyLoadedLocale, Translate } from '$lib/index.js';
+
+    const userLocale = writable('en-us');
+    let ready = $state(false);
+    let error = $state<string | null>(null);
+
+    const LOCALES = [
+        { code: 'en-us', label: 'English (US)' },
+        { code: 'es-es', label: 'Español' },
+        { code: 'fr-fr', label: 'Français' },
+        { code: 'de-de', label: 'Deutsch' },
+    ];
+
+    onMount(async () => {
+        const projectid = import.meta.env.VITE_LANGSYS_PROJECT_ID;
+        const key = import.meta.env.VITE_LANGSYS_API_KEY;
+        if (!projectid || !key) {
+            error = 'Missing VITE_LANGSYS_PROJECT_ID or VITE_LANGSYS_API_KEY in .env';
+            return;
+        }
+        const res = await LangsysApp.init({
+            projectid,
+            key,
+            UserLocaleStore: userLocale,
+            baseLocale: 'en-us',
+            debug: true,
+        });
+        if (res?.status === false) {
+            error = res.errors?.join(', ') ?? 'Init failed';
+        } else {
+            ready = true;
+        }
+    });
+</script>
+
+{#if error}
+    <main>
+        <h1 style="color: #c00">Langsys init failed</h1>
+        <p style="font-family: monospace">{error}</p>
+        <p>
+            Copy <code>.env.example</code> to <code>.env</code>, fill in your project ID + API key,
+            and restart <code>npm run dev</code>.
+        </p>
+    </main>
+{:else if !ready}
+    <main><p>Loading Langsys…</p></main>
+{:else}
+    <main>
+        <h1>{$t('Demo', 'Welcome to the Langsys + Svelte demo')}</h1>
+        <p>{$t('Demo', 'Pick a locale below — translations update everywhere.')}</p>
+
+        <div class="row">
+            <label for="locale">{$t('UI', 'Locale')}:</label>
+            <select id="locale" bind:value={$userLocale}>
+                {#each LOCALES as l (l.code)}
+                    <option value={l.code}>{l.label}</option>
+                {/each}
+            </select>
+        </div>
+
+        <section class="card">
+            <h2>{$t('Demo', 'Direct phrase translation')}</h2>
+            <p>
+                {$t(
+                    'Demo',
+                    'Each phrase in your code is its own token. The first render registers the phrase with the Translation Manager; subsequent locale changes fetch and re-render automatically.',
+                )}
+            </p>
+        </section>
+
+        <section class="card">
+            <h2>{$t('Demo', 'Interpolation')}</h2>
+            <p>{$t('Greetings', 'Hello, {name}! You have {count} new messages.', { name: 'Sarah', count: 3 })}</p>
+            <p class="muted">
+                {$t('Demo', 'Placeholders in the phrase above are required and type-checked at compile time — try removing a key from the params object to see the error.')}
+            </p>
+        </section>
+
+        <section class="card">
+            <h2>{$t('Demo', 'Categorization disambiguates context')}</h2>
+            <ul>
+                <li>
+                    <strong>{$t('Main Menu', 'Home')}</strong>
+                    &nbsp;<em>{$t('Demo', '(menu item)')}</em>
+                </li>
+                <li>
+                    <strong>{$t('Home repairs', 'Home')}</strong>
+                    &nbsp;<em>{$t('Demo', '(the building)')}</em>
+                </li>
+            </ul>
+        </section>
+
+        <Translate category="Demo" label="Block demo" tag="section" class="card">
+            <h2>HTML content blocks</h2>
+            <p>
+                Wrap richer content in <code>&lt;Translate&gt;</code> and the SDK registers the whole thing as a
+                <strong>content block</strong> — translators see your styling and structure as the user sees it.
+                Attribute values like <em>placeholder</em>, <em>alt</em>, <em>aria-label</em> are also harvested.
+            </p>
+            <p>
+                <input type="text" placeholder="Type something here…" />
+            </p>
+        </Translate>
+
+        <p class="footer">{$t('UI', 'Current locale')}: <code>{$currentlyLoadedLocale}</code></p>
+    </main>
+{/if}
+
+<style>
+    main {
+        font-family: system-ui, sans-serif;
+        max-width: 720px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        color: #222;
+    }
+    .row {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        margin: 1rem 0;
+    }
+    .card {
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 1rem 1.2rem;
+        margin: 1rem 0;
+    }
+    .muted {
+        color: #666;
+        font-size: 0.9rem;
+    }
+    .footer {
+        color: #666;
+        margin-top: 2rem;
+    }
+</style>

@@ -1,73 +1,64 @@
 # SSR Usage Guide
 
-This guide shows how to use langsys-js-svelte with Server-Side Rendering (SSR) to eliminate duplicate API calls and improve performance.
+This guide shows how to use `langsys-js-svelte` with Server-Side Rendering (SSR) to eliminate duplicate API calls and improve performance.
 
-## The Problem
+## The problem
 
-In traditional SSR applications:
-1. Server fetches translations during render
-2. Client re-fetches the same translations after hydration
-3. This causes duplicate API calls and slower initial render
+In a traditional SSR flow:
+1. The server fetches translations during render.
+2. The client re-fetches the same translations after hydration.
+3. Duplicate API calls, slower initial render, possible flash of untranslated content.
 
-## The Solution
+## The solution
 
-Pass pre-fetched translations from server to client using the `initialTranslations` config option.
+Pass pre-fetched translations from server to client using the `initialTranslations` config option. The client SDK uses them as-is and skips the initial fetch.
 
-## SvelteKit Implementation
+## SvelteKit implementation
 
-### Step 1: Server-Side Data Fetching
-
-Create a server load function that fetches translations:
+### Step 1: Server-side data fetching
 
 ```typescript
 // src/routes/+layout.server.ts
 import type { iCategories } from 'langsys-js-svelte';
 
 export async function load({ fetch, locals }) {
-    // Get user's locale (from cookies, headers, etc.)
     const locale = locals.userLocale || 'en';
 
-    // Fetch translations on the server
     const response = await fetch(
         `https://api.langsys.dev/api/projects/${process.env.LANGSYS_PROJECT_ID}/translations?locale=${locale}`,
         {
             headers: {
                 'x-Authorization': process.env.LANGSYS_API_KEY,
-                'Content-Type': 'application/json'
-            }
-        }
+                'Content-Type': 'application/json',
+            },
+        },
     );
-
     const result = await response.json();
 
     return {
         locale,
         translations: result.data as iCategories,
         projectId: process.env.LANGSYS_PROJECT_ID,
-        apiKey: process.env.PUBLIC_LANGSYS_API_KEY // Use read-only key for client
+        apiKey: process.env.PUBLIC_LANGSYS_API_KEY, // use a read-only key for the client
     };
 }
 ```
 
-### Step 2: Client-Side Initialization
-
-Use the pre-fetched translations in your layout:
+### Step 2: Client-side initialization
 
 ```svelte
 <!-- src/routes/+layout.svelte -->
 <script lang="ts">
-    import { LangsysApp, type iLangsysInitConfig } from 'langsys-js-svelte';
     import { writable } from 'svelte/store';
     import { onMount } from 'svelte';
+    import { LangsysApp, type iLangsysInitConfig } from 'langsys-js-svelte';
     import type { PageData } from './$types';
 
-    export let data: PageData;
+    let { data, children }: { data: PageData; children: any } = $props();
 
-    // Create a store for the user's locale
     const userLocale = writable(data.locale);
 
     onMount(async () => {
-        // Initialize with pre-fetched translations
         const config: iLangsysInitConfig = {
             projectid: data.projectId,
             key: data.apiKey,
@@ -75,49 +66,48 @@ Use the pre-fetched translations in your layout:
             baseLocale: 'en',
             initialTranslations: data.translations,
             initialTranslationsLocale: data.locale,
-            ssrTokenStrategy: 'client' // Optional: control token creation
+            ssrTokenStrategy: 'client',
         };
 
         await LangsysApp.init(config);
     });
 </script>
 
-<slot />
+{@render children()}
 ```
 
-### Step 3: Using Translations
-
-Use translations as normal in your components:
+### Step 3: Using translations
 
 ```svelte
 <!-- src/routes/+page.svelte -->
 <script lang="ts">
-    import { _ } from 'langsys-js-svelte';
+    import { t } from 'langsys-js-svelte';
 </script>
 
-<h1>{$_['HomePage']['Welcome']}</h1>
-<p>{$_['HomePage']['Description']}</p>
+<h1>{$t('HomePage', 'Welcome')}</h1>
+<p>{$t('HomePage', 'Description')}</p>
+<p>{$t('HomePage', 'Hello, {name}!', { name: 'Sarah' })}</p>
 ```
 
-## Advanced: Locale Switching
+## Locale switching
 
-When users change their locale, the SDK will fetch new translations:
+Update the `userLocale` writable; the SDK reacts and fetches the new locale's translations:
 
 ```svelte
 <script lang="ts">
     import { LangsysApp } from 'langsys-js-svelte';
+    import { writable } from 'svelte/store';
 
-    async function changeLocale(newLocale: string) {
-        // Update the store (triggers automatic fetch)
-        $userLocale = newLocale;
-
-        // Optional: Force immediate fetch
-        await LangsysApp.getApp().changeLocale(newLocale, true);
+    // (assume userLocale was created at the layout level and is in scope)
+    function changeLocale(newLocale: string) {
+        $userLocale = newLocale;       // subscribers in the SDK trigger a fetch
+        // Optional: explicitly await the in-flight fetch:
+        return LangsysApp.translationsLoadingPromise;
     }
 </script>
 
-<button on:click={() => changeLocale('es')}>Español</button>
-<button on:click={() => changeLocale('fr')}>Français</button>
+<button onclick={() => changeLocale('es')}>Español</button>
+<button onclick={() => changeLocale('fr')}>Français</button>
 ```
 
 ## Plain Node.js SSR
@@ -126,30 +116,24 @@ For non-SvelteKit SSR implementations:
 
 ```javascript
 // server.js
-import { renderToString } from 'svelte/server';
+import { render } from 'svelte/server';
 import App from './App.svelte';
 
-// Fetch translations on server
-const translations = await fetch(/* ... */);
+const translations = await fetch(/* ... */).then((r) => r.json());
 
-// Pass to your app
-const html = renderToString(App, {
-    props: {
-        initialTranslations: translations,
-        locale: 'en'
-    }
+const { html, head } = render(App, {
+    props: { initialTranslations: translations, locale: 'en' },
 });
 
-// Include in your HTML response
 res.send(`
 <!DOCTYPE html>
 <html>
-<head>...</head>
+<head>${head}</head>
 <body>
     ${html}
     <script>
         window.__INITIAL_TRANSLATIONS__ = ${JSON.stringify(translations)};
-        window.__INITIAL_LOCALE__ = '${locale}';
+        window.__INITIAL_LOCALE__ = 'en';
     </script>
     <script src="/app.js"></script>
 </body>
@@ -160,117 +144,115 @@ res.send(`
 ```javascript
 // client.js
 import { LangsysApp } from 'langsys-js-svelte';
+import { writable } from 'svelte/store';
 
-// Use server-provided translations
+const userLocale = writable(window.__INITIAL_LOCALE__);
+
 LangsysApp.init({
     projectid: 'your-project-id',
     key: 'your-api-key',
     UserLocaleStore: userLocale,
     initialTranslations: window.__INITIAL_TRANSLATIONS__,
-    initialTranslationsLocale: window.__INITIAL_LOCALE__
+    initialTranslationsLocale: window.__INITIAL_LOCALE__,
 });
 ```
 
 ## Benefits
 
 ### Performance
-- ✅ No duplicate API calls (server + client)
-- ✅ Translations ready immediately on hydration
-- ✅ Faster Time to Interactive (TTI)
-- ✅ Reduced API usage and costs
+- No duplicate API calls (server + client).
+- Translations ready immediately on hydration.
+- Faster Time to Interactive (TTI).
+- Reduced API usage and costs.
 
-### User Experience
-- ✅ No flash of untranslated content
-- ✅ Instant translation display
-- ✅ Better SEO with server-rendered translations
+### User experience
+- No flash of untranslated content.
+- Instant translation display.
+- Better SEO with server-rendered translations.
 
-### Developer Experience
-- ✅ Simple configuration
-- ✅ Works with existing code
-- ✅ Full TypeScript support
-- ✅ Backward compatible
+### Developer experience
+- Simple configuration.
+- Full TypeScript support, including compile-time-checked interpolation params on `$t()`.
 
-## Configuration Options
+## Configuration options
 
-### SSR Token Strategy
+### SSR token strategy
 
 Control how missing tokens are handled during SSR:
 
 ```typescript
 {
-    ssrTokenStrategy: 'client' | 'server' | 'auto'
+    ssrTokenStrategy: 'client' | 'server' | 'auto';
 }
 ```
 
-- `'client'` (default): Queue tokens, send from client after hydration
-- `'server'`: Send tokens immediately from server
-- `'auto'`: Small batches from server, large batches from client
+- `'client'` (default) — queue tokens, send from client after hydration.
+- `'server'` — send tokens immediately from server.
+- `'auto'` — small batches (≤5) from server, larger batches from client.
 
-### Debug Mode
-
-Enable debug logging to see when translations are loaded:
+### Debug mode
 
 ```typescript
 {
     debug: true,
     initialTranslations: data.translations,
-    initialTranslationsLocale: data.locale
+    initialTranslationsLocale: data.locale,
 }
 ```
 
-Debug output will show:
-- "INITIAL TRANSLATIONS PROVIDED" - When pre-fetched data is detected
-- "Using pre-fetched translations for locale" - When skipping API fetch
-- "Locale change detected!" - When fetching new translations
+Look for:
+- `SSR initial translations config:` on init — confirms pre-fetched data is detected.
+- `Using pre-fetched translations for locale` — confirms the initial fetch was skipped.
+- `Locale change detected!` — fires on a subsequent locale switch.
 
-## Important Notes
+## Important notes
 
-1. **One-time Use**: Initial translations are only used once during initialization. Subsequent locale changes will fetch from the API.
-
-2. **Matching Locales**: Always provide `initialTranslationsLocale` with `initialTranslations` to ensure the data matches the expected locale.
-
-3. **Data Format**: The translations must match the API response structure (iCategories type).
-
-4. **Caching**: The 60-second cache still applies. Pre-fetched translations are marked as cached.
-
-5. **Token Creation**: With read-only API keys, missing tokens won't be created (recommended for production).
+1. **One-time use.** `initialTranslations` is consumed only at init. Locale changes after init go through the normal fetch path.
+2. **Matching locales.** Always provide `initialTranslationsLocale` with `initialTranslations` so the SDK knows what locale the data represents.
+3. **Data format.** The translations payload must match the `iCategories` shape returned by `LangsysAppAPI.getTranslations()`.
+4. **Cache.** The 60-second locale cache still applies. Pre-fetched translations count as cached.
+5. **Token creation.** Use a read-only API key for the client in production — missing tokens won't be sent. Keep the write key on the server (and ideally pre-populate tokens via your local dev environment).
 
 ## Troubleshooting
 
 ### Translations not appearing
-- Check that `initialTranslationsLocale` matches the UserLocaleStore value
-- Verify the translations data structure matches iCategories type
-- Enable debug mode to see what's happening
+- Check that `initialTranslationsLocale` matches the `UserLocaleStore` value at init.
+- Verify the translations payload matches the `iCategories` shape.
+- Enable `debug: true` and look for the messages above.
 
 ### Still seeing duplicate API calls
-- Ensure you're passing both `initialTranslations` AND `initialTranslationsLocale`
-- Check that initialization happens before any translation usage
-- Verify the locale hasn't changed between server and client
+- Confirm both `initialTranslations` *and* `initialTranslationsLocale` are passed.
+- Confirm init runs before any rendering that calls `$t(...)`.
+- Confirm the locale hasn't drifted between server and client.
 
-### TypeScript errors
-- Import types: `import type { iCategories } from 'langsys-js-svelte'`
-- Ensure you're using the latest version of the SDK
+### TypeScript errors on `$t()`
+- Placeholders are compile-time-checked: `$t('Cat', 'Hello, {name}!')` *requires* a params object with `name`. Either add the key or remove the placeholder.
+- Allowed param value types: `string | number | Date | boolean`.
 
-## Example Project Structure
+## Example project structure
 
 ```
 src/
 ├── routes/
 │   ├── +layout.server.ts   # Fetch translations
-│   ├── +layout.svelte       # Initialize Langsys
-│   └── +page.svelte         # Use translations
+│   ├── +layout.svelte      # Initialize Langsys
+│   └── +page.svelte        # Use translations
 ├── lib/
 │   └── stores/
-│       └── locale.ts        # User locale store
+│       └── locale.ts       # User locale writable (if you keep it separate)
 └── app.html
 ```
 
-## Migration from Non-SSR
+## Migration from v2.x
 
-If you're migrating from a client-only setup:
+If you're migrating from `langsys-js-svelte` v2.x, the SSR plumbing is unchanged — `initialTranslations` / `initialTranslationsLocale` work exactly as before. The only call-site difference is template usage:
 
-1. **No changes required** - Existing code continues to work
-2. **Optional enhancement** - Add server-side fetching when ready
-3. **Gradual adoption** - Can implement page by page
+```svelte
+<!-- v2.x -->
+<h1>{$_['HomePage']['Welcome']}</h1>
 
-The SDK maintains full backward compatibility, so you can adopt SSR support at your own pace.
+<!-- v3.0+ -->
+<h1>{$t('HomePage', 'Welcome')}</h1>
+```
+
+See `CHANGELOG.md` for the full breaking-change list.

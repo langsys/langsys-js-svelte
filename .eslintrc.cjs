@@ -27,8 +27,5 @@ module.exports = {
             }
         }
     ],
-    rules: {
-        "@typescript-eslint/no-explicit-any": "off",
-        "@typescript-eslint/prefer-rest-params": "off"
-    }
+    rules: {}
 };

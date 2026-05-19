@@ -1,3 +1,41 @@
+## 3.0.0 - 2026-05-19
+
+### BREAKING CHANGES
+
+- **The `$_['Category']['Phrase']` proxy is removed**, replaced by `$t(category, phrase, params?)`. The phrase remains both the lookup key and the base-language default, but the function-call form unlocks interpolation, future ICU plural/select support, and compile-time-checked parameters via template-literal types.
+    - **Migration:** `$_['UI']['Title']` → `$t('UI', 'Title')`. Two-arg, 1:1 with the previous category/phrase. Codemod-friendly.
+- **`langsys-js-svelte` is now a thin Svelte binding over the framework-agnostic [`langsys-js-typescript`](https://github.com/langsys/langsys-js-typescript) package.** All of the previous internals (Translations class, LangsysAppAPI, stores, utility code, type definitions) live there now. This package contains only Svelte-native concerns: a `LangsysApp` wrapper that accepts a `Writable<string>` for the user locale, the `t` / `currentlyLoadedLocale` / `sTranslations` / `contentBlocks` re-exports typed as Svelte `Readable`s, and the `<Translate>` Svelte 5 component.
+- **Legacy parameter-based `LangsysApp.init(projectid, key, store, …)` is removed.** The config-object form (deprecated in 2.0.0) is now the only signature. Callers still on the old form must migrate to `LangsysApp.init({ projectid, key, UserLocaleStore, … })`.
+
+### Added
+
+- `$t(category, phrase, params?)` function-call translation API.
+- `{name}`-style placeholder interpolation. Allowed value types: `string | number | Date | boolean`; `Date` serializes to ISO 8601.
+- **Compile-time-checked params** via template-literal types. Placeholder names are extracted from the phrase string literal; the params object must satisfy them exactly. Missing or extra keys are TypeScript errors at the call site.
+- `t: Readable<TFunction>` — Svelte store wrapping the underlying reactive primitive. `$t(...)` re-renders subscribed templates whenever translations or the loaded locale change.
+- Re-exports of `currentlyLoadedLocale`, `sTranslations`, `contentBlocks` typed as Svelte `Readable`s.
+- Type re-exports: `TFunction`, `TranslationParams`, `ParamPrimitive`, `ExtractParamKeys`, `ParamsFor`, `TArgs`, plus all the previous `iCategory`/`iCountry`/`iLocale`/etc types now sourced from `langsys-js-typescript`.
+
+### Changed
+
+- `LangsysApp.init` accepts a Svelte `Writable<string>` for `UserLocaleStore` and adapts it internally to the base SDK's `Signal<string>`. From the caller's perspective the contract is unchanged.
+- All previously stale `@typescript-eslint/*: off` rule overrides removed — the new wrapper code is precise enough not to need them.
+- `prettier` invocations updated to drop deprecated `--plugin-search-dir .` flags.
+
+### Removed
+
+- Old proxy-based `_` export and the entire `TranslationsAccessor` machinery.
+- Legacy parameter-based `LangsysApp.init` signature (deprecated in 2.0).
+- `src/lib/interface/`, `src/lib/js/`, `src/lib/service/`, `src/lib/store/` — all functionality now lives in `langsys-js-typescript`.
+- `@macfja/svelte-persistent-store` and `@ungap/structured-clone` dependencies (no longer needed; persistence and cloning handled by `langsys-js-typescript`).
+- `watch` devDep + accompanying `npm run watch` script. `svelte-package` has built-in watch mode.
+
+### Added (deps)
+
+- `langsys-js-typescript` — the framework-agnostic base SDK this package binds to.
+
+---
+
 ## 2.0.0 - 2026-05-17
 
 ### BREAKING CHANGES

@@ -6,9 +6,9 @@ Integrate the Langsys Translation Manager into your Svelte and SvelteKit applica
 
 ## Requirements
 
-- **Svelte 5** - This SDK requires Svelte 5 and is fully compatible with SSR (Server-Side Rendering) in SvelteKit applications.
+- **Svelte 5** with full SSR support in SvelteKit.
 
-> **Note for Svelte 3/4 users:** The last version supporting Svelte 3 and 4 (client-side only) is available at tag `v-last-svelte4-compat`. Use that version if you need compatibility with older Svelte versions.
+> The last version supporting Svelte 3 / 4 (client-side only) is tagged `v-last-svelte4-compat`.
 
 [![GitHub Release](https://img.shields.io/github/release/langsys/langsys-js-svelte.svg?style=flat)]()
 [![GitHub last commit](https://img.shields.io/github/last-commit/langsys/langsys-js-svelte.svg?style=flat)]()
@@ -16,327 +16,260 @@ Integrate the Langsys Translation Manager into your Svelte and SvelteKit applica
 [![PR's Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat)](http://makeapullrequest.com)
 [![NPM License](https://img.shields.io/npm/l/all-contributors.svg?style=flat)](https://github.com/langsys/langsys-js-svelte/blob/master/LICENSE)
 
-## Creating a Langsys project
+## How it's layered
 
-Visit [Langsys.dev](https://Langsys.dev/) to create your account, and then create your project. Take note your project ID and API key.
+As of v3.0.0, `langsys-js-svelte` is a thin Svelte binding over the framework-agnostic [`langsys-js-typescript`](https://github.com/langsys/langsys-js-typescript) package — which owns the API client, translation lifecycle, token discovery, DOM tokenizer, and SSR-aware token strategies. This package adds only the Svelte-native concerns:
 
-### API Key Permissions
+- A `LangsysApp` whose `init` accepts a Svelte `Writable<string>` for the user locale
+- A `t` store you read with `$t('Category', 'Phrase')` — re-renders any subscribed template when translations or the loaded locale change
+- A `<Translate>` Svelte 5 component wrapping the underlying DOM walker
 
-The SDK now automatically detects and respects API key permissions:
+If you need the SDK outside Svelte (a Node script, a non-Svelte web app), import from `langsys-js-typescript` directly.
 
-- **Write Permission**: Allows automatic creation of new translation tokens and content blocks. Recommended for development environments.
-- **Read-only Permission**: Only fetches existing translations. Recommended for production environments to prevent accidental token creation.
-
-The SDK will automatically skip token collection and content block creation when using a read-only key.
-
-From within your Svelte project:
+## Install
 
 ```bash
-# install sdk to your svelte project
 npm install langsys-js-svelte
 ```
 
-## Developing
+`langsys-js-typescript` is installed automatically as a transitive dependency.
 
-### Initialization
-Once you've installed the SDK in your project with `npm install` (or `pnpm install` or `yarn`), you are ready to initialize Langsys, which needs to be done before the rest of your app.
+## Creating a Langsys project
 
-#### Modern Configuration (Recommended)
+Visit [Langsys.dev](https://Langsys.dev/) to create your account, then create your project. Take note of your project ID and API key.
 
-```typescript
-import { LangsysApp, type iLangsysInitConfig } from 'langsys-js-svelte';
-import sUserLocale from './stores/UserLocale';
+### API key permissions
 
-const config: iLangsysInitConfig = {
-    projectid: env.LANGSYS_PROJECT_ID,
-    key: env.LANGSYS_API_KEY,
-    UserLocaleStore: sUserLocale,
-    baseLocale: 'en-us',
-    debug: false,
-    ssrTokenStrategy: 'client' // Optional: 'client' | 'server' | 'auto'
-};
+- **Write key** (development): the SDK auto-creates new translation tokens and content blocks as they appear in your app.
+- **Read-only key** (production): the SDK fetches translations only — no token creation, no content-block writes.
 
-await LangsysApp.init(config);
-```
+The SDK detects the key type automatically and behaves accordingly.
 
-#### Legacy Initialization (Deprecated)
+## Initialization
 
-> ⚠️ **DEPRECATED**: The parameter-based approach is deprecated and will be removed in a future version. Please migrate to the config object approach above.
-
-```typescript
-// ⚠️ DEPRECATED - DO NOT USE FOR NEW CODE
-await LangsysApp.init(
-    projectid,
-    apikey,
-    sUserLocale,
-    'en-us',
-    false, // debug
-    false  // emulateFailureToLoad
-);
-```
-
-#### SSR Token Strategy
-
-**Available strategies for `ssrTokenStrategy`:**
-- `'client'` (default): Tokens discovered during SSR are queued and sent from the client after hydration. Best for performance.
-- `'server'`: Tokens are sent immediately from the server during SSR. Best for reliability and immediate registration.
-- `'auto'`: Small batches (≤5 tokens) sent from server, larger batches queued for client. Balanced approach.
-
-### Server-Side Rendering (SSR) Support
-
-This SDK fully supports SSR with SvelteKit and other SSR frameworks. Key features include:
-
-- **Eliminate duplicate API calls** by passing pre-fetched translations from server to client
-- **Faster initial render** with translations ready immediately on hydration
-- **Better SEO** with server-rendered translated content
-- **Configurable token strategies** for different SSR environments
-
-📖 **For detailed SSR implementation guide, see [README-SSR.md](./README-SSR.md)**
-
-The SSR guide includes:
-- Complete SvelteKit implementation example
-- How to pass translations from server to client
-- Plain Node.js SSR setup
-- Configuration options and best practices
-- Troubleshooting common SSR issues
-
-For a plain Svelte app, this might be in your app.svelte component onMount call
-
-```html
+```svelte
+<!-- src/routes/+layout.svelte -->
 <script lang="ts">
-    // ...
+    import { writable } from 'svelte/store';
+    import { onMount } from 'svelte';
     import { LangsysApp, type iLangsysInitConfig } from 'langsys-js-svelte';
-    import sUserLocale from '../stores/UserLocale'; // wherever your store for your user locale is
-    // ...
 
-    let appInitError = false;
+    const userLocale = writable('en-us');
+    let appReady = $state(false);
+    let appInitError = $state<string | null>(null);
 
     onMount(async () => {
         const config: iLangsysInitConfig = {
-            projectid: env.LANGSYS_PROJECT_ID,
-            key: env.LANGSYS_API_KEY,
-            UserLocaleStore: sUserLocale,
+            projectid: import.meta.env.VITE_LANGSYS_PROJECT_ID,
+            key: import.meta.env.VITE_LANGSYS_API_KEY,
+            UserLocaleStore: userLocale,
             baseLocale: 'en-us',
             debug: false,
-            ssrTokenStrategy: 'client' // Optional for SSR apps
+            ssrTokenStrategy: 'client',
         };
 
-        const response = await LangsysApp.init(config);
-
-        if (response.status) {
-            appInit();
-        } else {
-            appInitError = {
-                code: 'LS-PK404',
-                details: null,
-                message: `Could not find matching project and key.`,
-                hint: `${config.projectid} | ${config.key.substring(0, 10)}{...}`,
-            };
-        }
+        const res = await LangsysApp.init(config);
+        if (res.status) appReady = true;
+        else appInitError = res.errors?.join(', ') ?? 'Init failed';
     });
-
-    function appInit() {
-        // ... rest of your app initialization functions
-    }
 </script>
 
-<App {...params}>
-    <!-- If Langsys (or something else you might have) doesn't complete, it fills out the appInitError and this displays, example code styled by Bulma classes -->
-    {#if appInitError !== false}
-        <View>
-            <Page class="p-6">
-                <img
-                    src={config.brand.logoTall}
-                    class="mb-4 mx-auto is-block"
-                    style="width: 500px; max-width: 100%"
-                    alt={config.brand.name}
-                />
-                <Card style="margin: auto auto; max-width: 400px;">
-                    <CardContent>
-                        {#if appInitError === false}
-                            <Loader />
-                        {:else}
-                            <div class="is-notification is-danger is-light">
-                                <h5 class="mt-0 has-text-dark">Error during app init</h5>
-                                <p class="has-text-weight-bold">[{appInitError.code}] {appInitError.message}</p>
-                                <p class="is-italic has-text-dark">{appInitError.hint}</p>
-                            </div>
-                        {/if}
-                    </CardContent>
-                </Card>
-            </Page>
-        </View>
-    {:else}
-        <View>
-            <!-- ... your normal application view after initialization succeeds ... -->
-        </View>
-    {/if}
-</App>
+{#if appInitError}
+    <p>Langsys init failed: {appInitError}</p>
+{:else if !appReady}
+    <p>Loading…</p>
+{:else}
+    <slot />
+{/if}
 ```
-![image of integration code error](https://p-gkfqz2n.b2.n0.cdn.getcloudapp.com/items/9ZuymoAe/c1b84ac3-f07c-4539-bd84-24467d53caf6.jpg?source=viewer&v=214198bfd9215c42c09ad0427465f4fa)
 
-### Implementation
+`UserLocaleStore` is a standard Svelte `Writable<string>` — set/update it however you like and the SDK reacts.
 
-There are two ways to implement translations in-app.
-1. Direct store for individual strings
-2. Translate component for individual strings, paragraphs or any html content you want translated in whole.
+### SSR token strategy
 
-#### Direct Store
-This is the most common method you will use throughout your app.
-```html
-<script lang="ts">
-    import { _ } from "langsys-js-svelte";
+`ssrTokenStrategy` (default `'client'`) controls when missing tokens are sent during server rendering:
+
+- `'client'` — tokens collected on the server are flushed from the client after hydration. Best for performance.
+- `'server'` — tokens are sent immediately during SSR. Best for reliability and immediate registration.
+- `'auto'` — small batches (≤5) sent from server, larger queued for client.
+
+## Using translations
+
+### `$t(category, phrase, params?)` — the everyday API
+
+```svelte
+<script>
+    import { t } from 'langsys-js-svelte';
 </script>
-<h1>{$_['Context Category']['Title for my page here']}</h1>
+
+<h1>{$t('UI', 'Welcome to my app')}</h1>
+<p>{$t('UI', 'Hello, {name}!', { name: 'Sarah' })}</p>
 ```
-The underscore `_` is the store. The first array entry is to help you organize and give context to your content. The second is your actual content to be translated.  While we highly recommend using categorization, it is not required.  You can also do this:
-```js
-$_['Title for my page here']
+
+The **phrase itself is the lookup key** *and* the base-language default — there's no separate keys file to maintain. The first render of a phrase registers it in the Translation Manager (when using a write key); from then on, translations are fetched and rendered automatically as locales change.
+
+#### Interpolation
+
+Curly-brace placeholders are substituted from the third argument:
+
+```svelte
+<p>{$t('Notifications', 'You have {count} new messages', { count: 3 })}</p>
 ```
-It is important to note that every translation is unique to its category.  An example:
-```js
-$_['Main Menu']['Home']; // translated to 'Inicio' in spanish
-$_['Home repairs page']['Home']; // translate to 'Hogar' in spanish
+
+Placeholder names are extracted from the phrase at compile time and **type-checked**: omitting a required key or adding an extra one is a TypeScript error.
+
+```typescript
+$t('Notifications', 'You have {count} new messages', {});
+// ❌ Property 'count' is missing in type '{}'
+
+$t('Notifications', 'You have {count} new messages', { count: 3, extra: 'x' });
+// ❌ Object literal may only specify known properties, and 'extra' does not exist
 ```
-As you see you'll need two different translations for the word `Home`. If you didn't categorize, you'd only be able to have ONE translation, which wouldn't work in this context.
 
-Langsys will always minimize translations with the philosophy of translate ONCE, use everywhere.  So when you need contextual translations, you'll need to categorize them.
+Allowed value types: `string | number | Date | boolean`. Dates serialize to ISO 8601.
 
-A good rule for organization is to categorize based on the module the content is being displayed. ie: `Home`, `Main Menu`, `Account`, `Errors`, or even `UI` for reusable content like `Ok` `Yes` `Submit` etc.
+> Future versions will swap the simple `{name}` runtime for ICU MessageFormat — adding plural / select / date formatting — without changing the public signature. Today's `$t('Cart', '{count} items', { count })` will evolve to `$t('Cart', '{count, plural, one {# item} other {# items}}', { count })`.
 
-#### Translate Component
-This component is geared toward larger blocks of content without variable data. An example of this would be web page content or a blog article, but it can be any html content you like, or it can even just be a string of text too.
+#### Categorization disambiguates context
 
-##### Some Examples:
-```html
-<script type="ts">
-import { Translate } from "langsys-js-svelte";
+Different categories give the *same* phrase different translations:
+
+```svelte
+<strong>{$t('Main Menu', 'Home')}</strong>      <!-- "Inicio" in Spanish -->
+<strong>{$t('Home repairs', 'Home')}</strong>   <!-- "Hogar" in Spanish -->
+```
+
+Without categorization, "Home" would only have one translation — which can't work for both contexts. Langsys's philosophy is *translate once, use everywhere*; categorize when the same phrase legitimately means different things.
+
+A good rule for category names: the module or feature the phrase lives in (`Account`, `Errors`, `Checkout`, `UI`).
+
+### `<Translate>` — HTML content blocks
+
+For larger blocks of HTML where the structure should be preserved for the translator:
+
+```svelte
+<script>
+    import { Translate } from 'langsys-js-svelte';
 </script>
-<Translate category="Blog" tag="div">
+
+<Translate category="Blog" tag="article">
     <h1 class="title">My article title</h1>
     <p>My content <strong>is the best</strong> when internationalized by Langsys.</p>
-    <p>Because this contains html, Langsys will create a "content block" from it.</p>
-    <p>
-        That means in the Translation Manager, the translator will see this content in the same
-        way that end-users see it in your app.  All styling from classes or otherwise is retained.
-        The translator would visually translate the content, while having no control over the styling.
-        For example, the would translate the phrase "My content" and then "is the best" in two separate
-        phrases, but because they see the same bolding and sentence structure, they can apply the right
-        words in sequence.
-    </p>
-    <p>
-        This is a key feature of Langsys! Separating design from content entirely and yet making it super
-        easy to translate!
-    </p>
+    <p>Translators see this exactly as users do — same styling, same structure.</p>
 </Translate>
+```
 
-<Translate category="Home">
-    Maybe I have a paragraph of text without html formatting, but I want it to be line wrapped
-    and looking pretty in my code. I could use {$_['Home']['This content']} but since its so long
-    it wouldn't look nice in my code.  Translate will recognize this is without HTML and treat it
-    as a single string instead of a content block.  It will trim out extra spaces (line breaks) so that
-    translation is clean, but it will also preserve my spaces when redisplayed to the end-users.
-</Translate>
+The component:
+- Recursively tokenizes text nodes and translatable attributes (`placeholder`, `alt`, `title`, `aria-label`, plus button/input `value` attributes and `<option>` text).
+- Captures semantic CSS so translators see the styled appearance in the Translation Manager.
+- Registers the whole thing as a **content block** that translators handle as one unit while still translating the individual phrases inside.
+- Auto re-translates on locale change.
 
-<!-- Yes, you can even pass your CMS content directly into the Translate component!  No more managing translations externally! -->
+Use `<Translate>` for prose, marketing copy, CMS-rendered articles, forms with placeholders — anything where the structure matters. Use `$t()` for individual strings.
+
+```svelte
+<!-- CMS content goes through Translate as-is -->
 <Translate category="News" tag="div">
     {@html article?.content}
 </Translate>
 ```
 
-Thats it! This lets you keep natural language inside your app where it belongs, while automatically building your database of translations!
+`<Translate>` props: `category?`, `custom_id?`, `label?`, `tag?` (defaults to `translate`), `class?`, `children`.
 
-### Content Blocks
-In using the Translate Component, you will automatically generate what we call `Content Blocks` in the Translation Manager app.
-![Translation Manager Content Block UI](https://p-GKFQz2n.b2.n0.cdn.zight.com/items/z8uo8Gq8/3c5ec3fd-253b-42db-8b33-da9b60aa84ec.png?v=25bd11b616dafeb31c15ae6e72613689)
+## Reactive stores
 
-### Creating translation tokens
-Content that needs to be translated, we call "tokens". By simply adding it to your app, then running your app, a token will automatically be created in your Translation Manager if it does not yet exist.
+| Export | Type | Notes |
+|---|---|---|
+| `t` | `Readable<TFunction>` | Re-emits whenever translations or locale change. Use as `$t('Cat', 'Phrase')`. |
+| `currentlyLoadedLocale` | `Readable<string>` | The locale whose translations are currently loaded (lags `UserLocaleStore` until the fetch completes). |
+| `sTranslations` | `Readable<iCategories>` | Raw translation catalog. Rarely needed in app code. |
+| `contentBlocks` | `Readable<iContentBlock[]>` | Content blocks discovered this session. Rarely needed in app code. |
 
-**Important:** Token creation only occurs when using an API key with `write` permissions. The SDK automatically detects your key's permission level and will:
-- With write permission: Automatically create new tokens and content blocks as they're discovered
-- With read-only permission: Only fetch existing translations, skip all token creation
+## Server-Side Rendering
 
-It is highly recommended to use an API key with `write` permission on your development app, but switch to a read-only key for your production app.
+The SDK is fully SSR-compatible with SvelteKit. The main pattern is to pre-fetch translations server-side and seed them through `initialTranslations` / `initialTranslationsLocale` so the client doesn't refetch on hydration.
 
-### Translation - Using the Translation Manager
-Your project can have translators assigned, so that when new tokens appear, they are notified and can quickly translate the new content for you, from any device.  You can also enable automatic machine translations or even AI translations.  All automatic translations are held as a special status in the Translation Manager, so if you want to have humans pass over and do editing/verifying, they'll know what new content needs done at all times automatically!
+📖 **See [README-SSR.md](./README-SSR.md)** for a complete SvelteKit walkthrough.
 
-### Translations Loading Promise
-Sometimes you'll want to re-render some content after translations have been loaded. For example, if some UI is generated with some functions, you'll want to wait for translations to load before calling those functions. This is something to consider, primarily, when a user changes their locale (sUserLocale) after your app is loaded.
+## Utilities
 
-You can use the `translationsLoadingPromise` property of the LangsysApp class to wait for translations to load before re-rendering.
-```html
-<script lang="ts">
-    import { LangsysApp } from 'langsys-js-svelte';
-    // ...
-    $effect(() => {
-        LangsysApp.translationsLoadingPromise.then(() => {
-            // re-render content here
-        });
-    });
-</script>
-```
+`LangsysApp` exposes localized helpers:
 
-### Useful Utilities!
-In the course of your project you will often need localized country lists, country names, dial codes, and language names.  Generate them easily!
-```html
+```svelte
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { LangsysApp, type iCountryList, type iCountryDialCode, type iCurrencyList, type iLocaleDefault } from 'langsys-js-svelte';
+    import {
+        LangsysApp,
+        type iCountryList,
+        type iCountryDialCode,
+        type iCurrencyList,
+        type iLocaleDefault,
+    } from 'langsys-js-svelte';
 
     let countries: iCountryList;
     let dialCodes: iCountryDialCode[];
     let currencies: iCurrencyList;
     let locales: iLocaleDefault;
-    let singleLanguageName:string;
-    onMount( async () => {
-        countries = await LangsysApp.getCountries();      // [{ code: "US", label: "United States" }, ...]
-        dialCodes = await LangsysApp.getDialCodes();      // [{ country_code: "US", dial_code: "+1", name: "United States" }, ...]
+    let localeName: string;
+
+    onMount(async () => {
+        countries  = await LangsysApp.getCountries();     // [{ code: "US", label: "United States" }, ...]
+        dialCodes  = await LangsysApp.getDialCodes();     // [{ country_code: "US", dial_code: "+1", name: "United States" }, ...]
         currencies = await LangsysApp.getCurrencies();    // [{ code: "USD", name: "US Dollar", symbol: "$", ... }, ...]
-        locales = await LangsysApp.getLocales();          // { "English": [{ code: "en-US", name: "English (US)" }, ...], ... }
-        singleLanguageName = await LangsysApp.getLanguageName('es-es', true, 'fr-fr'); // espagnol
+        locales    = await LangsysApp.getLocales();       // { "English": [{ code: "en-US", name: "English (US)" }, ...], ... }
+        localeName = await LangsysApp.getLocaleNameWithLookup('es-es', true, 'fr-fr'); // "espagnol"
     });
 </script>
 ```
 
-#### Detecting User's Preferred Locale
-Detect the end-user's preferred locale from the browser or SSR request headers:
+### Detecting the user's preferred locale
 
 ```typescript
-// Browser: uses navigator.languages (full preference array) with fallback to navigator.language
+// Browser: navigator.languages → fallback to navigator.language
 const locale = LangsysApp.detectPreferredLocale();
-// Returns: 'en-US', 'fr', etc. or false if not detected
+// Returns 'en-US', 'fr', etc., or false if not detected
 
-// SSR (SvelteKit hooks.server.ts or +page.server.ts):
+// SSR (hooks.server.ts / +page.server.ts): parses Accept-Language
 const locale = LangsysApp.detectPreferredLocale(request.headers.get('Accept-Language'));
-// Parses "en-US,en;q=0.9,fr;q=0.8" and returns highest priority: 'en-US'
-```
 
-**Matching against supported locales:** Pass an optional array of supported locale codes to find the best match:
-
-```typescript
-// Get your app's supported locales and find the best match
-const supportedLocales = (await LangsysApp.getLocalesFlat()).map(l => l.code);
+// Matched against your app's supported locales
+const supportedLocales = (await LangsysApp.getLocalesFlat()).map((l) => l.code);
 const locale = LangsysApp.detectPreferredLocale(
     request.headers.get('Accept-Language'),
-    supportedLocales
+    supportedLocales,
 );
-// If user prefers 'en-US' but you only support 'en-GB', it matches via language code 'en'
 ```
 
-This is useful for setting an initial locale before the user makes a selection:
+The matcher tries exact match first (e.g. `en-US`), then language-only (`en` matches `en-GB`), then returns `null` if no match.
 
-```typescript
-// In your +layout.server.ts
-export const load = async ({ request }) => {
-    const supportedLocales = (await LangsysApp.getLocalesFlat()).map(l => l.code);
-    const detectedLocale = LangsysApp.detectPreferredLocale(
-        request.headers.get('Accept-Language'),
-        supportedLocales
-    );
-    return {
-        initialLocale: detectedLocale || 'en' // fallback to 'en' if not detected
-    };
-};
+### Waiting for translations to load
+
+When changing locale mid-session, you may want to re-run dependent code after the new translations arrive:
+
+```svelte
+<script>
+    import { LangsysApp } from 'langsys-js-svelte';
+
+    $effect(() => {
+        LangsysApp.translationsLoadingPromise.then(() => {
+            // re-render content / regenerate UI here
+        });
+    });
+</script>
 ```
+
+## Migrating from v2.x
+
+The v2.x proxy-based API was replaced in v3.0.0 with `$t()`. See [CHANGELOG.md](./CHANGELOG.md) for the full diff.
+
+Quick conversion:
+
+```svelte
+<!-- v2.x -->
+<h1>{$_['UI']['Title']}</h1>
+
+<!-- v3.0+ -->
+<h1>{$t('UI', 'Title')}</h1>
+```
+
+The category and phrase arguments map 1:1; the win is that `$t()` accommodates interpolation cleanly and is type-checked at the call site. The change is mechanical and codemod-friendly.
