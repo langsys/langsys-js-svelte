@@ -85,6 +85,24 @@ npm run check         # picks up new types
 
 For end-user installs the dep would resolve to a real npm version — the file: form is for the monorepo workflow only.
 
+## Release & publishing
+
+Releases are CI-driven via npm **trusted publishing** (OIDC). There is no long-lived npm token anywhere — neither in the repo, in CI secrets, nor on the maintainer's laptop.
+
+The flow:
+
+1. **Local:** `npm run release` (alias for `./_dev_/publish.sh`) — prompts for the new version, bumps `package.json`, amends the last commit with the version bump, force-pushes `main`, creates a tag `vX.Y.Z`, creates a GitHub Release. **It does not publish to npm.**
+2. **CI:** the `release: published` event triggers `.github/workflows/publish.yml`, which runs `npm ci` → `npm run check` → `npm test` → `npm run package` → `npm publish --provenance`. Publishing happens inside the `npm-publish` GitHub Environment so only tag-ref runs can mint the OIDC token.
+3. **PR/push gate:** `.github/workflows/ci.yml` runs `check` + `test` on every PR and every push to `main`, independent of the release flow.
+
+If a publish fails after the GitHub Release was created, the Release stays but no npm version exists for that tag — fix forward by either deleting the GH release and re-running `npm run release`, or by re-running the failed workflow from the Actions tab once the fix is merged.
+
+The three trust-handshake strings must stay in sync, or CI will fail at the publish step:
+
+- GitHub Environment name: `npm-publish`
+- npm trusted publisher config: Environment name `npm-publish`, workflow filename `publish.yml`
+- `.github/workflows/publish.yml`: `environment: npm-publish`
+
 ## When making changes
 
 - **Do not reimplement base-SDK behavior here.** API client, lookup logic, missing-token flow, persistence, SSR strategies all belong in `langsys-js-typescript`. If you need to extend any of that, the change goes in the base package and we re-export.
