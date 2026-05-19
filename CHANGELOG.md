@@ -4,6 +4,7 @@
 
 - **The `$_['Category']['Phrase']` proxy is removed**, replaced by `$t(category, phrase, params?)`. The phrase remains both the lookup key and the base-language default, but the function-call form unlocks interpolation, future ICU plural/select support, and compile-time-checked parameters via template-literal types.
     - **Migration:** `$_['UI']['Title']` → `$t('UI', 'Title')`. Two-arg, 1:1 with the previous category/phrase. Codemod-friendly.
+    - **Staying on the proxy?** Consumers who want to keep the `$_['Cat']['Token']` syntax must pin to `2.x` or install via the `v-last-proxy-compat` dist-tag (`npm install langsys-js-svelte@v-last-proxy-compat`). 2.x will receive only critical security fixes going forward.
 - **`langsys-js-svelte` is now a thin Svelte binding over the framework-agnostic [`langsys-js-typescript`](https://github.com/langsys/langsys-js-typescript) package.** All of the previous internals (Translations class, LangsysAppAPI, stores, utility code, type definitions) live there now. This package contains only Svelte-native concerns: a `LangsysApp` wrapper that accepts a `Writable<string>` for the user locale, the `t` / `currentlyLoadedLocale` / `sTranslations` / `contentBlocks` re-exports typed as Svelte `Readable`s, and the `<Translate>` Svelte 5 component.
 - **Legacy parameter-based `LangsysApp.init(projectid, key, store, …)` is removed.** The config-object form (deprecated in 2.0.0) is now the only signature. Callers still on the old form must migrate to `LangsysApp.init({ projectid, key, UserLocaleStore, … })`.
 

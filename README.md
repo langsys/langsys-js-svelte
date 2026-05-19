@@ -8,7 +8,9 @@ Integrate the Langsys Translation Manager into your Svelte and SvelteKit applica
 
 - **Svelte 5** with full SSR support in SvelteKit.
 
-> The last version supporting Svelte 3 / 4 (client-side only) is tagged `v-last-svelte4-compat`.
+> The last version supporting Svelte 3 / 4 (client-side only) is tagged `v-last-svelte4-compat` (`1.2.1`).
+>
+> The last version with the `$_['Category']['Token']` proxy access pattern (Svelte 5) is tagged `v-last-proxy-compat` (`2.0.0`). v3 replaces it with `$t(category, phrase, params?)` — see the [3.0.0 CHANGELOG](./CHANGELOG.md) for migration notes.
 
 [![GitHub Release](https://img.shields.io/github/release/langsys/langsys-js-svelte.svg?style=flat)]()
 [![GitHub last commit](https://img.shields.io/github/last-commit/langsys/langsys-js-svelte.svg?style=flat)]()
