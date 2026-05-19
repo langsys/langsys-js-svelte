@@ -274,11 +274,9 @@ gh release create "v$NEW_VERSION" \
     --title "v$NEW_VERSION" \
     --notes "$RELEASE_NOTES"
 
-# Publish to npm
-log_info "Publishing to npm..."
-npm publish
-
 echo
-log_success "🎉 Successfully published version $NEW_VERSION!"
-log_success "View the release at: https://github.com/langsys/langsys-js-svelte/releases/tag/v$NEW_VERSION"
-log_success "View on npm at: https://www.npmjs.com/package/langsys-js-svelte/v/$NEW_VERSION"
+log_success "🎉 GitHub release v$NEW_VERSION created!"
+log_info "The 'Publish to npm' GitHub Action will now build and publish via trusted publishing."
+log_info "Watch the run: https://github.com/langsys/langsys-js-svelte/actions"
+log_success "Release page: https://github.com/langsys/langsys-js-svelte/releases/tag/v$NEW_VERSION"
+log_success "npm (once CI finishes): https://www.npmjs.com/package/langsys-js-svelte/v/$NEW_VERSION"
