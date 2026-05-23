@@ -3,7 +3,7 @@
  *
  * Public API:
  *   - `LangsysApp` (init accepts a Svelte `Writable<string>` for userLocale)
- *   - `t` — `Readable<TFunction>`. Use `{$t('Cat', 'Phrase', { name })}` in templates.
+ *   - `t` — `Readable<TFunction>`. Use `{$t('Phrase', 'Cat', { name })}` in templates.
  *   - `currentlyLoadedLocale`, `sTranslations`, `contentBlocks` — read with `$store` syntax.
  *   - `Translate` — Svelte component wrapping the vanilla DOM Translate class.
  */
