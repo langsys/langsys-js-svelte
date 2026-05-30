@@ -49,11 +49,11 @@
     <main><p>Loading Langsys…</p></main>
 {:else}
     <main>
-        <h1>{$t('Demo', 'Welcome to the Langsys + Svelte demo')}</h1>
-        <p>{$t('Demo', 'Pick a locale below — translations update everywhere.')}</p>
+        <h1>{$t('Welcome to the Langsys + Svelte demo', 'Demo')}</h1>
+        <p>{$t('Pick a locale below — translations update everywhere.', 'Demo')}</p>
 
         <div class="row">
-            <label for="locale">{$t('UI', 'Locale')}:</label>
+            <label for="locale">{$t('Locale', 'UI')}:</label>
             <select id="locale" bind:value={$userLocale}>
                 {#each LOCALES as l (l.code)}
                     <option value={l.code}>{l.label}</option>
@@ -62,33 +62,33 @@
         </div>
 
         <section class="card">
-            <h2>{$t('Demo', 'Direct phrase translation')}</h2>
+            <h2>{$t('Direct phrase translation', 'Demo')}</h2>
             <p>
                 {$t(
-                    'Demo',
                     'Each phrase in your code is its own token. The first render registers the phrase with the Translation Manager; subsequent locale changes fetch and re-render automatically.',
+                    'Demo',
                 )}
             </p>
         </section>
 
         <section class="card">
-            <h2>{$t('Demo', 'Interpolation')}</h2>
-            <p>{$t('Greetings', 'Hello, {name}! You have {count} new messages.', { name: 'Sarah', count: 3 })}</p>
+            <h2>{$t('Interpolation', 'Demo')}</h2>
+            <p>{$t('Hello, {name}! You have {count} new messages.', 'Greetings', { name: 'Sarah', count: 3 })}</p>
             <p class="muted">
-                {$t('Demo', 'Placeholders in the phrase above are required and type-checked at compile time — try removing a key from the params object to see the error.')}
+                {$t('Placeholders in the phrase above are required and type-checked at compile time — try removing a key from the params object to see the error.', 'Demo')}
             </p>
         </section>
 
         <section class="card">
-            <h2>{$t('Demo', 'Categorization disambiguates context')}</h2>
+            <h2>{$t('Categorization disambiguates context', 'Demo')}</h2>
             <ul>
                 <li>
-                    <strong>{$t('Main Menu', 'Home')}</strong>
-                    &nbsp;<em>{$t('Demo', '(menu item)')}</em>
+                    <strong>{$t('Home', 'Main Menu')}</strong>
+                    &nbsp;<em>{$t('(menu item)', 'Demo')}</em>
                 </li>
                 <li>
-                    <strong>{$t('Home repairs', 'Home')}</strong>
-                    &nbsp;<em>{$t('Demo', '(the building)')}</em>
+                    <strong>{$t('Home', 'Home repairs')}</strong>
+                    &nbsp;<em>{$t('(the building)', 'Demo')}</em>
                 </li>
             </ul>
         </section>
@@ -105,7 +105,7 @@
             </p>
         </Translate>
 
-        <p class="footer">{$t('UI', 'Current locale')}: <code>{$currentlyLoadedLocale}</code></p>
+        <p class="footer">{$t('Current locale', 'UI')}: <code>{$currentlyLoadedLocale}</code></p>
     </main>
 {/if}
 

@@ -84,9 +84,9 @@ export async function load({ fetch, locals }) {
     import { t } from 'langsys-js-svelte';
 </script>
 
-<h1>{$t('HomePage', 'Welcome')}</h1>
-<p>{$t('HomePage', 'Description')}</p>
-<p>{$t('HomePage', 'Hello, {name}!', { name: 'Sarah' })}</p>
+<h1>{$t('Welcome', 'HomePage')}</h1>
+<p>{$t('Description', 'HomePage')}</p>
+<p>{$t('Hello, {name}!', 'HomePage', { name: 'Sarah' })}</p>
 ```
 
 ## Locale switching
@@ -226,7 +226,7 @@ Look for:
 - Confirm the locale hasn't drifted between server and client.
 
 ### TypeScript errors on `$t()`
-- Placeholders are compile-time-checked: `$t('Cat', 'Hello, {name}!')` *requires* a params object with `name`. Either add the key or remove the placeholder.
+- Placeholders are compile-time-checked: `$t('Hello, {name}!', 'Cat')` *requires* a params object with `name`. Either add the key or remove the placeholder.
 - Allowed param value types: `string | number | Date | boolean`.
 
 ## Example project structure
@@ -252,7 +252,7 @@ If you're migrating from `langsys-js-svelte` v2.x, the SSR plumbing is unchanged
 <h1>{$_['HomePage']['Welcome']}</h1>
 
 <!-- v3.0+ -->
-<h1>{$t('HomePage', 'Welcome')}</h1>
+<h1>{$t('Welcome', 'HomePage')}</h1>
 ```
 
 See `CHANGELOG.md` for the full breaking-change list.

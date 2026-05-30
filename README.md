@@ -10,7 +10,7 @@ Integrate the Langsys Translation Manager into your Svelte and SvelteKit applica
 
 > The last version supporting Svelte 3 / 4 (client-side only) is tagged `v-last-svelte4-compat` (`1.2.1`).
 >
-> The last version with the `$_['Category']['Token']` proxy access pattern (Svelte 5) is tagged `v-last-proxy-compat` (`2.0.0`). v3 replaces it with `$t(category, phrase, params?)` — see the [3.0.0 CHANGELOG](./CHANGELOG.md) for migration notes.
+> The last version with the `$_['Category']['Token']` proxy access pattern (Svelte 5) is tagged `v-last-proxy-compat` (`2.0.0`). v3 replaces it with `$t(phrase, category?, params?)` — see the [3.0.0 CHANGELOG](./CHANGELOG.md) for migration notes.
 
 [![GitHub Release](https://img.shields.io/github/release/langsys/langsys-js-svelte.svg?style=flat)]()
 [![GitHub last commit](https://img.shields.io/github/last-commit/langsys/langsys-js-svelte.svg?style=flat)]()
@@ -23,7 +23,7 @@ Integrate the Langsys Translation Manager into your Svelte and SvelteKit applica
 As of v3.0.0, `langsys-js-svelte` is a thin Svelte binding over the framework-agnostic [`langsys-js-typescript`](https://github.com/langsys/langsys-js-typescript) package — which owns the API client, translation lifecycle, token discovery, DOM tokenizer, and SSR-aware token strategies. This package adds only the Svelte-native concerns:
 
 - A `LangsysApp` whose `init` accepts a Svelte `Writable<string>` for the user locale
-- A `t` store you read with `$t('Category', 'Phrase')` — re-renders any subscribed template when translations or the loaded locale change
+- A `t` store you read with `$t('Phrase', 'Category')` — re-renders any subscribed template when translations or the loaded locale change
 - A `<Translate>` Svelte 5 component wrapping the underlying DOM walker
 
 If you need the SDK outside Svelte (a Node script, a non-Svelte web app), import from `langsys-js-typescript` directly.
@@ -97,48 +97,57 @@ The SDK detects the key type automatically and behaves accordingly.
 
 ## Using translations
 
-### `$t(category, phrase, params?)` — the everyday API
+### `$t(phrase, category?, params?)` — the everyday API
 
 ```svelte
 <script>
     import { t } from 'langsys-js-svelte';
 </script>
 
-<h1>{$t('UI', 'Welcome to my app')}</h1>
-<p>{$t('UI', 'Hello, {name}!', { name: 'Sarah' })}</p>
+<h1>{$t('Welcome to my app', 'UI')}</h1>
+<p>{$t('Hello, {name}!', 'UI', { name: 'Sarah' })}</p>
+```
+
+The signature is **`$t(phrase, category?, params?)`** — the phrase comes first, the category is optional, and params come last:
+
+```svelte
+{$t('Save')}                                    <!-- no category, no params -->
+{$t('Save', 'UI')}                              <!-- categorized -->
+{$t('Hello, {name}!', { name: 'X' })}           <!-- no category, with params -->
+{$t('Hello, {name}!', 'Greetings', { name: 'X' })} <!-- category + params -->
 ```
 
 The **phrase itself is the lookup key** *and* the base-language default — there's no separate keys file to maintain. The first render of a phrase registers it in the Translation Manager (when using a write key); from then on, translations are fetched and rendered automatically as locales change.
 
 #### Interpolation
 
-Curly-brace placeholders are substituted from the third argument:
+Curly-brace placeholders are substituted from the params argument:
 
 ```svelte
-<p>{$t('Notifications', 'You have {count} new messages', { count: 3 })}</p>
+<p>{$t('You have {count} new messages', 'Notifications', { count: 3 })}</p>
 ```
 
 Placeholder names are extracted from the phrase at compile time and **type-checked**: omitting a required key or adding an extra one is a TypeScript error.
 
 ```typescript
-$t('Notifications', 'You have {count} new messages', {});
+$t('You have {count} new messages', 'Notifications', {});
 // ❌ Property 'count' is missing in type '{}'
 
-$t('Notifications', 'You have {count} new messages', { count: 3, extra: 'x' });
+$t('You have {count} new messages', 'Notifications', { count: 3, extra: 'x' });
 // ❌ Object literal may only specify known properties, and 'extra' does not exist
 ```
 
 Allowed value types: `string | number | Date | boolean`. Dates serialize to ISO 8601.
 
-> Future versions will swap the simple `{name}` runtime for ICU MessageFormat — adding plural / select / date formatting — without changing the public signature. Today's `$t('Cart', '{count} items', { count })` will evolve to `$t('Cart', '{count, plural, one {# item} other {# items}}', { count })`.
+> Future versions will swap the simple `{name}` runtime for ICU MessageFormat — adding plural / select / date formatting — without changing the public signature. Today's `$t('{count} items', 'Cart', { count })` will evolve to `$t('{count, plural, one {# item} other {# items}}', 'Cart', { count })`.
 
 #### Categorization disambiguates context
 
 Different categories give the *same* phrase different translations:
 
 ```svelte
-<strong>{$t('Main Menu', 'Home')}</strong>      <!-- "Inicio" in Spanish -->
-<strong>{$t('Home repairs', 'Home')}</strong>   <!-- "Hogar" in Spanish -->
+<strong>{$t('Home', 'Main Menu')}</strong>      <!-- "Inicio" in Spanish -->
+<strong>{$t('Home', 'Home repairs')}</strong>   <!-- "Hogar" in Spanish -->
 ```
 
 Without categorization, "Home" would only have one translation — which can't work for both contexts. Langsys's philosophy is *translate once, use everywhere*; categorize when the same phrase legitimately means different things.
@@ -182,10 +191,9 @@ Use `<Translate>` for prose, marketing copy, CMS-rendered articles, forms with p
 
 | Export | Type | Notes |
 |---|---|---|
-| `t` | `Readable<TFunction>` | Re-emits whenever translations or locale change. Use as `$t('Cat', 'Phrase')`. |
+| `t` | `Readable<TFunction>` | Re-emits whenever translations or locale change. Use as `$t('Phrase', 'Cat')`. |
 | `currentlyLoadedLocale` | `Readable<string>` | The locale whose translations are currently loaded (lags `UserLocaleStore` until the fetch completes). |
 | `sTranslations` | `Readable<iCategories>` | Raw translation catalog. Rarely needed in app code. |
-| `contentBlocks` | `Readable<iContentBlock[]>` | Content blocks discovered this session. Rarely needed in app code. |
 
 ## Server-Side Rendering
 
@@ -229,7 +237,7 @@ The SDK is fully SSR-compatible with SvelteKit. The main pattern is to pre-fetch
 ```typescript
 // Browser: navigator.languages → fallback to navigator.language
 const locale = LangsysApp.detectPreferredLocale();
-// Returns 'en-US', 'fr', etc., or false if not detected
+// Returns 'en-US', 'fr', etc., or false if nothing can be detected
 
 // SSR (hooks.server.ts / +page.server.ts): parses Accept-Language
 const locale = LangsysApp.detectPreferredLocale(request.headers.get('Accept-Language'));
@@ -242,7 +250,7 @@ const locale = LangsysApp.detectPreferredLocale(
 );
 ```
 
-The matcher tries exact match first (e.g. `en-US`), then language-only (`en` matches `en-GB`), then returns `null` if no match.
+The matcher tries exact match first (e.g. `en-US`), then language-only (`en` matches `en-GB`). When you pass `supportedLocales` and none match, it falls back to the user's top preference (normalized); it returns `false` only when no preference can be determined at all.
 
 ### Waiting for translations to load
 
@@ -271,7 +279,7 @@ Quick conversion:
 <h1>{$_['UI']['Title']}</h1>
 
 <!-- v3.0+ -->
-<h1>{$t('UI', 'Title')}</h1>
+<h1>{$t('Title', 'UI')}</h1>
 ```
 
-The category and phrase arguments map 1:1; the win is that `$t()` accommodates interpolation cleanly and is type-checked at the call site. The change is mechanical and codemod-friendly.
+Note the order: the proxy was `$_[category][phrase]`, while `$t()` takes the **phrase first, then the category** — `$_['UI']['Title']` becomes `$t('Title', 'UI')`. The win is that `$t()` accommodates interpolation cleanly and is type-checked at the call site. The change is mechanical and codemod-friendly.
