@@ -47,8 +47,10 @@ export {
 // API client (vanilla — no Svelte concerns)
 export { LangsysAppAPI } from 'langsys-js-typescript';
 
-// Component
+// Components
 export { default as Translate } from './components/Translate.svelte';
+export { default as Phrase } from './components/Phrase.svelte';
+export { default as DontTranslate } from './components/DontTranslate.svelte';
 
 // Type re-exports — these are all framework-agnostic so consumers can rely on
 // them directly without reaching into langsys-js-typescript.
