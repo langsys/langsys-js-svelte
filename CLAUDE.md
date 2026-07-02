@@ -68,22 +68,26 @@ TFunction, TranslationParams, ParamPrimitive, ExtractParamKeys, ParamsFor, TArgs
 
 - `npm run dev` — Vite dev server with the demo at `src/routes/+page.svelte`. Needs `.env` with `VITE_LANGSYS_PROJECT_ID` and `VITE_LANGSYS_API_KEY` (see `.env.example`).
 - `npm run check` — `svelte-kit sync && svelte-check --tsconfig ./tsconfig.json`. Should be clean before any commit.
-- `npm run package` — `svelte-kit sync && svelte-package && publint`. Builds to `dist/`. Note: the `publint` step warns about the local `file:../langsys-js-typescript` dep — expected during development.
+- `npm run package` — `svelte-kit sync && svelte-package && publint`. Builds to `dist/`. `publint` should report "All good!" — the dep is the published npm `langsys-js-typescript`, so there is no `file:` dep to warn about.
 - `npm run test` — Vitest. Tests are minimal; expand here for new features.
 - `npm run lint` / `npm run format` — Prettier + ESLint.
 
 ## Local development setup
 
-This package depends on `langsys-js-typescript` via `file:../langsys-js-typescript`. After changes to the base SDK:
+This package depends on the **published** `langsys-js-typescript` from npm (a caret range like `^0.2.x`), exactly as an end user would — never a `file:`/symlink/`npm link` dep. A local link has bitten us before (a stale local build silently shadowing the real package), so the dependency stays de-linked at all times.
+
+To pick up base-SDK changes:
 
 ```bash
 cd ../langsys-js-typescript
-npm run build         # rebuilds dist/
+npm run build         # rebuild dist/
+# bump + publish (npm run release), then back here:
 cd ../langsys-js-svelte
-npm run check         # picks up new types
+npm install langsys-js-typescript@latest   # or bump the range in package.json
+npm run check                              # picks up the new types
 ```
 
-For end-user installs the dep would resolve to a real npm version — the file: form is for the monorepo workflow only.
+If you ever must test an unpublished base-SDK build locally, do it in a throwaway checkout and **revert before committing** — never commit a `file:` dep. Consumers must always resolve the real npm version.
 
 ## Release & publishing
 
