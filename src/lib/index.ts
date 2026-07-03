@@ -47,6 +47,9 @@ export {
 // API client (vanilla — no Svelte concerns)
 export { LangsysAppAPI } from 'langsys-js-typescript';
 
+// Locale canonicalization (vanilla) — BCP 47 casing, e.g. 'en-us' → 'en-US'.
+export { canonicalizeLocale } from 'langsys-js-typescript';
+
 // Components
 export { default as Translate } from './components/Translate.svelte';
 export { default as Phrase } from './components/Phrase.svelte';

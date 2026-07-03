@@ -74,7 +74,7 @@ TFunction, TranslationParams, ParamPrimitive, ExtractParamKeys, ParamsFor, TArgs
 
 ## Local development setup
 
-This package depends on the **published** `langsys-js-typescript` from npm (a caret range like `^0.2.x`), exactly as an end user would — never a `file:`/symlink/`npm link` dep. A local link has bitten us before (a stale local build silently shadowing the real package), so the dependency stays de-linked at all times.
+This package depends on the **published** `langsys-js-typescript` from npm (a caret range like `^0.3.x`), exactly as an end user would — never a `file:`/symlink/`npm link` dep. A local link has bitten us before (a stale local build silently shadowing the real package), so the dependency stays de-linked at all times.
 
 To pick up base-SDK changes:
 

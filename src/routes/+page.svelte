@@ -3,15 +3,15 @@
     import { onMount } from 'svelte';
     import { LangsysApp, t, currentlyLoadedLocale, Translate } from '$lib/index.js';
 
-    const userLocale = writable('en-us');
+    const userLocale = writable('en-US');
     let ready = $state(false);
     let error = $state<string | null>(null);
 
     const LOCALES = [
-        { code: 'en-us', label: 'English (US)' },
-        { code: 'es-es', label: 'Español' },
-        { code: 'fr-fr', label: 'Français' },
-        { code: 'de-de', label: 'Deutsch' },
+        { code: 'en-US', label: 'English (US)' },
+        { code: 'es-ES', label: 'Español' },
+        { code: 'fr-FR', label: 'Français' },
+        { code: 'de-DE', label: 'Deutsch' },
     ];
 
     onMount(async () => {
@@ -25,7 +25,7 @@
             projectid,
             key,
             UserLocaleStore: userLocale,
-            baseLocale: 'en-us',
+            baseLocale: 'en-US',
             debug: true,
         });
         if (res?.status === false) {

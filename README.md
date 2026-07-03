@@ -56,7 +56,7 @@ The SDK detects the key type automatically and behaves accordingly.
     import { onMount } from 'svelte';
     import { LangsysApp, type iLangsysInitConfig } from 'langsys-js-svelte';
 
-    const userLocale = writable('en-us');
+    const userLocale = writable('en-US');
     let appReady = $state(false);
     let appInitError = $state<string | null>(null);
 
@@ -65,7 +65,7 @@ The SDK detects the key type automatically and behaves accordingly.
             projectid: import.meta.env.VITE_LANGSYS_PROJECT_ID,
             key: import.meta.env.VITE_LANGSYS_API_KEY,
             UserLocaleStore: userLocale,
-            baseLocale: 'en-us',
+            baseLocale: 'en-US',
             debug: false,
             ssrTokenStrategy: 'client',
         };
@@ -227,7 +227,7 @@ The SDK is fully SSR-compatible with SvelteKit. The main pattern is to pre-fetch
         dialCodes  = await LangsysApp.getDialCodes();     // [{ country_code: "US", dial_code: "+1", name: "United States" }, ...]
         currencies = await LangsysApp.getCurrencies();    // [{ code: "USD", name: "US Dollar", symbol: "$", ... }, ...]
         locales    = await LangsysApp.getLocales();       // { "English": [{ code: "en-US", name: "English (US)" }, ...], ... }
-        localeName = await LangsysApp.getLocaleNameWithLookup('es-es', true, 'fr-fr'); // "espagnol"
+        localeName = await LangsysApp.getLocaleNameWithLookup('es-ES', true, 'fr-FR'); // "espagnol"
     });
 </script>
 ```

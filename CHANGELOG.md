@@ -1,3 +1,20 @@
+## 3.2.0 - 2026-07-03
+
+### Added
+
+- Re-export of `canonicalizeLocale()` from the package index, so consumers don't need a direct import of `langsys-js-typescript` to normalize locale identifiers.
+
+### Changed
+
+- **Base SDK bumped to `langsys-js-typescript` ^0.3.0 (CLDR-compliant).** No wrapper API changes, but consumers inherit the new SDK behavior:
+    - Locale identifiers are canonicalized to BCP 47 everywhere (`en-us` → `en-US`) — on the wire, in cache keys, and in `$currentlyLoadedLocale` emissions. Comparisons against lowercase literals should be updated (or routed through the SDK's `canonicalizeLocale()`).
+    - `detectPreferredLocale` matching is script-aware via CLDR likely-subtags (`zh-TW` matches `zh-Hant`, never falls back to `zh-Hans`); results come back canonical.
+    - `{name}` interpolation now formats `number` params via `Intl.NumberFormat` and `Date` params via `Intl.DateTimeFormat` (medium date style) instead of `String()` / ISO 8601. String-typed values opt out.
+    - Style-less ICU args (`{n, number}`, `{d, date}`, `{t, time}`) now format instead of rendering literally.
+- README and demo updated to canonical locale casing (`en-US`, `es-ES`, `fr-FR`, `de-DE`).
+
+---
+
 ## 3.0.0 - 2026-05-19
 
 ### BREAKING CHANGES
