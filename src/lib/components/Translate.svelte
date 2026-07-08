@@ -8,7 +8,7 @@
      * token registration — lives in the base SDK; this component is purely
      * the mount/destroy glue.
      */
-    import { Translate as VanillaTranslate } from 'langsys-js-typescript';
+    import { Translate as VanillaTranslate, type ParamPrimitive } from 'langsys-js-typescript';
     import type { Snippet } from 'svelte';
     import { onDestroy } from 'svelte';
 
@@ -18,6 +18,7 @@
         label?: string;
         category?: string;
         custom_id?: string;
+        params?: Record<string, ParamPrimitive>;
         children: Snippet;
     }
 
@@ -27,6 +28,7 @@
         label = '',
         category = '',
         custom_id = '',
+        params = undefined,
         children,
     }: Props = $props();
 
@@ -35,7 +37,13 @@
 
     $effect(() => {
         if (!host || instance) return;
-        instance = new VanillaTranslate(host, { category, custom_id, label });
+        instance = new VanillaTranslate(host, { category, custom_id, label, params });
+    });
+
+    // Re-render when params change (e.g. a changed count) after mount.
+    $effect(() => {
+        const next = params;
+        if (instance) instance.setParams(next);
     });
 
     onDestroy(() => {

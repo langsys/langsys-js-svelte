@@ -1,3 +1,15 @@
+## 3.3.0 - 2026-07-08
+
+### Added
+
+- **`<Translate params={{ … }}>`** — the component now accepts a `params?: Record<string, ParamPrimitive>` prop, forwarded to the base SDK's `Translate` and re-applied via `setParams()` when it changes. Enables `{name}`/`{count}`-style single-brace interpolation (same syntax as `$t()`) across content-block text nodes, translatable attributes, select options, and the single-token path. Mirrors the existing `<Phrase params={…}>` prop.
+
+### Changed
+
+- Base SDK floor bumped to `langsys-js-typescript` ^0.4.0, which adds `TranslateOptions.params` and `Translate.setParams()`. The prior `^0.3.0` range permitted installs lacking those, so the floor is raised in lockstep with the feature.
+
+---
+
 ## 3.2.0 - 2026-07-03
 
 ### Added
