@@ -185,7 +185,30 @@ Use `<Translate>` for prose, marketing copy, CMS-rendered articles, forms with p
 </Translate>
 ```
 
-`<Translate>` props: `category?`, `custom_id?`, `label?`, `tag?` (defaults to `translate`), `class?`, `children`.
+#### Interpolation with `params`
+
+`<Translate>` accepts a `params` prop for runtime values, using the same single-brace `{key}` syntax as `$t()`:
+
+```svelte
+<script>
+    import { Translate } from 'langsys-js-svelte';
+
+    let name = $state('Sarah');
+    let count = $state(3);
+</script>
+
+<Translate category="Dashboard" params={{ name, count }}>
+    <p>Welcome back, {name}. You have {count} new messages.</p>
+</Translate>
+```
+
+- Placeholders interpolate into translated text nodes **and** translatable attributes, after the lookup — so translators translate the phrase and the values drop in per locale.
+- Placeholders are part of the registered phrase, so translators keep them intact.
+- Unknown keys are left visible (`{missing}` renders as-is) rather than blanked.
+- `number` and `Date` values are formatted for the active locale via the base SDK's CLDR rules; `string` values pass through untouched.
+- The prop is **reactive** — changing `params` (e.g. an updated `count`) re-renders via the underlying `setParams()`. Same interpolation is available on `<Phrase>` for markup-bearing runs.
+
+`<Translate>` props: `category?`, `custom_id?`, `label?`, `tag?` (defaults to `translate`), `class?`, `params?`, `children`.
 
 ## Reactive stores
 
