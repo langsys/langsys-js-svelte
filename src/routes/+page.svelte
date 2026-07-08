@@ -7,6 +7,11 @@
     let ready = $state(false);
     let error = $state<string | null>(null);
 
+    // Live params for the <Translate params> demo below — editing these
+    // re-renders the content block via the underlying setParams().
+    let personName = $state('Sarah');
+    let messageCount = $state(3);
+
     const LOCALES = [
         { code: 'en-US', label: 'English (US)' },
         { code: 'es-ES', label: 'Español' },
@@ -104,6 +109,34 @@
                 <input type="text" placeholder="Type something here…" />
             </p>
         </Translate>
+
+        <section class="card">
+            <h2>{$t('Interpolation inside a content block', 'Demo')}</h2>
+
+            <Translate
+                category="Demo"
+                label="Params demo"
+                tag="div"
+                params={{ name: personName, count: messageCount }}
+            >
+                <p>Welcome back, %name%. You have %count% new messages.</p>
+            </Translate>
+
+            <div class="row">
+                <label for="pname">{$t('Name', 'UI')}:</label>
+                <input id="pname" bind:value={personName} />
+                <button onclick={() => (messageCount += 1)}>{$t('Add a message', 'UI')}</button>
+            </div>
+
+            <p class="muted">
+                Write <code>%name%</code> / <code>%count%</code> — not <code>&lbrace;name&rbrace;</code> —
+                inside <code>&lt;Translate&gt;</code> markup: Svelte (like JSX) would otherwise consume the
+                braces before Langsys sees them. The SDK normalizes the percent form back to
+                <code>&lbrace;name&rbrace;</code> at capture, so translators still work with
+                <code>&lbrace;name&rbrace;</code>. Editing the name or bumping the count re-renders the block
+                via <code>setParams()</code>.
+            </p>
+        </section>
 
         <p class="footer">{$t('Current locale', 'UI')}: <code>{$currentlyLoadedLocale}</code></p>
     </main>
