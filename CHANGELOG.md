@@ -1,3 +1,13 @@
+## 3.4.0 - 2026-07-08
+
+### Changed
+
+- **Markup placeholders now use `%name%`, not `{name}`.** Bare `{name}` written inside `<Translate>`/`<Phrase>` content is consumed by the Svelte compiler (same as JSX) as an expression tag before Langsys sees it, silently breaking translation while still rendering correctly in the base locale. `langsys-js-typescript` ^0.4.1 adds a compiler-safe `%name%` markup delimiter that it normalizes back to canonical `{name}` at capture time — so translators still only ever see `{name}`, both spellings register the same content-block, and literal `%` in prose ("50% off") is left untouched. `$t()` is unaffected and keeps single-brace `{key}` (its placeholders live in JS strings, where there is no compiler collision).
+- Base SDK floor bumped to `langsys-js-typescript` ^0.4.1 (adds the `%name%` markup normalization). The wrapper needs no code change — the normalization lives entirely in the base SDK's tokenizer.
+- README `<Translate params>` example updated from the previous `{name}` form to `%name%`, with the rationale documented inline.
+
+---
+
 ## 3.3.0 - 2026-07-08
 
 ### Added

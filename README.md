@@ -187,7 +187,7 @@ Use `<Translate>` for prose, marketing copy, CMS-rendered articles, forms with p
 
 #### Interpolation with `params`
 
-`<Translate>` accepts a `params` prop for runtime values, using the same single-brace `{key}` syntax as `$t()`:
+`<Translate>` accepts a `params` prop for runtime values. In markup, write placeholders with **percent delimiters — `%name%`** — not the single-brace `{name}` form:
 
 ```svelte
 <script>
@@ -198,15 +198,17 @@ Use `<Translate>` for prose, marketing copy, CMS-rendered articles, forms with p
 </script>
 
 <Translate category="Dashboard" params={{ name, count }}>
-    <p>Welcome back, {name}. You have {count} new messages.</p>
+    <p>Welcome back, %name%. You have %count% new messages.</p>
 </Translate>
 ```
 
+> [!IMPORTANT]
+> **Use `%name%`, not `{name}`, inside `<Translate>`/`<Phrase>` content.** Svelte (like JSX) treats `{name}` in markup as its own expression tag and would substitute it *before* Langsys sees the text — silently breaking translation while still looking right in the base locale. The base SDK normalizes `%name%` back to canonical `{name}` at capture time, so **translators still only ever see `{name}`** and both spellings register the same content-block. Only simple identifiers between the percents are matched (`%[A-Za-z_][A-Za-z0-9_]*%`), so literal `%` in prose — "50% off", "width: 100%" — is left untouched. The braces on the `params={{ … }}` prop itself are normal Svelte and stay as-is. This is a markup-only concern: `$t('Hello, {name}!', { name })` keeps single braces because the placeholder lives in a JS string, not the template.
+
 - Placeholders interpolate into translated text nodes **and** translatable attributes, after the lookup — so translators translate the phrase and the values drop in per locale.
-- Placeholders are part of the registered phrase, so translators keep them intact.
-- Unknown keys are left visible (`{missing}` renders as-is) rather than blanked.
+- Unknown keys stay visible in canonical form (`%missing%` renders as `{missing}`) rather than blanked — matching `$t()`'s unknown-key behavior.
 - `number` and `Date` values are formatted for the active locale via the base SDK's CLDR rules; `string` values pass through untouched.
-- The prop is **reactive** — changing `params` (e.g. an updated `count`) re-renders via the underlying `setParams()`. Same interpolation is available on `<Phrase>` for markup-bearing runs.
+- The prop is **reactive** — changing `params` (e.g. an updated `count`) re-renders via the underlying `setParams()`. The same `%name%` rule applies to `<Phrase>` for markup-bearing runs.
 
 `<Translate>` props: `category?`, `custom_id?`, `label?`, `tag?` (defaults to `translate`), `class?`, `params?`, `children`.
 
