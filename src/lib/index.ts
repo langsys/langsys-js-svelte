@@ -37,6 +37,7 @@ import {
     type iCountryList,
     type iCurrency,
     type iCurrencyList,
+    type WriteGrant,
     type iLangsysInitConfig as iVanillaInitConfig,
     type iLangsysResponse,
     type iLanguageName,
@@ -47,12 +48,16 @@ import {
     type iTranslations,
 } from 'langsys-js-typescript';
 import type { Readable, Writable } from 'svelte/store';
-import { adaptStore } from './adapters.js';
+import { adaptStore, adaptWriteGrant, type WriteGrantSource } from './adapters.js';
 
 // Stores — the underlying Signals already satisfy Svelte's Readable contract.
 // We re-export them under Svelte-native types so IDE hovers and consumers see
 // the familiar shape.
 export { currentlyLoadedLocale, sTranslations, tSignal as t } from 'langsys-js-typescript';
+
+// `writeEnabled` is the one store we do NOT re-export by reference — reading the
+// live signal during hydration is a mismatch hazard in SvelteKit. See stores.ts.
+export { writeEnabled } from './stores.js';
 
 // API client (vanilla — no Svelte concerns)
 export { LangsysAppAPI } from 'langsys-js-typescript';
@@ -67,6 +72,8 @@ export { default as DontTranslate } from './components/DontTranslate.svelte';
 
 // Type re-exports — these are all framework-agnostic so consumers can rely on
 // them directly without reaching into langsys-js-typescript.
+export type { WriteGrantSource } from './adapters.js';
+
 export type {
     ExtractParamKeys,
     ParamPrimitive,
@@ -74,6 +81,7 @@ export type {
     TArgs,
     TFunction,
     TranslationParams,
+    WriteGrant,
     iCategories,
     iContentBlock,
     iCountry,
@@ -96,8 +104,14 @@ export type {
  * store shape) — the wrapper adapts it to the base SDK's `Signal<string>`
  * automatically.
  */
-export interface iLangsysInitConfig extends Omit<iVanillaInitConfig, 'UserLocaleStore'> {
+export interface iLangsysInitConfig
+    extends Omit<iVanillaInitConfig, 'UserLocaleStore' | 'writeGrant'> {
     UserLocaleStore: Writable<string>;
+    /**
+     * Short-lived write grant for login-walled apps. Accepts everything the base
+     * SDK does, plus a Svelte store — refresh by writing to the store.
+     */
+    writeGrant?: WriteGrantSource;
 }
 
 /**
@@ -111,7 +125,18 @@ class LangsysAppSvelte {
         return _LangsysApp.init({
             ...config,
             UserLocaleStore: adaptStore(config.UserLocaleStore),
+            writeGrant: adaptWriteGrant(config.writeGrant),
         });
+    }
+
+    /**
+     * Supply the write grant after `init()` — for apps whose token only exists
+     * once the user has logged in. Re-authorizes so the server re-evaluates the
+     * session with the new grant, so `await` it if you need `writeEnabled`
+     * settled before the next assertion.
+     */
+    public setWriteGrant(grant: WriteGrantSource | undefined): Promise<void> {
+        return _LangsysApp.setWriteGrant(adaptWriteGrant(grant));
     }
 
     public get Translations() {
