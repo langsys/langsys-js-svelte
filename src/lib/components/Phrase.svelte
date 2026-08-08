@@ -7,8 +7,13 @@
      * pluralizes:
      *
      *   <Phrase category="ProductCard" params={{ n: reviewCount }}>
-     *     Based on {n} <strong>reviews</strong>
+     *     Based on %n% <strong>reviews</strong>
      *   </Phrase>
+     *
+     * Placeholders in markup use `%n%`, not `{n}` — Svelte would compile a bare
+     * `{n}` as its own expression tag and substitute it before Langsys saw the
+     * text. The base SDK normalizes `%n%` back to canonical `{n}` at capture,
+     * so translators still work with `{n}`.
      *
      * The inline markup never reaches the translator — it's replaced with
      * neutral tokens and the real elements are reconstituted at render (see
