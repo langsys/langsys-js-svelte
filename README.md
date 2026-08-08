@@ -209,6 +209,7 @@ Use `<Translate>` for prose, marketing copy, CMS-rendered articles, forms with p
 - Unknown keys stay visible in canonical form (`%missing%` renders as `{missing}`) rather than blanked — matching `$t()`'s unknown-key behavior.
 - `number` and `Date` values are formatted for the active locale via the base SDK's CLDR rules; `string` values pass through untouched.
 - The prop is **reactive** — changing `params` (e.g. an updated `count`) re-renders via the underlying `setParams()`. The same `%name%` rule applies to `<Phrase>` for markup-bearing runs.
+- **`debug: true` catches the mistake for you.** If you pass `params` whose keys match no placeholder in the content, the SDK warns and names the fix — that state is the fingerprint of having written `{name}` in markup and had the compiler eat it. ICU slots count as legitimate uses, the warning re-fires only when the params key-set changes (a ticking `count` won't spam the console), and it is silent in production.
 
 `<Translate>` props: `category?`, `custom_id?`, `label?`, `tag?` (defaults to `translate`), `class?`, `params?`, `children`.
 

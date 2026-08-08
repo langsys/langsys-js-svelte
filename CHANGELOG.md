@@ -1,3 +1,12 @@
+## 3.4.1 - 2026-07-09
+
+### Changed
+
+- Base SDK floor bumped to `langsys-js-typescript` ^0.4.2, which adds a debug-mode diagnostic for the `{name}`-in-markup mistake: passing `params` whose keys match no placeholder in the captured content now warns and names the fix (`write %count% instead`). That state is the fingerprint of having written `{name}` in markup and had the Svelte/JSX compiler substitute it before Langsys saw the text. ICU slots count as legitimate uses, the warning re-fires only when the params key-set changes, and it is silent in production. No wrapper code change — `<Translate>`/`<Phrase>` inherit it through the base SDK.
+- README notes the new debug diagnostic under "Interpolation with `params`".
+
+---
+
 ## 3.4.0 - 2026-07-08
 
 ### Changed
