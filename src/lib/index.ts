@@ -5,7 +5,16 @@
  *   - `LangsysApp` (init accepts a Svelte `Writable<string>` for userLocale)
  *   - `t` — `Readable<TFunction>`. Use `{$t('Phrase', 'Cat', { name })}` in templates.
  *   - `currentlyLoadedLocale`, `sTranslations` — read with `$store` syntax.
- *   - `Translate` — Svelte component wrapping the vanilla DOM Translate class.
+ *   - `Translate` — content-block component; tokenizes each translatable run
+ *     in its subtree (text nodes + translatable attributes).
+ *   - `Phrase` — keeps ONE markup-bearing run as a single translatable phrase,
+ *     so a count stays in the same catalog entry as the noun it inflects.
+ *     Required for correct ICU pluralization; `Translate` alone would split at
+ *     the tag boundary.
+ *   - `DontTranslate` — marks a region as never-translated, preserved verbatim.
+ *
+ * In markup, placeholders are written `%name%`, not `{name}` — Svelte would
+ * compile a bare `{name}` as its own expression tag. `$t()` keeps `{name}`.
  */
 
 import {
