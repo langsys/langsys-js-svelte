@@ -15,10 +15,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 src/lib/
-    index.ts                      # public exports — LangsysApp wrapper, t store, Translate, type re-exports
+    index.ts                      # public exports — LangsysApp wrapper, t store, components, type re-exports
     adapters.ts                   # writable<T> → Signal<T> adapter (svelte/store get → .get())
     components/
         Translate.svelte          # Svelte 5 thin wrapper around langsys-js-typescript's vanilla DOM Translate class
+        Phrase.svelte             # thin wrapper around the vanilla Phrase rich-text handler
+        DontTranslate.svelte      # pure glue — emits translate="no"; no vanilla handler behind it
 ```
 
 That's the entire surface. Every other concern — HTTP, missing-token registration, persistence, SSR strategies, the proxy/lookup/interpolation logic — lives in `langsys-js-typescript`.
@@ -27,9 +29,9 @@ That's the entire surface. Every other concern — HTTP, missing-token registrat
 
 1. **`LangsysApp.init({ UserLocaleStore: writable })`** — the wrapper class (`LangsysAppSvelte` in `index.ts`) accepts a Svelte `Writable<string>` for the user locale. Internally it adapts it via `adaptStore` (in `adapters.ts`) to satisfy the base SDK's `Signal<string>` contract (Svelte writables expose `subscribe/set/update` — the adapter synthesizes `.get()` via `svelte/store`'s `get` helper). Every other `LangsysApp.*` method is a direct delegation.
 
-2. **`t` as a Svelte store** — the underlying `tSignal` from `langsys-js-typescript` is a `Signal<TFunction>` that re-emits a fresh closure on every translations/locale change. `Signal` structurally satisfies Svelte's `Readable<T>` contract (subscribe-fires-immediately semantics), so we re-export it under the type `Readable<TFunction>` with no runtime wrapping. `$t('Cat', 'Phrase')` works because:
+2. **`t` as a Svelte store** — the underlying `tSignal` from `langsys-js-typescript` is a `Signal<TFunction>` that re-emits a fresh closure on every translations/locale change. `Signal` structurally satisfies Svelte's `Readable<T>` contract (subscribe-fires-immediately semantics), so we re-export it under the type `Readable<TFunction>` with no runtime wrapping. `$t('Phrase', 'Cat')` works because:
     - `$t` unboxes the store, returning the current `TFunction`
-    - The function is called with `('Cat', 'Phrase')`, returning the current translation
+    - The function is called with `('Phrase', 'Cat')`, returning the current translation
     - Reactivity comes from the store re-emitting → the template re-runs `$t(...)`
 
 3. **`<Translate>`** — wraps `langsys-js-typescript`'s vanilla `Translate` DOM class. `bind:this` on a `svelte:element` gets us the host node; an `$effect` constructs `new Translate(host, opts)` on mount; `onDestroy` calls `instance.destroy()`. The DOM walking, content-block registration, attribute harvesting, and re-translation on locale change all live in the underlying class.
@@ -46,13 +48,17 @@ LangsysApp.refresh()
 LangsysApp.translationsLoadingPromise
 
 // Reactive stores (Svelte Readable<T>)
-t                                // Readable<TFunction> — read with $t('Cat', 'Phrase', params?)
+t                                // Readable<TFunction> — read with $t('Phrase', 'Cat', params?)
 currentlyLoadedLocale            // Readable<string>
 sTranslations                    // Readable<iCategories>
-contentBlocks                    // Readable<iContentBlock[]>
 
-// Component
-<Translate category? custom_id? label? tag? class? children />
+// Components
+<Translate category? custom_id? label? tag? class? params? children />
+<Phrase category? params? tag? class? children />          // one markup-bearing sentence kept whole
+<DontTranslate tag? class? children />                     // never translated (translate="no")
+
+// Markup placeholders are %name%, not {name} — Svelte compiles a bare {name}
+// as its own expression tag. $t() keeps {name} (JS string, no collision).
 
 // Direct API client access (vanilla — no Svelte concerns)
 LangsysAppAPI
