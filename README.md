@@ -24,7 +24,7 @@ As of v3.0.0, `langsys-js-svelte` is a thin Svelte binding over the framework-ag
 
 - A `LangsysApp` whose `init` accepts a Svelte `Writable<string>` for the user locale
 - A `t` store you read with `$t('Phrase', 'Category')` — re-renders any subscribed template when translations or the loaded locale change
-- A `<Translate>` Svelte 5 component wrapping the underlying DOM walker
+- Svelte 5 components wrapping the underlying DOM handlers: `<Translate>` (content blocks), `<Phrase>` (one markup-bearing sentence kept whole), `<DontTranslate>` (never translated)
 
 If you need the SDK outside Svelte (a Node script, a non-Svelte web app), import from `langsys-js-typescript` directly.
 
@@ -212,6 +212,58 @@ Use `<Translate>` for prose, marketing copy, CMS-rendered articles, forms with p
 - **`debug: true` catches the mistake for you.** If you pass `params` whose keys match no placeholder in the content, the SDK warns and names the fix — that state is the fingerprint of having written `{name}` in markup and had the compiler eat it. ICU slots count as legitimate uses, the warning re-fires only when the params key-set changes (a ticking `count` won't spam the console), and it is silent in production.
 
 `<Translate>` props: `category?`, `custom_id?`, `label?`, `tag?` (defaults to `translate`), `class?`, `params?`, `children`.
+
+### `<Phrase>` — one sentence that happens to contain markup
+
+`<Translate>` **splits**: it walks its subtree and registers each translatable run as its own phrase. That's right for prose, and wrong the moment a single sentence is broken up by inline markup — because the fragments land in separate catalog entries, and a translator can't move words across them.
+
+```svelte
+<!-- ❌ Translate alone splits this into "Based on" / "reviews" -->
+<Translate category="ProductCard">
+    <p>Based on <strong>{reviewCount}</strong> reviews</p>
+</Translate>
+```
+
+`<Phrase>` **keeps**: it encodes its whole subtree — inline markup and all — into a *single* phrase, registers that one string, then reconstitutes your real elements around the translated text.
+
+```svelte
+<script>
+    import { Phrase } from 'langsys-js-svelte';
+    let reviewCount = $state(4);
+</script>
+
+<Phrase category="ProductCard" params={{ n: reviewCount }}>
+    Based on %n% <strong>reviews</strong>
+</Phrase>
+```
+
+**This is a correctness requirement, not a formatting preference.** A count and the noun it inflects must live in the same phrase for grammatical agreement to be expressible. Split them, and no ICU plural rule can select the right form — English tolerates this (two forms, and "1 reviews" merely reads badly), but Russian has 4 plural categories, Polish 4, Arabic 6. If `%n%` and `reviews` are in different catalog entries, those languages simply cannot be translated correctly. `<Phrase>` is the only primitive that prevents it.
+
+- **The markup never reaches the translator.** Inline elements are replaced with neutral tokens, so translators see one clean sentence and can reorder freely — the `<strong>` reattaches to whatever word it wraps in the target language.
+- **Composes with `<Translate>`.** A `<Phrase>` carries `data-ls-phrase`, which tells a wrapping `<Translate>` to skip that subtree and let `<Phrase>` own it. The common pattern is `<Translate>` for the block, with `<Phrase>` around any run that must stay atomic.
+- **Same `%name%` rule** as `<Translate>` — write `%n%`, not `{n}` (see the note above).
+- Use it for: a count plus its noun, a sentence with a bolded or linked span, anything where word order must be free across the markup.
+
+`<Phrase>` props: `category?`, `params?`, `tag?` (defaults to `span`), `class?`, `children`.
+
+### `<DontTranslate>` — content that must survive verbatim
+
+Marks a region as never-translated. Brand names, product names, domains, identifiers, code — anything that would be damaged by a well-meaning translation.
+
+```svelte
+<script>
+    import { DontTranslate } from 'langsys-js-svelte';
+</script>
+
+<p>
+    Built with <DontTranslate>Kangen®</DontTranslate> on
+    <DontTranslate>langsys.dev</DontTranslate>
+</p>
+```
+
+The host carries the standard [`translate="no"`](https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/translate) attribute, which the base SDK's tokenizer and renderer both honor — so the content is never tokenized, never registered, and never replaced. It's presentational glue with no vanilla handler behind it. As a bonus, `translate="no"` is the same signal browser-level translators (Chrome, Safari) respect, so the content is protected from those too.
+
+`<DontTranslate>` props: `tag?` (defaults to `span`), `class?`, `children`.
 
 ## Reactive stores
 
