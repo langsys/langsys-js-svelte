@@ -1,3 +1,20 @@
+## 3.4.2 - 2026-08-09
+
+### Fixed (documentation)
+
+- **`<Phrase>` and `<DontTranslate>` are now documented.** Both have shipped since 3.x, but the README covered neither and the `index.d.ts` "Public API" header — what IDE hover and autocomplete surface — listed only `<Translate>`. Readers reasonably concluded the components did not exist and reached for `<Translate>` on content that needs `<Phrase>`, which silently breaks pluralization: a count and the noun it inflects land in separate catalog entries, so no ICU plural rule can select the right form. Tolerable in English, untranslatable in Russian (4 plural categories), Polish (4), Arabic (6).
+- `<Phrase>`'s JSDoc example used a bare `{n}` placeholder in markup — the exact mistake the README warns about, in the file's canonical pluralization example. Now `%n%`.
+- README claimed `Date` params serialize to ISO 8601. Stale since the 3.2.0 CLDR adoption; they format in locale medium date style (`Mar 14, 2026` / `14.03.2026`).
+- Layering summary and `CLAUDE.md` API summary corrected — both listed only `<Translate>`; `CLAUDE.md` additionally showed `$t()` category-first (it is phrase-first) and a `contentBlocks` store that was removed after 3.0.0.
+
+No code changes — runtime behavior is identical to 3.4.1.
+
+### Changed
+
+- Lockfile updated to `langsys-js-typescript` 0.4.3 (framework-neutral wording in the unused-params warning). The published `^0.4.2` range already resolved 0.4.3 for consumers; this only affects this repo's dev build.
+
+---
+
 ## 3.4.1 - 2026-07-09
 
 ### Changed
