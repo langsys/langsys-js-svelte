@@ -11,6 +11,7 @@
         { href: '/e2e/visibility', label: 'Visibility' },
         { href: '/e2e/nav', label: 'Navigation' },
         { href: '/e2e/grant', label: 'Grant' },
+        { href: '/e2e/params', label: 'Params' },
     ];
 </script>
 
