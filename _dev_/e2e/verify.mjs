@@ -55,14 +55,32 @@ const fail = (n, d) => results.push({ ok: false, n, d });
 
 const browser = await chromium.launch();
 
+/**
+ * Every API response the page received, so assertions can check what the server
+ * ACCEPTED rather than only what the SDK sent.
+ *
+ * Asserting on a captured request body is the same class of bug as a fetch that
+ * returns 200 without executing: a perfectly-formed POST the server rejects
+ * outright reads as success, and the suite certifies a broken path as working.
+ * A suite that cannot fail is worse than no suite.
+ */
+const apiCalls = [];
+
 async function newPage() {
     const ctx = await browser.newContext();
     const p = await ctx.newPage();
     const msgs = [];
     p.on('console', (m) => msgs.push({ type: m.type(), text: m.text() }));
     p.on('pageerror', (e) => msgs.push({ type: 'pageerror', text: String(e) }));
+    p.on('response', async (r) => {
+        const url = r.url();
+        if (!url.includes('/api/')) return;
+        apiCalls.push({ url, status: r.status(), method: r.request().method() });
+    });
     return { p, ctx, msgs };
 }
+
+const callsTo = (fragment) => apiCalls.filter((c) => c.url.includes(fragment));
 
 const cellFor = (p, label) =>
     p.evaluate((l) => {
@@ -311,6 +329,94 @@ for (const [key, expected] of [
     else fail('one hint per URL — no cross-route batching', JSON.stringify(hints));
 
     await ctx.close();
+}
+
+// ---------- TEST 11: the server ACCEPTED the work, not just that we sent it ----------
+// Without this block the entire suite stays green while the server rejects every
+// registration — which is exactly how React's suite certified a 100%-failing
+// registration path as 35/36 passing.
+{
+    const RUN = 'accept' + Math.floor((Date.now() / 1000) % 100000);
+    const { p } = await newPage();
+    await p.goto(`${BASE}/e2e/lanes?key=ip_write&run=${RUN}`, { waitUntil: 'networkidle' });
+    await p.waitForTimeout(4000); // let the registration flush
+
+    const regs = callsTo('translatable-items');
+    const bad = regs.filter((c) => c.status < 200 || c.status >= 300);
+
+    if (!regs.length) fail('registration POSTs were actually issued', 'none seen — nothing to accept');
+    else if (!bad.length) pass('registration POSTs ACCEPTED by server', `${regs.length} call(s), all 2xx`);
+    else fail('registration POSTs ACCEPTED by server', `${bad.length}/${regs.length} rejected: ${JSON.stringify(bad.slice(0, 2))}`);
+
+    // Strongest form: server STATE, not a status code.
+    const cat = await (
+        await fetch(`${API}/translations?project_id=${PROJECT}&locale=en-US`, {
+            headers: { 'x-Authorization': KEY_READ },
+        })
+    ).json();
+    const landed = Object.keys(cat?.data?.E2E838 ?? {}).filter((k) => k.includes(RUN));
+    landed.length >= 2
+        ? pass('registered phrases present in catalog', `${landed.length} for run ${RUN}`)
+        : fail('registered phrases present in catalog', `${landed.length} for run ${RUN} — server did not persist`);
+
+    // Hints answer 204; anything else means the discovery lane is failing silently.
+    const hintCalls = callsTo('discovery/hint');
+    const badHints = hintCalls.filter((c) => c.status !== 204);
+    if (!hintCalls.length) pass('hint lane: none issued this run', 'n/a (write-enabled session)');
+    else if (!badHints.length) pass('hint POSTs answered 204', `${hintCalls.length} call(s)`);
+    else fail('hint POSTs answered 204', JSON.stringify(badHints.slice(0, 2)));
+
+    // Catch-all: no API call anywhere in the suite came back 4xx/5xx.
+    const errs = apiCalls.filter((c) => c.status >= 400);
+    errs.length === 0
+        ? pass('no 4xx/5xx from the API across the whole suite', `${apiCalls.length} calls checked`)
+        : fail('no 4xx/5xx from the API across the whole suite', JSON.stringify(errs.slice(0, 3)));
+}
+
+// ---------- TEST 12: params / interpolation / <Phrase> ----------
+// Covers what v0.4.2–0.4.3 touched (interpolate.ts, phrase.ts, translate.ts and
+// findUnusedParamKeys). Selects by text, not data-testid: <Translate> rewrites its
+// subtree during tokenization and drops data-* attributes from descendants, so a
+// testid hook inside it does not survive to the rendered DOM.
+{
+    const { p, msgs } = await newPage();
+    await p.goto(`${BASE}/e2e/params`, { waitUntil: 'networkidle' });
+    await p.waitForTimeout(1500);
+    const text = () => p.evaluate(() => document.body.innerText);
+
+    const t1 = await text();
+    /Welcome back, Sarah\. You have 3 new messages\./.test(t1)
+        ? pass('<Translate params> substitutes %name% and %count%', 'Sarah / 3')
+        : fail('<Translate params> substitutes %name% and %count%', t1.split('\n').find((l) => l.includes('Welcome')) ?? '?');
+
+    await p.fill('#pname', 'Umberto');
+    await p.locator('button:has-text("add message")').click();
+    await p.waitForTimeout(700);
+    const t2 = await text();
+    /Welcome back, Umberto\. You have 4 new messages\./.test(t2)
+        ? pass('setParams re-renders on param change', 'Umberto / 4')
+        : fail('setParams re-renders on param change', t2.split('\n').find((l) => l.includes('Welcome')) ?? '?');
+
+    /Based on 4 <?reviews/.test(t2.replace(/\s+/g, ' '))
+        ? pass('<Phrase params> substitutes %n%', 'n=4')
+        : fail('<Phrase params> substitutes %n%', t2.split('\n').find((l) => l.includes('Based on')) ?? '?');
+
+    (await p.locator('p[data-ls-phrase] strong, [data-ls-phrase] strong').count()) >= 1 ||
+    (await p.locator('strong:has-text("reviews")').count()) >= 1
+        ? pass('<Phrase> inline markup reconstituted', '<strong> present in DOM')
+        : fail('<Phrase> inline markup reconstituted', 'no <strong>');
+
+    t2.includes('{missing}')
+        ? pass('unknown placeholder stays canonical', '{missing}')
+        : fail('unknown placeholder stays canonical', t2.split('\n').find((l) => l.includes('your code')) ?? '?');
+
+    /Save 50% today — width: 100% supported/.test(t2)
+        ? pass('literal % in prose untouched', '50% / 100%')
+        : fail('literal % in prose untouched', t2.split('\n').find((l) => l.includes('Save 50')) ?? '?');
+
+    msgs.some((m) => /unusedKey/.test(m.text))
+        ? pass('unused param key warned (findUnusedParamKeys)', 'names unusedKey')
+        : fail('unused param key warned (findUnusedParamKeys)', 'no console message named unusedKey');
 }
 
 await browser.close();
