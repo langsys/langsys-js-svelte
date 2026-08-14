@@ -20,7 +20,7 @@
      * richtext.ts in the base SDK). The host carries `data-ls-phrase` so a
      * wrapping <Translate> skips it and lets this handler own it.
      */
-    import { Phrase as VanillaPhrase } from 'langsys-js-typescript';
+    import { Phrase as VanillaPhrase, type ParamPrimitive } from 'langsys-js-typescript';
     import type { Snippet } from 'svelte';
     import { onDestroy } from 'svelte';
 
@@ -28,7 +28,7 @@
         class?: string;
         tag?: string;
         category?: string;
-        params?: Record<string, unknown>;
+        params?: Record<string, ParamPrimitive>;
         children: Snippet;
     }
 
