@@ -1,4 +1,9 @@
-## 3.4.2 - 2026-08-09
+## 3.5.0 - 2026-08-14
+
+### Changed
+
+- **`<Phrase>`'s `params` prop narrows from `Record<string, unknown>` to `Record<string, ParamPrimitive>`.** Matches `<Translate params>` and `$t()`. The loose type admitted values interpolation can only render as `[object Object]` — objects, arrays, functions — so this rejects at compile time what was already broken at runtime. **Runtime behavior is unchanged**; existing code that passed only strings, numbers, `Date`s, or booleans is unaffected. Code that passed richer values will now fail typecheck, which is the point.
+- Base SDK floor bumped to `langsys-js-typescript` ^0.5.0, which carries the corresponding `PhraseOptions.params` narrowing. The wrapper's own narrowing was applied ahead of the bump and is assignable to both the old and new base types, so no code changed when the floor moved. (Supersedes an interim 0.4.3 lockfile update — framework-neutral wording in the unused-params warning.)
 
 ### Fixed (documentation)
 
@@ -7,11 +12,7 @@
 - README claimed `Date` params serialize to ISO 8601. Stale since the 3.2.0 CLDR adoption; they format in locale medium date style (`Mar 14, 2026` / `14.03.2026`).
 - Layering summary and `CLAUDE.md` API summary corrected — both listed only `<Translate>`; `CLAUDE.md` additionally showed `$t()` category-first (it is phrase-first) and a `contentBlocks` store that was removed after 3.0.0.
 
-No code changes — runtime behavior is identical to 3.4.1.
-
-### Changed
-
-- Lockfile updated to `langsys-js-typescript` 0.4.3 (framework-neutral wording in the unused-params warning). The published `^0.4.2` range already resolved 0.4.3 for consumers; this only affects this repo's dev build.
+No runtime behavior changed in any of the documentation fixes above.
 
 ---
 
