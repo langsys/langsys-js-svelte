@@ -196,9 +196,10 @@ log_success "Updated package.json version to $NEW_VERSION"
 # "## Unreleased" while work queues and stamping HERE fixes that: this runs
 # minutes before CI publishes, so the date matches the registry.
 #
-# Stamp here rather than after publishing: a post-publish fixup would leave the
-# published tarball itself reading "Unreleased", which is the artifact
-# consumers actually download.
+# Stamp here rather than after publishing so the date is carried by the git tag
+# and GitHub release rather than added afterwards. (This package's tarball ships
+# only dist/ and no CHANGELOG.md, so no npm artifact could read "Unreleased" —
+# that hazard applies to packages that do ship theirs.)
 if grep -q '^## Unreleased' CHANGELOG.md; then
     RELEASE_DATE=$(date +%Y-%m-%d)
     log_info "Stamping CHANGELOG: ## Unreleased -> ## $NEW_VERSION - $RELEASE_DATE"

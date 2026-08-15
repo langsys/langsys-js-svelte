@@ -17,7 +17,7 @@
 ### Infrastructure
 
 - CI now enforces **changelog tag coverage** on every push and PR: every released tag must have a CHANGELOG section. Runs with `fetch-depth: 0`, without which `actions/checkout`'s tagless shallow clone makes the check pass vacuously.
-- The release script now **stamps the `## Unreleased` heading** with the version and date as it runs, so entries are dated from the release rather than from whenever they were written — the cause of four wrong dates corrected above. It stamps before publishing, not after, so the published tarball never carries an "Unreleased" heading.
+- The release script now **stamps the `## Unreleased` heading** with the version and date as it runs, so entries are dated from the release rather than from whenever they were written — the cause of four wrong dates corrected above. Stamping happens before the release commit is amended, so the date is carried by the git tag and the GitHub release rather than added afterwards. (This package's npm tarball ships only `dist` and does not include `CHANGELOG.md`, so no published artifact was ever at risk of reading "Unreleased" — that hazard applies to packages that do ship theirs.)
 
 ---
 
