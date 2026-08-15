@@ -1,3 +1,26 @@
+## Unreleased
+
+_Date deliberately left unstamped until publish — to be taken from `npm view langsys-js-svelte time --json`, not from the author's clock at writing time. See the 3.1.0/3.1.1 dating errors corrected in this release._
+
+### Changed
+
+- Base SDK floor bumped to `langsys-js-typescript` ^0.6.0. Two fixes ride along, both entirely inside the base SDK — no wrapper code changed:
+    - **`md5` now agrees with standard UTF-8 MD5.** It had been packing UTF-16 code units into byte lanes, so it only matched for ASCII: non-ASCII content-block ids diverged from `langsys-php`'s, and distinct blocks could collide. Pure-ASCII ids are byte-identical to before, so only non-ASCII blocks rebase, and migration is automatic and lookup-only — `Translate` falls back to the legacy id when the corrected one misses, while registration always uses the corrected id.
+    - **The tokenizer now recognises `data-langsys-phrase`** (langsys-php's keep-together marker) alongside our `data-ls-phrase`. On an SSR handoff both SDKs walk one DOM, so ours had been recursing into subtrees PHP deliberately kept whole — splitting them at tag boundaries, the exact failure `<Phrase>` exists to prevent. Relevant if you hydrate PHP-rendered markup.
+
+### Fixed (documentation)
+
+- `<Phrase>` section gains **phrase-key stability** as a third reason, after grammatical agreement and reordering. It is the argument against hand-rolling: passing an element's `innerHTML` to `$t()` yourself puts Svelte's content-derived scoped-style hashes (`svelte-a1b2c3`) into the phrase key, so a restyle silently drifts the key and the page falls back to the base language.
+- The `<Phrase>` counter-example demonstrated two silent failures — the tag-boundary split and a compiled-away `{reviewCount}` — while the prose explained only the split, so a reader could conclude braces are safe inside `<Phrase>`. Both are now labelled, and `data-ls-phrase` is marked as an internal marker rather than an authoring hook.
+- **CHANGELOG entries reconstructed for 3.1.0 and 3.1.1**, which shipped with no entry at all. 3.1.0 is where `<Phrase>` and `<DontTranslate>` were added and `contentBlocks` was removed — one missing entry that produced documentation defects on three separate surfaces over four minor releases.
+- Four release dates corrected against the npm publish record (3.5.0, 3.4.1, 3.1.1, 3.1.0).
+
+### Infrastructure
+
+- CI now enforces **changelog tag coverage** on every push and PR: every released tag must have a CHANGELOG section. Runs with `fetch-depth: 0`, without which `actions/checkout`'s tagless shallow clone makes the check pass vacuously.
+
+---
+
 ## 3.5.0 - 2026-08-15
 
 ### Changed
