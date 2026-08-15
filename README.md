@@ -218,11 +218,18 @@ Use `<Translate>` for prose, marketing copy, CMS-rendered articles, forms with p
 `<Translate>` **splits**: it walks its subtree and registers each translatable run as its own phrase. That's right for prose, and wrong the moment a single sentence is broken up by inline markup — because the fragments land in separate catalog entries, and a translator can't move words across them.
 
 ```svelte
-<!-- ❌ Translate alone splits this into "Based on" / "reviews" -->
+<!-- ❌ TWO separate mistakes here, both silent: -->
+<!--    1. <strong> splits the sentence — "Based on" and "reviews" register as
+           separate phrases, so no translation can move words between them.    -->
+<!--    2. {reviewCount} is a Svelte expression, compiled away before Langsys
+           sees the text — the count is baked into the registered phrase, and a
+           new phrase registers every time it changes. Write %n% instead.      -->
 <Translate category="ProductCard">
     <p>Based on <strong>{reviewCount}</strong> reviews</p>
 </Translate>
 ```
+
+Fixing it takes **both** changes — `<Phrase>` for the split, `%n%` for the placeholder. `<Phrase>` alone does not make the brace form safe: the compiler substitutes `{n}` before any Langsys component sees the text, inside `<Phrase>` exactly as inside `<Translate>`.
 
 `<Phrase>` **keeps**: it encodes its whole subtree — inline markup and all — into a *single* phrase, registers that one string, then reconstitutes your real elements around the translated text.
 
@@ -241,7 +248,7 @@ Use `<Translate>` for prose, marketing copy, CMS-rendered articles, forms with p
 
 - **The markup never reaches the translator.** Inline elements are replaced with neutral tokens, so translators see one clean sentence and can reorder freely — the `<strong>` reattaches to whatever word it wraps in the target language.
 - **Your scoped CSS never enters the phrase key** — which is why hand-rolling this goes wrong in Svelte specifically. Passing an element's `innerHTML` to `$t()` yourself puts markup in the key, and in Svelte that markup carries scoped-style hashes like `class="svelte-a1b2c3"`. Those hashes are content-derived, so they change whenever the component's styles change: the phrase key silently drifts on a build, the old key orphans, the new one registers untranslated, and the page falls back to the base language with no error anywhere. Every restyle would cost a retranslation. `<Phrase>` keeps the real elements inside the SDK as shallow clones and puts only neutral `{m0o}`/`{m0c}` tokens on the wire, so nothing build-specific can reach the key — and because those tokens are valid ICU argument names, plural/select still parse around them.
-- **Composes with `<Translate>`.** A `<Phrase>` carries `data-ls-phrase`, which tells a wrapping `<Translate>` to skip that subtree and let `<Phrase>` own it. The common pattern is `<Translate>` for the block, with `<Phrase>` around any run that must stay atomic.
+- **Composes with `<Translate>`.** A `<Phrase>` emits `data-ls-phrase`, which tells a wrapping `<Translate>` to skip that subtree and let `<Phrase>` own it — an internal marker the component sets for you, never something you write on an element yourself. The common pattern is `<Translate>` for the block, with `<Phrase>` around any run that must stay atomic.
 - **Same `%name%` rule** as `<Translate>` — write `%n%`, not `{n}` (see the note above).
 - Use it for: a count plus its noun, a sentence with a bolded or linked span, anything where word order must be free across the markup.
 
