@@ -64,6 +64,43 @@ No runtime behavior changed in any of the documentation fixes above.
 
 ---
 
+## 3.1.1 - 2026-05-21
+
+_Entry reconstructed from git history on 2026-08-15; this release originally shipped without one._
+
+### Changed
+
+- Base SDK floor bumped to `langsys-js-typescript` ^0.2.2.
+
+---
+
+## 3.1.0 - 2026-05-20
+
+_Entry reconstructed from git history on 2026-08-15; this release originally shipped without one. Its absence has a documented cost — see the note below._
+
+### Added
+
+- **`<Phrase>`** — thin wrapper over the base SDK's vanilla `Phrase` rich-text handler. Keeps a markup-bearing run as ONE translatable phrase: mounts on a host carrying `data-ls-phrase` (so a wrapping `<Translate>` skips the subtree), forwards `category` + `params`, and re-applies params on change.
+- **`<DontTranslate>`** — marks its host `translate="no"`, which the base SDK's tokenizer and renderer already honor. Pure glue; no vanilla handler behind it.
+
+### Changed
+
+- Base SDK floor bumped to `langsys-js-typescript` ^0.2.0 (the new components require the 0.2 API).
+- **`$t()` documentation corrected to phrase-first.** The README and README-SSR documented `$t(category, phrase, params?)`, but the `TFunction` type, the runtime discriminator, and the base SDK were all already phrase-first — `$t(phrase, category?, params?)`. Examples and the demo's call sites were flipped to match.
+- `detectPreferredLocale` description corrected: it falls back to the user's top preference and returns `false` only when nothing is detectable.
+
+### Removed
+
+- **The `contentBlocks` re-export.** Mirrors the base SDK refactor that deleted the signal — `sTranslations` became the single source of truth for whether the backend knows a content block. No behavioral change in any component.
+
+### Infrastructure
+
+- npm **trusted publishing** (OIDC) with provenance, scoped to the `npm-publish` GitHub Environment so the token can only be minted from tag-ref runs; PR/push CI running `svelte-check` + `vitest`; the local release script now stops after creating the GitHub Release.
+
+> **Why this missing entry mattered.** `<Phrase>` and `<DontTranslate>` were added here and documented nowhere for the next four minor releases — no README sections, and the `index.d.ts` "Public API" header kept listing only `<Translate>` — until 3.5.0. Readers, including an AI agent integrating the SDK, concluded the components did not exist and reached for `<Translate>` on content that needs `<Phrase>`, silently breaking pluralization. The stale `contentBlocks` reference in `CLAUDE.md`, fixed in the same release, traces to the same gap: this entry is where its removal should have been announced. A missing changelog entry is a documentation defect that causes further documentation defects.
+
+---
+
 ## 3.0.0 - 2026-05-19
 
 ### BREAKING CHANGES
