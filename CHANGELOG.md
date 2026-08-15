@@ -1,4 +1,4 @@
-## 3.5.0 - 2026-08-14
+## 3.5.0 - 2026-08-15
 
 ### Changed
 
@@ -16,7 +16,7 @@ No runtime behavior changed in any of the documentation fixes above.
 
 ---
 
-## 3.4.1 - 2026-07-09
+## 3.4.1 - 2026-08-08
 
 ### Changed
 
@@ -64,9 +64,9 @@ No runtime behavior changed in any of the documentation fixes above.
 
 ---
 
-## 3.1.1 - 2026-05-21
+## 3.1.1 - 2026-06-24
 
-_Entry reconstructed from git history on 2026-08-15; this release originally shipped without one._
+_Entry reconstructed from git history on 2026-08-15; this release originally shipped without one. Date taken from the npm publish record._
 
 ### Changed
 
@@ -74,9 +74,9 @@ _Entry reconstructed from git history on 2026-08-15; this release originally shi
 
 ---
 
-## 3.1.0 - 2026-05-20
+## 3.1.0 - 2026-06-10
 
-_Entry reconstructed from git history on 2026-08-15; this release originally shipped without one. Its absence has a documented cost — see the note below._
+_Entry reconstructed from git history on 2026-08-15; this release originally shipped without one. Date taken from the npm publish record. Its absence has a documented cost — see the note below._
 
 ### Added
 
