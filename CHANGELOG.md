@@ -1,12 +1,11 @@
-## Unreleased
-
-_Date deliberately left unstamped until publish — to be taken from `npm view langsys-js-svelte time --json`, not from the author's clock at writing time. See the 3.1.0/3.1.1 dating errors corrected in this release._
+## 3.6.0 - 2026-08-15
 
 ### Changed
 
-- Base SDK floor bumped to `langsys-js-typescript` ^0.6.0. Two fixes ride along, both entirely inside the base SDK — no wrapper code changed:
+- Base SDK floor bumped to `langsys-js-typescript` ^0.6.1. Three fixes ride along, all entirely inside the base SDK — no wrapper code changed:
     - **`md5` now agrees with standard UTF-8 MD5.** It had been packing UTF-16 code units into byte lanes, so it only matched for ASCII: non-ASCII content-block ids diverged from `langsys-php`'s, and distinct blocks could collide. Pure-ASCII ids are byte-identical to before, so only non-ASCII blocks rebase, and migration is automatic and lookup-only — `Translate` falls back to the legacy id when the corrected one misses, while registration always uses the corrected id.
     - **The tokenizer now recognises `data-langsys-phrase`** (langsys-php's keep-together marker) alongside our `data-ls-phrase`. On an SSR handoff both SDKs walk one DOM, so ours had been recursing into subtrees PHP deliberately kept whole — splitting them at tag boundaries, the exact failure `<Phrase>` exists to prevent. Relevant if you hydrate PHP-rendered markup.
+    - **`data-langsys-phrase="false"` / `="0"` is honored as an explicit opt-out** (case-insensitively). Unlike our internal marker, PHP's is author-facing, so an author can un-mark a subtree; matching on presence alone would have skipped content the author had deliberately released — tokenized by PHP, skipped by JS, translated properly by neither.
 
 ### Fixed (documentation)
 
@@ -18,6 +17,7 @@ _Date deliberately left unstamped until publish — to be taken from `npm view l
 ### Infrastructure
 
 - CI now enforces **changelog tag coverage** on every push and PR: every released tag must have a CHANGELOG section. Runs with `fetch-depth: 0`, without which `actions/checkout`'s tagless shallow clone makes the check pass vacuously.
+- The release script now **stamps the `## Unreleased` heading** with the version and date as it runs, so entries are dated from the release rather than from whenever they were written — the cause of four wrong dates corrected above. It stamps before publishing, not after, so the published tarball never carries an "Unreleased" heading.
 
 ---
 

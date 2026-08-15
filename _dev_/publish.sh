@@ -188,6 +188,30 @@ else
 fi
 log_success "Updated package.json version to $NEW_VERSION"
 
+# Stamp the CHANGELOG's "## Unreleased" heading with the version and date.
+#
+# Authoring-time dates are wrong often enough to matter — four of this repo's
+# entries were off, one by a month — because a heading written days before the
+# release is dated from the author's clock, not the publish record. Writing
+# "## Unreleased" while work queues and stamping HERE fixes that: this runs
+# minutes before CI publishes, so the date matches the registry.
+#
+# Stamp here rather than after publishing: a post-publish fixup would leave the
+# published tarball itself reading "Unreleased", which is the artifact
+# consumers actually download.
+if grep -q '^## Unreleased' CHANGELOG.md; then
+    RELEASE_DATE=$(date +%Y-%m-%d)
+    log_info "Stamping CHANGELOG: ## Unreleased -> ## $NEW_VERSION - $RELEASE_DATE"
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "s/^## Unreleased$/## $NEW_VERSION - $RELEASE_DATE/" CHANGELOG.md
+    else
+        sed -i "s/^## Unreleased$/## $NEW_VERSION - $RELEASE_DATE/" CHANGELOG.md
+    fi
+    log_success "CHANGELOG stamped ($RELEASE_DATE). Verify after publish: npm view langsys-js-svelte time --json"
+else
+    log_warning "No '## Unreleased' heading in CHANGELOG.md — is $NEW_VERSION documented?"
+fi
+
 # Run npm install to update package-lock.json
 log_info "Running npm install to update package-lock.json..."
 npm install
@@ -198,7 +222,7 @@ npm run build
 
 # Amend the last commit with version bump
 log_info "Amending last commit with version bump..."
-git add package.json package-lock.json
+git add package.json package-lock.json CHANGELOG.md
 
 # Get the current commit message
 LAST_COMMIT_MESSAGE=$(git log -1 --pretty=%B)
