@@ -1,3 +1,11 @@
+## Unreleased
+
+### Fixed (documentation)
+
+- The `<Translate>` attribute description now states the `value` rule precisely: `value` is translated on `<button>` and on `<input type="submit">` / `<input type="button">`, never on other input types, whose value is user data. It also names `TRANSLATABLE_ATTRIBUTES` as the canonical list and mentions the `data-*` validation messages. Verified by reading the published bundle rather than release notes.
+
+---
+
 ## 3.6.2 - 2026-08-16
 
 ### Fixed
