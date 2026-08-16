@@ -1,3 +1,14 @@
+## Unreleased
+
+### Changed
+
+- Base SDK floor bumped to `langsys-js-typescript` ^0.6.2. Three more SSR-handoff fixes, all inside the base SDK — no wrapper code changed:
+    - **`data-notrans` is honored** as langsys-php's author-facing alias for `translate="no"`. It survives into their `translatePage()` output, so on a handoff, content an author had marked do-not-translate was being harvested by whichever SDK walked it.
+    - Phrase-marker values are **trimmed** before comparison, matching a normalization PHP performs on its side.
+    - **`translate="no"` is now matched case-insensitively** — a gap that predated the cross-SDK work and applies to plain Svelte apps too, not just PHP handoff.
+
+---
+
 ## 3.6.0 - 2026-08-15
 
 ### Changed

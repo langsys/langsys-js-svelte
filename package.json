@@ -62,6 +62,6 @@
     "types": "./dist/index.d.ts",
     "type": "module",
     "dependencies": {
-        "langsys-js-typescript": "^0.6.1"
+        "langsys-js-typescript": "^0.6.2"
     }
 }
