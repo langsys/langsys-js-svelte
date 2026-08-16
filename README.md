@@ -1,5 +1,13 @@
 # Langsys SDK - Svelte
 
+[![npm](https://img.shields.io/npm/v/langsys-js-svelte.svg?style=flat)](https://www.npmjs.com/package/langsys-js-svelte)
+[![build](https://img.shields.io/github/actions/workflow/status/langsys/langsys-js-svelte/ci.yml?style=flat)](https://github.com/langsys/langsys-js-svelte/actions)
+[![last commit](https://img.shields.io/github/last-commit/langsys/langsys-js-svelte.svg?style=flat)](https://github.com/langsys/langsys-js-svelte/commits)
+[![commit activity](https://img.shields.io/github/commit-activity/m/langsys/langsys-js-svelte.svg?style=flat)](https://github.com/langsys/langsys-js-svelte/pulse)
+[![types](https://img.shields.io/npm/types/langsys-js-svelte.svg?style=flat)](https://www.npmjs.com/package/langsys-js-svelte)
+[![downloads](https://img.shields.io/npm/dm/langsys-js-svelte.svg?style=flat)](https://www.npmjs.com/package/langsys-js-svelte)
+[![license](https://img.shields.io/npm/l/langsys-js-svelte.svg?style=flat)](./LICENSE)
+
 Langsys revolutionizes localization for apps with easy to integrate, realtime, continuous translations. Read more about Langsys Translation Manager [at the website](https://Langsys.dev/).
 
 Integrate the Langsys Translation Manager into your Svelte and SvelteKit applications using this SDK.
@@ -11,12 +19,6 @@ Integrate the Langsys Translation Manager into your Svelte and SvelteKit applica
 > The last version supporting Svelte 3 / 4 (client-side only) is tagged `v-last-svelte4-compat` (`1.2.1`).
 >
 > The last version with the `$_['Category']['Token']` proxy access pattern (Svelte 5) is tagged `v-last-proxy-compat` (`2.0.0`). v3 replaces it with `$t(phrase, category?, params?)` — see the [3.0.0 CHANGELOG](./CHANGELOG.md) for migration notes.
-
-[![GitHub Release](https://img.shields.io/github/release/langsys/langsys-js-svelte.svg?style=flat)]()
-[![GitHub last commit](https://img.shields.io/github/last-commit/langsys/langsys-js-svelte.svg?style=flat)]()
-[![GitHub pull requests](https://img.shields.io/github/issues-pr/langsys/langsys-js-svelte.svg?style=flat)]()
-[![PR's Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat)](http://makeapullrequest.com)
-[![NPM License](https://img.shields.io/npm/l/all-contributors.svg?style=flat)](https://github.com/langsys/langsys-js-svelte/blob/master/LICENSE)
 
 ## How it's layered
 
@@ -139,7 +141,14 @@ $t('You have {count} new messages', 'Notifications', { count: 3, extra: 'x' });
 
 Allowed value types: `string | number | Date | boolean`. `number` and `Date` values are formatted for the active locale via CLDR — `1234.5` renders as `1,234.5` in `en-US` and `1.234,5` in `de-DE`; a `Date` renders in medium date style (`Mar 14, 2026` / `14.03.2026`). `string` values pass through untouched.
 
-> Future versions will swap the simple `{name}` runtime for ICU MessageFormat — adding plural / select / date formatting — without changing the public signature. Today's `$t('{count} items', 'Cart', { count })` will evolve to `$t('{count, plural, one {# item} other {# items}}', 'Cart', { count })`.
+**ICU MessageFormat is supported** alongside the simple form, on the same signature — plural, select, and date/time/number skeletons all work:
+
+```svelte
+{$t('{count, plural, one {# item} other {# items}}', 'Cart', { count })}
+{$t('{g, select, male {Bienvenido} female {Bienvenida} other {Bienvenide}}', 'UI', { g })}
+```
+
+You rarely need to write these yourself: Langsys promotes a plain `{name}` phrase to an ICU construct in target locales that require it — a gendered locale can grow a `select` argument your source phrase never had. When an argument the target expects isn't supplied, the SDK resolves `select` to its `other` branch and `plural` to `other` rather than rendering the raw construct.
 
 #### Categorization disambiguates context
 

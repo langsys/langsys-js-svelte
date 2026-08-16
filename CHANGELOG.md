@@ -1,6 +1,8 @@
 ## Unreleased
 
 ### Fixed (documentation)
+- **README badges standardized and two latent defects fixed.** The license badge queried `npm/l/all-contributors` — a different package's license, which rendered "MIT" only because that package is also MIT, so it looked right while being structurally wrong. Four badges also had empty `[]()` link targets, and the LICENSE link pointed at `blob/master/`, a branch this repo does not have (it resolved only via GitHub's redirect). Badges now sit under the H1 where they are actually read.
+- **Removed a stale "future versions will add ICU" note.** ICU MessageFormat has been supported for some time — plural, select, and date skeletons all work today, verified against the published bundle. The section now documents ICU as available, including that Langsys can promote a plain `{name}` phrase to an ICU construct in locales that need one, and how a missing argument resolves.
 
 - The `<Translate>` section now describes `value` as its own mechanism rather than folding it into the attribute list. `value` is translated **only where it is a label rather than data** — on `<button>` and on `<input type="submit">` / `<input type="button">` — and never on other input types, so a text field's value is not rewritten. It is called out separately because `value` does *not* appear in `TRANSLATABLE_ATTRIBUTES`, so a reader following that pointer would otherwise conclude it is never translated at all. The attribute list itself now also names the `data-*` validation messages. Verified by reading the published bundle.
 
