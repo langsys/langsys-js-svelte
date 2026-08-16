@@ -89,6 +89,8 @@ The SDK detects the key type automatically and behaves accordingly.
 
 `UserLocaleStore` is a standard Svelte `Writable<string>` — set/update it however you like and the SDK reacts.
 
+Store **BCP 47 language tags** in it (`en-US`, `pt-BR`, `zh-Hant`). Casing and `_` separators are normalized for you, so `en_us` becomes `en-US`. A tag that isn't valid BCP 47 at all — `english`, `en-USA` — is passed through best-effort rather than rejected, which means it simply fails to match a catalog and the page renders base language. That looks exactly like a locale you haven't translated yet, so run with `debug: true` in development: the SDK warns on an invalid tag at the point where it can still tell the difference.
+
 ### SSR token strategy
 
 `ssrTokenStrategy` (default `'client'`) controls when missing tokens are sent during server rendering:

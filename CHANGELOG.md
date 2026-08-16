@@ -1,6 +1,7 @@
-## Unreleased
+## 3.6.3 - 2026-08-16
 
 ### Fixed (documentation)
+- README notes that `UserLocaleStore` should hold **BCP 47 tags**. Casing and `_` separators are normalized (`en_us` → `en-US`), but a tag that isn't BCP 47 at all (`english`, `en-USA`) passes through best-effort and simply fails to match a catalog — rendering base language, which is indistinguishable from a locale that hasn't been translated yet. `langsys-js-typescript` 0.6.5 warns on this in debug mode; the note points readers at it. Picked up automatically by the existing `^0.6.4` range, so no floor change.
 - **README badges standardized and two latent defects fixed.** The license badge queried `npm/l/all-contributors` — a different package's license, which rendered "MIT" only because that package is also MIT, so it looked right while being structurally wrong. Four badges also had empty `[]()` link targets, and the LICENSE link pointed at `blob/master/`, a branch this repo does not have (it resolved only via GitHub's redirect). Badges now sit under the H1 where they are actually read.
 - **Removed a stale "future versions will add ICU" note.** ICU MessageFormat has been supported for some time — plural, select, and date skeletons all work today, verified against the published bundle. The section now documents ICU as available, including that Langsys can promote a plain `{name}` phrase to an ICU construct in locales that need one, and how a missing argument resolves.
 
