@@ -171,7 +171,8 @@ For larger blocks of HTML where the structure should be preserved for the transl
 ```
 
 The component:
-- Recursively tokenizes text nodes and translatable attributes — `placeholder`, `alt`, `title`, `label`, the `aria-*` ones a screen reader speaks, and `data-*` validation messages among them. Also `<option>` text, and `value` on `<button>` and on `<input type="submit">` / `<input type="button">` (never on other input types, whose value is user data). The canonical list is `TRANSLATABLE_ATTRIBUTES` in the base SDK's tokenizer and it grows — treat these as examples rather than an exhaustive set.
+- Recursively tokenizes text nodes, `<option>` text, and translatable attributes — `placeholder`, `alt`, `title`, `label`, the `aria-*` ones a screen reader speaks, and `data-*` validation messages among them. The canonical list is `TRANSLATABLE_ATTRIBUTES` in the base SDK's tokenizer and it grows, so treat these as examples rather than an exhaustive set.
+- Translates `value` **only where it is a label rather than data**: on `<button>`, and on `<input type="submit">` / `<input type="button">`. Every other input type is left alone, so a text field's value is never rewritten. This is a separate mechanism from the attribute list above — `value` does *not* appear in `TRANSLATABLE_ATTRIBUTES`.
 - Captures semantic CSS so translators see the styled appearance in the Translation Manager.
 - Registers the whole thing as a **content block** that translators handle as one unit while still translating the individual phrases inside.
 - Auto re-translates on locale change.

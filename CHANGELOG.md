@@ -2,7 +2,7 @@
 
 ### Fixed (documentation)
 
-- The `<Translate>` attribute description now states the `value` rule precisely: `value` is translated on `<button>` and on `<input type="submit">` / `<input type="button">`, never on other input types, whose value is user data. It also names `TRANSLATABLE_ATTRIBUTES` as the canonical list and mentions the `data-*` validation messages. Verified by reading the published bundle rather than release notes.
+- The `<Translate>` section now describes `value` as its own mechanism rather than folding it into the attribute list. `value` is translated **only where it is a label rather than data** — on `<button>` and on `<input type="submit">` / `<input type="button">` — and never on other input types, so a text field's value is not rewritten. It is called out separately because `value` does *not* appear in `TRANSLATABLE_ATTRIBUTES`, so a reader following that pointer would otherwise conclude it is never translated at all. The attribute list itself now also names the `data-*` validation messages. Verified by reading the published bundle.
 
 ---
 
