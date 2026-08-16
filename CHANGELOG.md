@@ -1,14 +1,17 @@
-## Unreleased
+## 3.6.1 - 2026-08-16
 
 ### Changed
 
-- Base SDK floor bumped to `langsys-js-typescript` ^0.6.2. Three more SSR-handoff fixes, all inside the base SDK — no wrapper code changed:
+- Base SDK floor bumped to `langsys-js-typescript` ^0.6.3. SSR-handoff and tokenizer fixes, all inside the base SDK — no wrapper code changed:
     - **`data-notrans` is honored** as langsys-php's author-facing alias for `translate="no"`. It survives into their `translatePage()` output, so on a handoff, content an author had marked do-not-translate was being harvested by whichever SDK walked it.
     - Phrase-marker values are **trimmed** before comparison, matching a normalization PHP performs on its side.
     - **`translate="no"` is now matched case-insensitively** — a gap that predated the cross-SDK work and applies to plain Svelte apps too, not just PHP handoff.
+    - **`<select>` option text is no longer harvested twice.** Any content block containing a `<select>` was producing duplicated tokens, diverging its `custom_id` from `langsys-php`'s. Migration is lookup-only across all historical id shapes, so nothing loses its translations, and content without a `<select>` does not rebase.
+    - **Four more translatable attributes**: `label`, `aria-description`, `aria-valuetext`, `aria-roledescription`. `label` is the text a user actually reads in a `<select>` picker; the ARIA three are spoken by screen readers, so leaving them untranslated degraded accessibility specifically for the users least able to work around it.
 
 ### Fixed (documentation)
 
+- The `<Translate>` attribute list is now presented as examples rather than an exhaustive enumeration, and names the accessibility attributes. That list is owned by the base SDK's tokenizer and grew twice this week — a copy of someone else's changing surface is a doc defect waiting to happen.
 - README documents the **cross-SDK marker boundary** for apps hydrating `langsys-php`-rendered markup: `data-ls-phrase` is ours and internal (emitted by `<Phrase>`, never author-written), while langsys-php's `data-langsys-*` and `data-notrans` are author-written. Inverted authorship over the same territory, and a reader working across both SDKs meets both at once. The accepted values are linked rather than restated — that surface belongs to langsys-php and has changed repeatedly.
 
 ---

@@ -171,7 +171,7 @@ For larger blocks of HTML where the structure should be preserved for the transl
 ```
 
 The component:
-- Recursively tokenizes text nodes and translatable attributes (`placeholder`, `alt`, `title`, `aria-label`, plus button/input `value` attributes and `<option>` text).
+- Recursively tokenizes text nodes and translatable attributes — `placeholder`, `alt`, `title`, `label`, the `aria-*` ones a screen reader speaks, button/input `value`, and `<option>` text among them. The full list lives in the base SDK's tokenizer and grows; treat these as examples rather than an exhaustive set.
 - Captures semantic CSS so translators see the styled appearance in the Translation Manager.
 - Registers the whole thing as a **content block** that translators handle as one unit while still translating the individual phrases inside.
 - Auto re-translates on locale change.
