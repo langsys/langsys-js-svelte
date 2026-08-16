@@ -1,3 +1,15 @@
+## 3.6.2 - 2026-08-16
+
+### Fixed
+
+- **A missing ICU argument no longer dumps the message source onto the page.** Base SDK floor bumped to `langsys-js-typescript` ^0.6.4. Previously a phrase whose translation used an ICU `select` or `plural` construct rendered its own source when the argument was absent — literally `{name_gender, select, male {Bienvenido} …} Sarah` in place of `Bienvenide Sarah`. Missing `select` now resolves to the `other` branch, and missing `plural` to `other` with `#` shown as `{count}`.
+
+    This is reachable **without any mistake by the caller**: Langsys's ICU promoter can introduce a `select` argument that the source phrase never had — a plain `{name}` becomes `{name_gender, select, …}` in gendered target locales — so an app cannot supply an argument that does not exist in the phrase its developer wrote. Any app translating into a gendered locale could hit it.
+
+    A `null` argument now counts as missing rather than coercing to `0`. That coercion made a failure indistinguishable from valid data: an empty cart and a forgotten `count` both rendered `0 items`.
+
+---
+
 ## 3.6.1 - 2026-08-16
 
 ### Changed
