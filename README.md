@@ -273,6 +273,15 @@ The host carries the standard [`translate="no"`](https://developer.mozilla.org/e
 
 `<DontTranslate>` props: `tag?` (defaults to `span`), `class?`, `children`.
 
+### Hydrating markup rendered by langsys-php
+
+If a Svelte app hydrates a page rendered by [`langsys-php`](https://github.com/langsys/langsys-php), both SDKs walk the same DOM — so it's worth knowing that the two use marker attributes with **inverted authorship**:
+
+- **`data-ls-phrase` is ours and internal.** Our `<Phrase>` component emits it; you never write it yourself, and writing it on a plain element does not grant phrase semantics.
+- **langsys-php's `data-langsys-*` attributes are author-written**, and so is `data-notrans` (its alias for `translate="no"`). Authors add them deliberately in PHP templates.
+
+Our tokenizer honors both families, but only ever emits its own. For the PHP attributes' accepted values and exact semantics, see [langsys-php's documentation](https://github.com/langsys/langsys-php) rather than any restatement here — that surface is theirs and has moved more than once.
+
 ## Reactive stores
 
 | Export | Type | Notes |

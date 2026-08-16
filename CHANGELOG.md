@@ -7,6 +7,10 @@
     - Phrase-marker values are **trimmed** before comparison, matching a normalization PHP performs on its side.
     - **`translate="no"` is now matched case-insensitively** — a gap that predated the cross-SDK work and applies to plain Svelte apps too, not just PHP handoff.
 
+### Fixed (documentation)
+
+- README documents the **cross-SDK marker boundary** for apps hydrating `langsys-php`-rendered markup: `data-ls-phrase` is ours and internal (emitted by `<Phrase>`, never author-written), while langsys-php's `data-langsys-*` and `data-notrans` are author-written. Inverted authorship over the same territory, and a reader working across both SDKs meets both at once. The accepted values are linked rather than restated — that surface belongs to langsys-php and has changed repeatedly.
+
 ---
 
 ## 3.6.0 - 2026-08-15
