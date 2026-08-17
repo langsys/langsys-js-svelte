@@ -22,14 +22,14 @@ import { chromium } from 'playwright';
 import { createHmac } from 'node:crypto';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173';
-const SECRET = process.env.VITE_LANGSYS_WRITE_GRANT_SECRET;
+const SECRET = process.env.LANGSYS_WRITE_GRANT_SECRET;
 const API = process.env.VITE_LANGSYS_BASE_URL ?? 'http://langsys2.test/api';
 const PROJECT = process.env.VITE_LANGSYS_PROJECT_ID;
 const KEY_READ = process.env.VITE_LANGSYS_KEY_READ;
 
 if (!SECRET || !PROJECT || !KEY_READ) {
     console.error(
-        'Missing env. Need VITE_LANGSYS_WRITE_GRANT_SECRET, VITE_LANGSYS_PROJECT_ID and\n' +
+        'Missing env. Need LANGSYS_WRITE_GRANT_SECRET, VITE_LANGSYS_PROJECT_ID and\n' +
             'VITE_LANGSYS_KEY_READ. Run with: node --env-file=.env _dev_/e2e/verify.mjs',
     );
     process.exit(2);
@@ -150,7 +150,7 @@ for (const [key, expected] of [
     await p.waitForTimeout(500);
     const beforeCount = auths.length;
 
-    await p.locator('button:has-text("Apply write grant")').click();
+    await p.locator('button:has-text("Send an invalid grant")').click();
     await p.waitForTimeout(2500);
     const added = auths.slice(beforeCount);
 

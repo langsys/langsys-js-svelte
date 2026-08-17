@@ -219,6 +219,58 @@ Use `<Translate>` for prose, marketing copy, CMS-rendered articles, forms with p
 | `t` | `Readable<TFunction>` | Re-emits whenever translations or locale change. Use as `$t('Phrase', 'Cat')`. |
 | `currentlyLoadedLocale` | `Readable<string>` | The locale whose translations are currently loaded (lags `UserLocaleStore` until the fetch completes). |
 | `sTranslations` | `Readable<iCategories>` | Raw translation catalog. Rarely needed in app code. |
+| `writeEnabled` | `Readable<boolean \| undefined>` | Whether the server has granted this session permission to register content. **Tri-state** — see below. |
+
+### `writeEnabled` and write grants
+
+Public API keys are read-only. The server decides **per session** whether a session may
+register newly-discovered content, because the same key can be write-enabled from one
+network and read-only from another — so nothing on the client can infer it.
+
+```svelte
+{#if $writeEnabled === undefined}
+    <span>checking…</span>       <!-- not known yet: authorization hasn't resolved -->
+{:else if $writeEnabled}
+    <span>content capture on</span>
+{:else}
+    <span>read-only session</span>
+{/if}
+```
+
+`undefined` means *not known yet* and is genuinely different from `false`. It is what the
+store reports during SSR and throughout hydration, and treating it as `false` would tell a
+write-enabled session it is read-only — a state it cannot recover from without a reload.
+
+For authenticated apps, your backend mints a short-lived JWT at login and the SDK sends it
+as `X-Write-Grant`, which lets the server treat the session as write-enabled:
+
+```ts
+import { writable } from 'svelte/store';
+import { LangsysApp } from 'langsys-js-svelte';
+
+const writeGrant = writable('');          // a Svelte store works directly
+
+await LangsysApp.init({ projectid, key, UserLocaleStore, writeGrant });
+
+// The grant is a short-lived token. Refresh by writing to the store — it is resolved
+// per request, never cached, so the next request uses the new value.
+writeGrant.set(await fetchFreshGrant());
+```
+
+`writeGrant` accepts a plain `string`, a provider function
+(`() => string | null | undefined | Promise<…>`), or — Svelte only — a store. Prefer a
+store or a provider over a bare string: a string is stale the moment the token expires.
+`null`/`undefined` are valid, meaning "no grant yet" (e.g. before login).
+
+If the token only exists after `init()`, supply it later. This re-authorizes, so `await`
+it if you need `$writeEnabled` settled before your next step:
+
+```ts
+await LangsysApp.setWriteGrant(token);
+```
+
+Types: `WriteGrant` (the base-SDK union) and `WriteGrantSource` (that union plus a Svelte
+store) are both re-exported.
 
 ## Server-Side Rendering
 

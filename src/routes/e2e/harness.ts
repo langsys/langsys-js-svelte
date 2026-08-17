@@ -96,6 +96,3 @@ export function missingEnv(): string[] {
     }
     return missing;
 }
-
-/** Registered in the layout nav; kept here so the nav list has one source. */
-export const E2E_ROUTES = ['/e2e', '/e2e/lanes', '/e2e/hydration', '/e2e/visibility', '/e2e/nav', '/e2e/grant'];
