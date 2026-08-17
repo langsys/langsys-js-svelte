@@ -28,8 +28,11 @@
     async function applyGrant() {
         grantState = 'setting';
         try {
-            // The `write` key's grant stands in for a real login-minted JWT: the
-            // point under test is that setWriteGrant re-authorizes at all.
+            // Deliberately NOT a valid grant. An API key is not a JWT and the server
+            // refuses it, so this exercises the MECHANISM — that `setWriteGrant`
+            // re-authorizes at all and sends `X-Write-Grant` — and nothing more.
+            // `writeEnabled` will stay false. For the accepted-grant path, which
+            // needs a real signed JWT, use /e2e/grant.
             await LangsysApp.setWriteGrant(KEYS.write);
             postGrant = true;
             grantState = 'set';
@@ -83,21 +86,34 @@
         <h2>Grant</h2>
         <p>
             <button onclick={applyGrant} disabled={grantState === 'setting' || grantState === 'set'}>
-                {grantState === 'set' ? 'Grant applied' : 'Apply write grant'}
+                {grantState === 'set' ? 'Grant sent (rejected)' : 'Send an invalid grant'}
             </button>
             <span class="mono muted">{grantState}</span>
         </p>
         <div class="expect">
-            <code>setWriteGrant()</code> re-authorizes, so <code>writeEnabled</code> above should
-            flip to <code>true</code>. The pre-grant misses are <em>not</em> expected to flush —
-            they were released when authorization came back read-only, and reach the backend via
-            the hint lane instead.
+            <strong>This button sends a deliberately invalid grant</strong> — an API key, not a
+            signed JWT — so the server refuses it and <code>writeEnabled</code> above stays
+            <code>false</code>. That is the expected result here, not a failure.
+            <br /><br />
+            What it proves is the <em>mechanism</em>: <code>setWriteGrant()</code> re-authorizes
+            rather than only writing config, and the re-auth request carries
+            <code>X-Write-Grant</code>. That mechanism was inert once, so it is worth exercising
+            on its own.
+            <br /><br />
+            For the accepted path — a valid grant flipping a read key to write-enabled, and
+            misses after it registering directly — see <a href="/e2e/grant">/e2e/grant</a>, which
+            takes real signed JWTs via <code>?initial=</code> / <code>?next=</code>. Minting one
+            here would put the signing secret in page code, which is exactly what it must never be.
         </div>
         {#if postGrant}
             <h3>Post-grant misses</h3>
             <p>{$t(phrase('lanes-post-grant', 1, run), CATEGORY)}</p>
             <p>{$t(phrase('lanes-post-grant', 2, run), CATEGORY)}</p>
-            <div class="expect">These must register directly, whatever the key's own level was.</div>
+            <div class="expect">
+                These must <strong>not</strong> register: the grant was refused, so the session is
+                still read-only and they belong to the hint lane. Confirmed by their absence from
+                the catalog after a run.
+            </div>
         {/if}
     </div>
 {/if}

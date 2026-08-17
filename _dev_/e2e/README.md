@@ -7,13 +7,26 @@ Dev-only. Not part of the published package; `_dev_/` is outside the `files` all
 Requires a `.env` (gitignored) with the API base, project id, one key per permission
 level, and the HS256 signing secret used to mint write grants — see `.env.example`.
 
-Playwright is **not** a declared dependency, deliberately: `package.json` and the
-lockfile are kept pristine while the base SDK is consumed from the registry. Install
-it out-of-tree and symlink it in, or add it as a devDependency if this harness ever
-becomes part of CI:
+Playwright **is** a declared devDependency, and its browser needs installing once:
 
 ```bash
-npm i -D playwright        # or symlink playwright + playwright-core into node_modules
+npm install
+npx playwright install chromium
+```
+
+It was deliberately undeclared at first, to keep `package.json` and the lockfile
+pristine while the base SDK came from the registry. That reason expired once the SDK
+moved to a gitignored symlink — there was no longer a `file:` dep that could leak into
+a commit — and keeping it out had a real cost: the out-of-tree copy was garbage-collected
+twice between sessions, leaving the harness unrunnable both times.
+
+**One local caveat.** While this branch consumes an unpublished base SDK via a symlink,
+a plain `npm install` reconciles the whole tree and replaces that symlink with the
+registry version — which does not carry the 838 surface. Re-create it afterwards:
+
+```bash
+rm -rf node_modules/langsys-js-typescript
+ln -s ../../langsys-js-typescript node_modules/langsys-js-typescript
 ```
 
 ## Running
@@ -28,10 +41,15 @@ jitter window twice over — see below.
 
 ## What it covers
 
-28 assertions: hydration safety, the read/ip_write/write gate matrix, cross-origin
+**39 assertions** (34 static call sites; TEST 2 loops over three keys and TEST 9 over
+four grant cases): hydration safety, the read/ip_write/write gate matrix, cross-origin
 requests and `X-Write-Grant` preflight, grant validity (valid / expired / no-`exp` /
-none, all self-minted), the Svelte store form of `writeGrant`, the three visibility
-shapes, client-side navigation and shallow routing, and hint URL attribution.
+none, all self-minted), the Svelte store form of `writeGrant`, server **acceptance** of
+registrations, the three visibility shapes, params/interpolation and `<Phrase>`,
+client-side navigation and shallow routing, and hint URL attribution.
+
+Re-run before quoting that number — it is the count the harness prints, not one derived
+by reading the source.
 
 ### Two things that are easy to get wrong when editing this
 
@@ -89,12 +107,25 @@ covered in the backend and core suites.
 
 | Route | Covers |
 | --- | --- |
-| `/e2e/lanes?key=read\|ip_write\|write` | gate matrix, `setWriteGrant` |
+| `/e2e/lanes?key=read\|ip_write\|write` | gate matrix; `setWriteGrant` mechanism (sends a deliberately **invalid** grant — refusal is the expected result) |
 | `/e2e/hydration` | `await init()` in a universal `load` — the mismatch path |
 | `/e2e/visibility` | CSS-hidden vs `{#if}` vs `{#await}` discovery |
+| `/e2e/params` | `<Translate params>`, `<Phrase params>`, unknown placeholders, literal `%`, unused-key warning |
+| `/e2e/vanilla` | isolation harness: same markup via the Svelte component vs the vanilla class — settles "is it core or is it the binding" |
 | `/e2e/nav` , `/e2e/nav/elsewhere` | client-side nav + `pushState` during jitter |
 | `/e2e/grant?initial=<jwt>&next=<jwt>` | the Svelte store form, incl. expiry degradation |
 | `/e2e/ssr-write?grant=1&token=<jwt>` | SSR write lane (fresh server per case) |
+
+**The layout nav lists every route except `/e2e/ssr-write`, deliberately** — that page
+needs a freshly started server per case, and a nav link would invite clicking into it
+mid-session and silently contaminating the run. It is reachable by typed URL only.
+
+The nav also carries `data-sveltekit-reload`, so every lane switch is a real page load.
+Without it these are client-side navigations, the app never remounts, and switching to a
+lane with a different init signature trips the guard in `initLangsys` and renders
+"Init failed" — which reads as a broken testbed rather than the singleton behaving as
+documented. The in-page links under `/e2e/nav` must **not** carry it: those navigations
+are the thing under test.
 
 Phrases are deterministic with a `?run=<id>` override. Re-running the same id exercises
 the registered-but-untranslated (`null`) case instead of a fresh miss — which is itself

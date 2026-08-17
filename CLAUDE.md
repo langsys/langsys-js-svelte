@@ -43,7 +43,8 @@ That's the entire surface. Every other concern — HTTP, missing-token registrat
 
 ```typescript
 // Main entry point — wraps init to accept Writable, delegates everything else
-LangsysApp.init({ projectid, key, UserLocaleStore, baseLocale?, debug?, ssrTokenStrategy?, initialTranslations?, initialTranslationsLocale? })
+LangsysApp.init({ projectid, key, UserLocaleStore, baseLocale?, debug?, ssrTokenStrategy?, initialTranslations?, initialTranslationsLocale?, writeGrant? })
+LangsysApp.setWriteGrant(grant)  // async — re-authorizes so the server re-evaluates the session
 LangsysApp.t                     // current TFunction (snapshot — not reactive on its own)
 LangsysApp.getCountries() / getCurrencies() / getDialCodes() / getLocales*() / ...
 LangsysApp.detectPreferredLocale(acceptLanguageHeader?, supportedLocales?)
@@ -54,6 +55,9 @@ LangsysApp.translationsLoadingPromise
 t                                // Readable<TFunction> — read with $t('Phrase', 'Cat', params?)
 currentlyLoadedLocale            // Signal<string>      — readable as $store, and WRITABLE
 sTranslations                    // Signal<iCategories>  — readable as $store, and WRITABLE
+writeEnabled                     // Readable<boolean | undefined> — tri-state, and READ-ONLY:
+                                 // the one store wrapped rather than re-exported, so unlike the
+                                 // two above it is genuinely not writable. undefined = not known yet
 
 // Components
 <Translate category? custom_id? label? tag? class? params? children />
@@ -71,7 +75,18 @@ iLangsysInitConfig (the Svelte-flavored one — UserLocaleStore is Writable<stri
 iLangsysResponse, iCategories, iTranslations, iContentBlock, iCountry, iCountryDialCode, iCountryList,
 iCurrency, iCurrencyList, iLanguageName, iLocaleData, iLocaleDefault, iLocaleFlat, iProject,
 TFunction, TranslationParams, ParamPrimitive, ExtractParamKeys, ParamsFor, TArgs
+WriteGrant (base-SDK union), WriteGrantSource (that union plus a Svelte store)
 ```
+
+**`writeEnabled` is the one store NOT re-exported by reference.** Everything else (`t`,
+`currentlyLoadedLocale`, `sTranslations`) is the base signal itself, so no code here sits
+in the catalog-miss path — which is what lets this package be *excluded* from an
+investigation rather than merely defended. `writeEnabled` is wrapped in `src/lib/stores.ts`
+because reading the live signal during hydration is a mismatch hazard specific to
+SvelteKit: a universal `load` re-runs on the client and is awaited *before* mount, so
+`await LangsysApp.init()` in a load resolves authorization before the first client render.
+The wrapper changes only *when* the value is observable, never what it is. See
+`src/lib/stores.test.ts`.
 
 ## Essential commands
 
