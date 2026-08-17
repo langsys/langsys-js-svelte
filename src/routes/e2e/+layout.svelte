@@ -12,13 +12,31 @@
         { href: '/e2e/nav', label: 'Navigation' },
         { href: '/e2e/grant', label: 'Grant' },
         { href: '/e2e/params', label: 'Params' },
+        { href: '/e2e/vanilla', label: 'Vanilla vs Svelte' },
     ];
+
+    // `/e2e/ssr-write` is deliberately NOT listed. It is one half of a two-case
+    // procedure that requires a freshly started server per case: `LangsysApp` is a
+    // process-wide singleton, so the first `init()` in a process wins for every
+    // later request — including requests for other routes. A nav link would invite
+    // clicking into it mid-session, silently contaminating both it and whatever ran
+    // before. See _dev_/e2e/README.md.
 </script>
 
 <div class="wrap">
     <header>
         <strong>Langsys 838 · Svelte E2E</strong>
-        <nav>
+        <!--
+            `data-sveltekit-reload` makes the overview's stated invariant true by
+            construction: every lane switch is a full page load, never a client-side
+            navigation. Without it these are ordinary SvelteKit navigations, the app
+            never remounts, and switching to a lane with a different init signature
+            trips the guard in `initLangsys` and renders "Init failed" — which reads
+            as a broken testbed rather than as the singleton doing exactly what it
+            documents. The in-page links under /e2e/nav must NOT carry this: those
+            navigations are the thing under test.
+        -->
+        <nav data-sveltekit-reload>
             {#each TESTS as tst (tst.href)}
                 <a href={tst.href} class:active={page.url.pathname === tst.href}>{tst.label}</a>
             {/each}
