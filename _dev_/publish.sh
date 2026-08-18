@@ -134,14 +134,15 @@ fi
 # Fetch first, so every check below reasons about the real remote state.
 git fetch > /dev/null 2>&1
 
-# Check for unpushed commits
-UNPUSHED_COMMITS=$(git rev-list origin/main..HEAD --count)
-if [ "$UNPUSHED_COMMITS" = "0" ]; then
-    handle_error "No unpushed commits found. Please make your changes and commit them before publishing."
-fi
-log_success "Found $UNPUSHED_COMMITS unpushed commit(s)"
 
 # Refuse to publish when main has moved on the remote.
+#
+# This runs BEFORE the unpushed-commits check on purpose. Both orders are
+# safe, but in the state ahead=0/behind=1 the other order reports "no unpushed
+# commits found" and sends the operator to commit work they do not have, while
+# the real condition is that they are behind. Being behind is the precondition
+# for the entire class of bug these checks exist to prevent, so it is the one
+# state worth naming precisely.
 #
 # THIS GUARD IS LOAD-BEARING — do not remove it as redundant because the push
 # below uses --force-with-lease. The lease compares the remote against our
@@ -159,6 +160,13 @@ if [ "$BEHIND_COMMITS" != "0" ]; then
     handle_error "origin/main has $BEHIND_COMMITS commit(s) you do not have. Publishing would force-push over them. Rebase first: git pull --rebase origin main"
 fi
 log_success "Up to date with origin/main (nothing would be overwritten)"
+
+# Check for unpushed commits
+UNPUSHED_COMMITS=$(git rev-list origin/main..HEAD --count)
+if [ "$UNPUSHED_COMMITS" = "0" ]; then
+    handle_error "No unpushed commits found. Please make your changes and commit them before publishing."
+fi
+log_success "Found $UNPUSHED_COMMITS unpushed commit(s)"
 
 log_success "All prerequisites met"
 
