@@ -131,6 +131,9 @@ if [ "$CURRENT_BRANCH" != "main" ]; then
     handle_error "You must be on the main branch to publish. Current branch: $CURRENT_BRANCH"
 fi
 
+# Fetch first, so every check below reasons about the real remote state.
+git fetch > /dev/null 2>&1
+
 # Check for unpushed commits
 UNPUSHED_COMMITS=$(git rev-list origin/main..HEAD --count)
 if [ "$UNPUSHED_COMMITS" = "0" ]; then
@@ -138,8 +141,24 @@ if [ "$UNPUSHED_COMMITS" = "0" ]; then
 fi
 log_success "Found $UNPUSHED_COMMITS unpushed commit(s)"
 
-# Fetch latest from remote
-git fetch > /dev/null 2>&1
+# Refuse to publish when main has moved on the remote.
+#
+# THIS GUARD IS LOAD-BEARING — do not remove it as redundant because the push
+# below uses --force-with-lease. The lease compares the remote against our
+# remote-tracking ref, and the fetch above has just refreshed that ref, so a
+# commit someone else pushed is already "expected" and the lease permits
+# destroying it. Verified by reproduction: fetch-then-force-with-lease
+# silently deleted a colleague's pushed commit.
+#
+# The damage is not limited to git. This script amends, force-pushes, tags and
+# creates a GitHub Release, and CI then publishes to npm. Dropping someone
+# else's commit here leaves their npm version, its tag and its signed
+# provenance attestation pointing at a SHA that no longer exists on any branch.
+BEHIND_COMMITS=$(git rev-list HEAD..origin/main --count)
+if [ "$BEHIND_COMMITS" != "0" ]; then
+    handle_error "origin/main has $BEHIND_COMMITS commit(s) you do not have. Publishing would force-push over them. Rebase first: git pull --rebase origin main"
+fi
+log_success "Up to date with origin/main (nothing would be overwritten)"
 
 log_success "All prerequisites met"
 

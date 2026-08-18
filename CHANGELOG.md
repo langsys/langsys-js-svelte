@@ -1,3 +1,11 @@
+## Unreleased
+
+### Infrastructure
+
+- **The release script now refuses to publish when `origin/main` has commits you don't have.** It force-pushes `main` by design (it amends the last commit to embed the version bump), and the existing `--force-with-lease` was providing no protection: the script fetches during its prerequisite checks, which refreshes the remote-tracking ref the lease compares against, so a commit someone else had pushed was already "expected" and the lease permitted destroying it. Reproduced before fixing — a colleague's pushed commit was silently deleted. The consequence reaches past git: the script also tags, creates a GitHub Release and triggers an npm publish, so dropping someone else's commit would leave their published version, its tag and its signed provenance attestation pointing at a SHA no longer reachable from any branch.
+
+---
+
 ## 3.6.3 - 2026-08-16
 
 ### Fixed (documentation)
