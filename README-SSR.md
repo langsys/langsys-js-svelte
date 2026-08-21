@@ -460,9 +460,25 @@ Control how missing tokens are handled during SSR:
 }
 ```
 
-- `'client'` (default) — queue tokens, send from client after hydration.
-- `'server'` — send tokens immediately from server.
+- `'client'` (default) — the server collects **nothing**; registration happens only from the browser.
+- `'server'` — send tokens immediately from the server.
 - `'auto'` — small batches (≤5) from server, larger batches from client.
+
+**"Queue on the server, send from the client" is not what `'client'` does, and is not
+possible.** Under SSR the server instance declines to collect (`shouldQueueForWrite()`
+returns `false`), and the post-hydration flush runs in the browser's module instance — a
+different object in a different process. There is no channel carrying a queue client-ward;
+`initialTranslations` goes the other way.
+
+**So server-only content is discovered by neither lane.** Markup that renders exclusively
+during SSR — a branch the browser never takes, anything gated on `!browser` — never reaches
+the browser's collector and was never collected on the server either. It fails silently: no
+error, no failed request, and no discovery hint, because SSR does not hint.
+
+Reach for `ssrTokenStrategy: 'server'` on those pages. It has its own precondition worth
+stating up front rather than as a footnote: the flush then originates from your **origin
+server's IP**, so that address must be allow-listed for the key — otherwise the SDK makes
+zero registration attempts by design and the failure is, again, completely silent.
 
 ### Debug mode
 
