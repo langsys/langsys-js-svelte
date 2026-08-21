@@ -242,10 +242,13 @@ Use `<Translate>` for prose, marketing copy, CMS-rendered articles, forms with p
 > | --- | --- | --- |
 > | `{#if flag}…{:else}…{/if}` (one phrase per branch) | **frozen** | **frozen** |
 > | a single reactive expression, e.g. `{msg}` | **frozen** | **frozen** |
-> | `{#await}` | updates | **frozen** |
-> | two or more phrases in the subtree | updates | updates |
+> | the same two driven by a **store** (`{$msg}`, `{#if $flag}`) | **frozen** | **frozen** |
+> | `{#await}` | **registers nothing** | **frozen** |
+> | two or more phrases in the subtree | fine | fine |
 >
-> `{#await}` surviving a client-only mount is luck, not safety: the host is still empty when the block tokenizes, so no write-back happens. Under SSR the pending branch is already in the DOM at hydration, the write lands, and it freezes.
+> The update mechanism doesn't matter — runes and store subscriptions fail identically. Only the token count does.
+>
+> **`{#await}` under a client-only mount is the worst cell in that table, not the safe one.** The block updates, so it looks correct — but the host is still empty when `<Translate>` tokenizes, so it takes an early return that marks the block parsed *without* tokenizing it. Nothing is ever registered: not the placeholder, not the real content. Verified by spying on the SDK's phrase lookup — zero calls client-only, `["loading"]` once hydrated. So the visibly-broken case is the one that at least tells you something, and turning SSR on converts silent non-registration into a visible freeze.
 >
 > There is a second cost even when nothing visibly breaks: **the placeholder is what gets registered.** `Loading…` reaches your catalog and the real content never does — and every block sharing that placeholder collapses onto the same entry.
 >

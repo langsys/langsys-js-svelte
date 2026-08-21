@@ -1,3 +1,13 @@
+## 3.6.8 - 2026-08-21
+
+### Fixed (documentation)
+
+- **3.6.7's scope table said client-only `{#await}` "updates"; that reads as safe and it is the opposite.** Verified by spying on the SDK's phrase lookup: client-only, it performs **zero** lookups — the empty-`childNodes` early return in `tokenizeContent` marks the block `parseComplete` *without* tokenizing it, and nothing re-enters, so neither the placeholder nor the real content is ever registered. Hydrated, the same component logs `["loading"]`. So the cell that looked like the working one is the silent total failure, and enabling SSR converts invisible non-registration into a visible freeze. Raised by the skill agent after they read `tokenizeContent` independently.
+
+- **Store-driven updates freeze identically to runes.** Measured `{$msg}` and `{#if $flag}` with a `writable` store: both freeze, client-only and hydrated, exactly as their rune equivalents do. The update mechanism is irrelevant — only the token count is. Worth stating because store subscriptions are the older and more widespread pattern in Svelte codebases, so the affected population is larger than a runes-only reading of 3.6.7 suggested. Requested by the skill agent, who ranked it above my own estimate of its importance; they were right.
+
+---
+
 ## 3.6.7 - 2026-08-21
 
 ### Fixed (documentation)
