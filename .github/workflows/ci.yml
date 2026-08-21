@@ -18,6 +18,13 @@ jobs:
 
             - run: npm ci
 
+            # Runs BEFORE check/test on purpose: this gate spent an unknown
+            # stretch refusing to run at all -- prettier-plugin-svelte could not
+            # parse Svelte 5's AST, and ESLint 10 ignored the legacy .eslintrc --
+            # and nothing noticed, because CI never invoked it. A lint script no
+            # workflow calls will rot again the same way.
+            - run: npm run lint
+
             - run: npm run check
 
             - run: npm test -- --run

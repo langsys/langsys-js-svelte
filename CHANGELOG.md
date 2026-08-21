@@ -8,6 +8,8 @@
 
 - **Prettier no longer rewrites the code samples inside the docs.** `embeddedLanguageFormatting` defaults to `auto`, which reformats the ```svelte fences in `README.md`at`printWidth: 160`— joining separate elements onto one line and pulling trailing HTML comments onto their own. It is scoped`off`for`\*.md`only: setting it globally breaks`prettier-plugin-svelte`, which relies on embedded formatting to print `<script>`blocks and fails with the same`unknown node type: Script`. Verified both ways, and the reasoning is a comment in the config so the next person to simplify it does not rediscover it.
 
+- **CI now runs `npm run lint`.** It did not before — the workflow ran `check`, `test` and the two coverage scripts, but never the lint gate. That is why both breakages could sit there unnoticed: the script was broken, and nothing invoked it, so its failure had no way to surface. A gate no workflow calls will rot again the same way, so the step is now first in the `check` job.
+
 - Repo formatted to that config. Cosmetic only — in the docs it is table padding and emphasis style with no fenced code altered; in `src/` it collapses multi-line prop destructuring under the 160-column width. `npm run check`, the test suite, `publint` and both coverage checks pass unchanged.
 
 ---
