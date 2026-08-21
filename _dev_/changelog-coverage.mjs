@@ -41,8 +41,7 @@ import { join, resolve } from 'node:path';
 const repo = resolve(process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : process.cwd());
 const strict = process.argv.includes('--strict');
 
-const changelog = ['CHANGELOG.md', 'CHANGELOG.markdown', 'changelog.md']
-    .map((f) => join(repo, f)).find(existsSync);
+const changelog = ['CHANGELOG.md', 'CHANGELOG.markdown', 'changelog.md'].map((f) => join(repo, f)).find(existsSync);
 
 if (!changelog) {
     console.log(`changelog-coverage: no CHANGELOG found in ${repo}`);
@@ -52,7 +51,8 @@ if (!changelog) {
 let tags = [];
 try {
     tags = execFileSync('git', ['-C', repo, 'tag'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
-        .split('\n').map((t) => t.trim())
+        .split('\n')
+        .map((t) => t.trim())
         .filter((t) => /^v?\d+\.\d+\.\d+$/.test(t));
 } catch {
     console.log('changelog-coverage: not a git repository, or git unavailable');
@@ -70,7 +70,8 @@ const text = readFileSync(changelog, 'utf8');
 const documented = new Set([...text.matchAll(/^#{1,4}\s.*?(\d+\.\d+\.\d+)/gm)].map((m) => m[1]));
 
 const cmp = (a, b) => {
-    const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
+    const pa = a.split('.').map(Number),
+        pb = b.split('.').map(Number);
     for (let i = 0; i < 3; i++) if (pa[i] !== pb[i]) return pa[i] < pb[i] ? -1 : 1;
     return 0;
 };

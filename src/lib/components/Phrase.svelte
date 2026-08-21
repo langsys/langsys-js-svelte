@@ -36,13 +36,7 @@
         children: Snippet;
     }
 
-    let {
-        class: clazz = '',
-        tag = 'span',
-        category = '',
-        params = {},
-        children,
-    }: Props = $props();
+    let { class: clazz = '', tag = 'span', category = '', params = {}, children }: Props = $props();
 
     let host = $state<HTMLElement>();
     let instance: VanillaPhrase | undefined;

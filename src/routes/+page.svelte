@@ -46,8 +46,7 @@
         <h1 style="color: #c00">Langsys init failed</h1>
         <p style="font-family: monospace">{error}</p>
         <p>
-            Copy <code>.env.example</code> to <code>.env</code>, fill in your project ID + API key,
-            and restart <code>npm run dev</code>.
+            Copy <code>.env.example</code> to <code>.env</code>, fill in your project ID + API key, and restart <code>npm run dev</code>.
         </p>
     </main>
 {:else if !ready}
@@ -71,7 +70,7 @@
             <p>
                 {$t(
                     'Each phrase in your code is its own token. The first render registers the phrase with the Translation Manager; subsequent locale changes fetch and re-render automatically.',
-                    'Demo',
+                    'Demo'
                 )}
             </p>
         </section>
@@ -80,7 +79,10 @@
             <h2>{$t('Interpolation', 'Demo')}</h2>
             <p>{$t('Hello, {name}! You have {count} new messages.', 'Greetings', { name: 'Sarah', count: 3 })}</p>
             <p class="muted">
-                {$t('Placeholders in the phrase above are required and type-checked at compile time — try removing a key from the params object to see the error.', 'Demo')}
+                {$t(
+                    'Placeholders in the phrase above are required and type-checked at compile time — try removing a key from the params object to see the error.',
+                    'Demo'
+                )}
             </p>
         </section>
 
@@ -102,8 +104,8 @@
             <h2>HTML content blocks</h2>
             <p>
                 Wrap richer content in <code>&lt;Translate&gt;</code> and the SDK registers the whole thing as a
-                <strong>content block</strong> — translators see your styling and structure as the user sees it.
-                Attribute values like <em>placeholder</em>, <em>alt</em>, <em>aria-label</em> are also harvested.
+                <strong>content block</strong> — translators see your styling and structure as the user sees it. Attribute values like <em>placeholder</em>,
+                <em>alt</em>, <em>aria-label</em> are also harvested.
             </p>
             <p>
                 <input type="text" placeholder="Type something here…" />
@@ -113,12 +115,7 @@
         <section class="card">
             <h2>{$t('Interpolation inside a content block', 'Demo')}</h2>
 
-            <Translate
-                category="Demo"
-                label="Params demo"
-                tag="div"
-                params={{ name: personName, count: messageCount }}
-            >
+            <Translate category="Demo" label="Params demo" tag="div" params={{ name: personName, count: messageCount }}>
                 <p>Welcome back, %name%. You have %count% new messages.</p>
             </Translate>
 
@@ -129,12 +126,10 @@
             </div>
 
             <p class="muted">
-                Write <code>%name%</code> / <code>%count%</code> — not <code>&lbrace;name&rbrace;</code> —
-                inside <code>&lt;Translate&gt;</code> markup: Svelte (like JSX) would otherwise consume the
-                braces before Langsys sees them. The SDK normalizes the percent form back to
+                Write <code>%name%</code> / <code>%count%</code> — not <code>&lbrace;name&rbrace;</code> — inside <code>&lt;Translate&gt;</code> markup: Svelte
+                (like JSX) would otherwise consume the braces before Langsys sees them. The SDK normalizes the percent form back to
                 <code>&lbrace;name&rbrace;</code> at capture, so translators still work with
-                <code>&lbrace;name&rbrace;</code>. Editing the name or bumping the count re-renders the block
-                via <code>setParams()</code>.
+                <code>&lbrace;name&rbrace;</code>. Editing the name or bumping the count re-renders the block via <code>setParams()</code>.
             </p>
         </section>
 

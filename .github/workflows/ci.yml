@@ -1,59 +1,59 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+    push:
+        branches: [main]
+    pull_request:
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
+    check:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: 22
+                  cache: npm
 
-      - run: npm ci
+            - run: npm ci
 
-      - run: npm run check
+            - run: npm run check
 
-      - run: npm test -- --run
+            - run: npm test -- --run
 
-  changelog-coverage:
-    runs-on: ubuntu-latest
-    steps:
-      # fetch-depth: 0 is REQUIRED, not tidiness. actions/checkout does a shallow
-      # clone with no tags by default, and the script exits 0 with "no release
-      # tags yet" when it finds none — so without this the check passes
-      # vacuously and enforces nothing. Verified against a --no-tags clone.
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
+    changelog-coverage:
+        runs-on: ubuntu-latest
+        steps:
+            # fetch-depth: 0 is REQUIRED, not tidiness. actions/checkout does a shallow
+            # clone with no tags by default, and the script exits 0 with "no release
+            # tags yet" when it finds none — so without this the check passes
+            # vacuously and enforces nothing. Verified against a --no-tags clone.
+            - uses: actions/checkout@v5
+              with:
+                  fetch-depth: 0
 
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: 22
 
-      - run: node _dev_/changelog-coverage.mjs . --strict
+            - run: node _dev_/changelog-coverage.mjs . --strict
 
-  docs-api-coverage:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
+    docs-api-coverage:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: 22
+                  cache: npm
 
-      - run: npm ci
+            - run: npm ci
 
-      # The check reads dist/index.d.ts — the surface a consumer's typechecker
-      # actually resolves — so the package must be built first. Without this the
-      # script exits 1 with "run npm run package"; it does not pass vacuously.
-      - run: npm run package
+            # The check reads dist/index.d.ts — the surface a consumer's typechecker
+            # actually resolves — so the package must be built first. Without this the
+            # script exits 1 with "run npm run package"; it does not pass vacuously.
+            - run: npm run package
 
-      - run: node _dev_/docs-api-coverage.mjs . --strict
+            - run: node _dev_/docs-api-coverage.mjs . --strict

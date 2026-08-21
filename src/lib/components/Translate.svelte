@@ -22,15 +22,7 @@
         children: Snippet;
     }
 
-    let {
-        class: clazz = '',
-        tag = 'translate',
-        label = '',
-        category = '',
-        custom_id = '',
-        params = undefined,
-        children,
-    }: Props = $props();
+    let { class: clazz = '', tag = 'translate', label = '', category = '', custom_id = '', params = undefined, children }: Props = $props();
 
     let host = $state<HTMLElement>();
     let instance: VanillaTranslate | undefined;

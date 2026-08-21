@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `langsys-js-svelte` is a Svelte 5 binding over the framework-agnostic [`langsys-js-typescript`](https://github.com/langsys/langsys-js-typescript) package. The base SDK owns the API client, translation lifecycle, token discovery, DOM tokenizer, and SSR-aware token strategies. This package is intentionally thin and contains only Svelte-native concerns.
 
 **Version compatibility:**
+
 - v3.x — Svelte 5 + the function-call `$t()` API. Depends on `langsys-js-typescript`.
 - v2.x — Svelte 5, proxy-based `$_['Cat']['Phrase']` API, self-contained.
 - Pre-v2 — Svelte 3/4 client-only. Tag `v-last-svelte4-compat`.

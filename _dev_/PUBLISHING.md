@@ -24,37 +24,38 @@ npm run release
 The publishing script automates the entire release process:
 
 1. **Verify Prerequisites**
-   - Check GitHub CLI is installed
-   - Verify you're on the main branch
-   - Ensure there are unpushed commits to release
+    - Check GitHub CLI is installed
+    - Verify you're on the main branch
+    - Ensure there are unpushed commits to release
 
 2. **Version Management**
-   - Display current version
-   - Prompt for new version (with suggestion)
-   - Validate version format
-   - Check version doesn't already exist
+    - Display current version
+    - Prompt for new version (with suggestion)
+    - Validate version format
+    - Check version doesn't already exist
 
 3. **Build and Test**
-   - Update version in package.json
-   - Run `npm install` to update package-lock.json
-   - Run `npm run build` to verify everything compiles
+    - Update version in package.json
+    - Run `npm install` to update package-lock.json
+    - Run `npm run build` to verify everything compiles
 
 4. **Git Operations**
-   - Commit version bump
-   - Push to origin
-   - Create and push git tag
+    - Commit version bump
+    - Push to origin
+    - Create and push git tag
 
 5. **Release Creation**
-   - Create GitHub release with auto-generated notes
-   - Publish package to npm
+    - Create GitHub release with auto-generated notes
+    - Publish package to npm
 
 6. **Error Handling**
-   - Comprehensive error checking at each step
-   - Automatic rollback option if something fails
+    - Comprehensive error checking at each step
+    - Automatic rollback option if something fails
 
 ## Version Format
 
 Versions must follow semantic versioning:
+
 - Format: `x.y.z` or `x.y.z-tag`
 - Examples: `1.2.3`, `2.0.0-beta.1`
 
@@ -97,22 +98,29 @@ npm publish
 ## Troubleshooting
 
 ### GitHub CLI Not Found
+
 Install the GitHub CLI from https://cli.github.com/
 
 ### npm Authentication Issues
+
 Ensure you're logged in to npm:
+
 ```bash
 npm login
 ```
 
 ### Permission Denied (script not executable)
+
 Make the scripts executable:
+
 ```bash
 chmod +x publish.js publish.sh
 ```
 
 ### Rollback Failed
+
 If automatic rollback fails, you can manually rollback:
+
 ```bash
 # Reset local changes
 git reset --hard HEAD~1

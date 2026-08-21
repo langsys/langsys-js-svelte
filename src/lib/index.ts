@@ -47,11 +47,7 @@ import { adaptStore } from './adapters.js';
 // Stores — the underlying Signals already satisfy Svelte's Readable contract.
 // We re-export them under Svelte-native types so IDE hovers and consumers see
 // the familiar shape.
-export {
-    currentlyLoadedLocale,
-    sTranslations,
-    tSignal as t,
-} from 'langsys-js-typescript';
+export { currentlyLoadedLocale, sTranslations, tSignal as t } from 'langsys-js-typescript';
 
 // API client (vanilla — no Svelte concerns)
 export { LangsysAppAPI } from 'langsys-js-typescript';

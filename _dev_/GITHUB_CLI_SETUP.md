@@ -3,44 +3,52 @@
 ## Installation
 
 ### macOS (using Homebrew)
+
 ```bash
 brew install gh
 ```
 
 ### macOS (using MacPorts)
+
 ```bash
 sudo port install gh
 ```
 
 ### Other platforms
+
 Visit: https://cli.github.com/manual/installation
 
 ## Authentication
 
 ### Interactive Setup (Recommended)
+
 ```bash
 gh auth login
 ```
 
 This will prompt you to:
+
 1. Choose GitHub.com or GitHub Enterprise
 2. Choose authentication method (browser or token)
 3. If browser: Opens GitHub to authorize the CLI
 4. If token: Paste a Personal Access Token
 
 ### Using Personal Access Token
+
 1. Generate a token at: https://github.com/settings/tokens/new
 2. Select scopes:
-   - `repo` (Full control of private repositories)
-   - `workflow` (Update GitHub Action workflows)
-   - `write:packages` (Upload packages to GitHub Package Registry)
+    - `repo` (Full control of private repositories)
+    - `workflow` (Update GitHub Action workflows)
+    - `write:packages` (Upload packages to GitHub Package Registry)
 
 3. Authenticate:
+
 ```bash
 gh auth login --with-token < token.txt
 ```
 
 ### Check Authentication Status
+
 ```bash
 gh auth status
 ```
@@ -50,17 +58,18 @@ gh auth status
 The scripts use these `gh` commands:
 
 1. **Check authentication**:
-   ```bash
-   gh auth status
-   ```
+
+    ```bash
+    gh auth status
+    ```
 
 2. **Create release**:
-   ```bash
-   gh release create v1.2.3 \
-     --title "Release v1.2.3" \
-     --notes "Release notes here" \
-     --target main
-   ```
+    ```bash
+    gh release create v1.2.3 \
+      --title "Release v1.2.3" \
+      --notes "Release notes here" \
+      --target main
+    ```
 
 ## Security Notes
 
@@ -78,6 +87,7 @@ export GITHUB_TOKEN="your-personal-access-token"
 ```
 
 Then use curl to create releases:
+
 ```bash
 curl -X POST \
   -H "Authorization: token $GITHUB_TOKEN" \

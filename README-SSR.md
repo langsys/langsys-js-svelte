@@ -26,7 +26,7 @@ not what this pattern delivers, and the difference is invisible to every cheap c
   hydration.
 - **SEO benefit for that copy.** A crawler reading the server response sees base
   language. See [Translated `<head>` for SEO](#translated-head-for-seo) below for the
-  part you *can* fix, and fix deliberately.
+  part you _can_ fix, and fix deliberately.
 
 The honest one-line summary: seeding removes the **second fetch** and the
 flash-to-correct-text that fetch caused. It does not move rendering to the server.
@@ -305,7 +305,7 @@ Look for:
 - `Locale change detected!` — fires on a subsequent locale switch.
 
 Run with `debug: true` in development and leave it on until you have seen these — the
-three lines above are `Logger.log()` calls, which *are* debug-gated.
+three lines above are `Logger.log()` calls, which _are_ debug-gated.
 
 A **failed** catalog fetch is not gated. `Logger.warn()` and `Logger.error()` emit
 regardless of the `debug` setting, so a rejected fetch always prints. Verified by
@@ -318,7 +318,7 @@ project does not have:
 [Langsys Error]   Error HTTP 422: Unprocessable Content
 ```
 
-Two lines, always. What they *don't* say is which locale was rejected or which tags the
+Two lines, always. What they _don't_ say is which locale was rejected or which tags the
 project accepts — so if your page renders base language, check the console before
 assuming the catalog is simply untranslated.
 
@@ -330,7 +330,7 @@ assuming the catalog is simply untranslated.
    `initialTranslations` so the SDK knows what locale the data represents.
 3. **Exact locale tags.** The value must be one of your project's configured locales,
    spelled the same way. Casing and `_` are normalized (`es_cr` → `es-CR`), but a bare
-   language is *not* widened to a region — `es` will not find `es-CR`. Resolve with
+   language is _not_ widened to a region — `es` will not find `es-CR`. Resolve with
    `LangsysApp.detectPreferredLocale(header, supportedLocales)`, which does the
    language-to-region match for you.
 4. **Data format.** The translations payload must match the `iCategories` shape
@@ -352,7 +352,7 @@ assuming the catalog is simply untranslated.
 
 ### `curl` cannot tell you whether this is working
 
-Body copy translates *after* hydration, so `curl https://… | grep` shows base language
+Body copy translates _after_ hydration, so `curl https://… | grep` shows base language
 on a perfectly healthy page — and on a completely broken one. A page with an empty
 catalog, a wrong locale, or a template bug looks byte-identical to a working page under
 any check that does not run JavaScript.
@@ -368,7 +368,7 @@ expected locale) — not on the rendered text.
 - Check the locale is one of your project's configured tags (note 3 above). A
   mismatched tag returns 422 and leaves the catalog empty. This always logs — a
   `[Langsys Warning] LangsysAppAPI failed to query` and a `[Langsys Error] Error HTTP
-  422`, both ungated — but neither names the offending locale, so it is easy to read
+422`, both ungated — but neither names the offending locale, so it is easy to read
   past.
 - Verify the translations payload matches the `iCategories` shape.
 - Enable `debug: true` and look for the messages above.
@@ -383,15 +383,15 @@ and check the resolved version in your lockfile, not in a local `node_modules`.
 
 ### Still seeing duplicate API calls
 
-- Confirm both `initialTranslations` *and* `initialTranslationsLocale` are passed.
+- Confirm both `initialTranslations` _and_ `initialTranslationsLocale` are passed.
 - Confirm the locale hasn't drifted between server and client.
-- Note that the *first* render calling `$t(...)` legitimately precedes `init()` — it
+- Note that the _first_ render calling `$t(...)` legitimately precedes `init()` — it
   runs before `onMount`. That is the base-language render, not a bug, and not something
   to fix by initializing earlier.
 
 ### TypeScript errors on `$t()`
 
-- Placeholders are compile-time-checked: `$t('Hello, {name}!', 'Cat')` *requires* a
+- Placeholders are compile-time-checked: `$t('Hello, {name}!', 'Cat')` _requires_ a
   params object with `name`. Either add the key or remove the placeholder.
 - Allowed param value types: `string | number | Date | boolean`.
 

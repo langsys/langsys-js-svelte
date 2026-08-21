@@ -121,7 +121,7 @@ The signature is **`$t(phrase, category?, params?)`** — the phrase comes first
 {$t('Hello, {name}!', 'Greetings', { name: 'X' })} <!-- category + params -->
 ```
 
-The **phrase itself is the lookup key** *and* the base-language default — there's no separate keys file to maintain. The first render of a phrase registers it in the Translation Manager (when using a write key); from then on, translations are fetched and rendered automatically as locales change.
+The **phrase itself is the lookup key** _and_ the base-language default — there's no separate keys file to maintain. The first render of a phrase registers it in the Translation Manager (when using a write key); from then on, translations are fetched and rendered automatically as locales change.
 
 #### Interpolation
 
@@ -154,14 +154,14 @@ You rarely need to write these yourself: Langsys promotes a plain `{name}` phras
 
 #### Categorization disambiguates context
 
-Different categories give the *same* phrase different translations:
+Different categories give the _same_ phrase different translations:
 
 ```svelte
 <strong>{$t('Home', 'Main Menu')}</strong>      <!-- "Inicio" in Spanish -->
 <strong>{$t('Home', 'Home repairs')}</strong>   <!-- "Hogar" in Spanish -->
 ```
 
-Without categorization, "Home" would only have one translation — which can't work for both contexts. Langsys's philosophy is *translate once, use everywhere*; categorize when the same phrase legitimately means different things.
+Without categorization, "Home" would only have one translation — which can't work for both contexts. Langsys's philosophy is _translate once, use everywhere_; categorize when the same phrase legitimately means different things.
 
 A good rule for category names: the module or feature the phrase lives in (`Account`, `Errors`, `Checkout`, `UI`).
 
@@ -182,8 +182,9 @@ For larger blocks of HTML where the structure should be preserved for the transl
 ```
 
 The component:
+
 - Recursively tokenizes text nodes, `<option>` text, and translatable attributes — `placeholder`, `alt`, `title`, `label`, the `aria-*` ones a screen reader speaks, and `data-*` validation messages among them. The canonical list is `TRANSLATABLE_ATTRIBUTES` in the base SDK's tokenizer and it grows, so treat these as examples rather than an exhaustive set.
-- Translates `value` **only where it is a label rather than data**: on `<button>`, and on `<input type="submit">` / `<input type="button">`. Every other input type is left alone, so a text field's value is never rewritten. This is a separate mechanism from the attribute list above — `value` does *not* appear in `TRANSLATABLE_ATTRIBUTES`.
+- Translates `value` **only where it is a label rather than data**: on `<button>`, and on `<input type="submit">` / `<input type="button">`. Every other input type is left alone, so a text field's value is never rewritten. This is a separate mechanism from the attribute list above — `value` does _not_ appear in `TRANSLATABLE_ATTRIBUTES`.
 - Captures semantic CSS so translators see the styled appearance in the Translation Manager.
 - Registers the whole thing as a **content block** that translators handle as one unit while still translating the individual phrases inside.
 - Auto re-translates on locale change.
@@ -215,7 +216,7 @@ Use `<Translate>` for prose, marketing copy, CMS-rendered articles, forms with p
 ```
 
 > [!IMPORTANT]
-> **Use `%name%`, not `{name}`, inside `<Translate>`/`<Phrase>` content.** Svelte (like JSX) treats `{name}` in markup as its own expression tag and would substitute it *before* Langsys sees the text. The damage is worse than a broken placeholder: the substituted **value** becomes part of what Langsys captures, so **every distinct value registers its own catalog entry**. `You have {count} items` registers `You have 0 items`, `You have 1 items`, and so on — one per value the component ever renders, each needing its own translation, none of them reusable. And the base locale renders perfectly throughout, so nothing looks wrong until a translator opens a catalog full of near-duplicate junk.
+> **Use `%name%`, not `{name}`, inside `<Translate>`/`<Phrase>` content.** Svelte (like JSX) treats `{name}` in markup as its own expression tag and would substitute it _before_ Langsys sees the text. The damage is worse than a broken placeholder: the substituted **value** becomes part of what Langsys captures, so **every distinct value registers its own catalog entry**. `You have {count} items` registers `You have 0 items`, `You have 1 items`, and so on — one per value the component ever renders, each needing its own translation, none of them reusable. And the base locale renders perfectly throughout, so nothing looks wrong until a translator opens a catalog full of near-duplicate junk.
 >
 > The two components reach that through **different mechanisms**, which matters if you are debugging rather than just following the rule. `<Translate>` tokenizes the subtree and keys a content block on the resulting token array, so the value changes the `custom_id`. `<Phrase>` encodes the subtree to a single phrase string and looks it up like any other phrase — no content block, no `custom_id` — so the value lands in the lookup key itself. Measured on the same DOM: `%n%` gives `"Based on {n} {m0o}reviews{m0c}"` for every value, while `{n}` gives `"Based on 0 …"`, `"Based on 1 …"`, one per render. Same rule, same cost, two paths.
 >
@@ -238,13 +239,13 @@ Use `<Translate>` for prose, marketing copy, CMS-rendered articles, forms with p
 >
 > Measured against `langsys-js-typescript@0.6.5`:
 >
-> | content | client-only | hydrated |
-> | --- | --- | --- |
-> | `{#if flag}…{:else}…{/if}` (one phrase per branch) | **frozen** | **frozen** |
-> | a single reactive expression, e.g. `{msg}` | **frozen** | **frozen** |
-> | the same two driven by a **store** (`{$msg}`, `{#if $flag}`) | **frozen** | **frozen** |
-> | `{#await}` | **registers nothing** | **frozen** |
-> | two or more phrases in the subtree | fine | fine |
+> | content                                                      | client-only           | hydrated   |
+> | ------------------------------------------------------------ | --------------------- | ---------- |
+> | `{#if flag}…{:else}…{/if}` (one phrase per branch)           | **frozen**            | **frozen** |
+> | a single reactive expression, e.g. `{msg}`                   | **frozen**            | **frozen** |
+> | the same two driven by a **store** (`{$msg}`, `{#if $flag}`) | **frozen**            | **frozen** |
+> | `{#await}`                                                   | **registers nothing** | **frozen** |
+> | two or more phrases in the subtree                           | fine                  | fine       |
 >
 > The update mechanism doesn't matter — runes and store subscriptions fail identically. Only the token count does.
 >
@@ -272,7 +273,6 @@ Use `<Translate>` for prose, marketing copy, CMS-rendered articles, forms with p
 >
 > For a value that changes rather than arrives, use `params` — `<Translate params={{ count }}>You have %count% items</Translate>` — which is the supported path for dynamic content and does not go through the write-back.
 
-
 ### `<Phrase>` — one sentence that happens to contain markup
 
 `<Translate>` **splits**: it walks its subtree and registers each translatable run as its own phrase. That's right for prose, and wrong the moment a single sentence is broken up by inline markup — because the fragments land in separate catalog entries, and a translator can't move words across them.
@@ -291,7 +291,7 @@ Use `<Translate>` for prose, marketing copy, CMS-rendered articles, forms with p
 
 Fixing it takes **both** changes — `<Phrase>` for the split, `%n%` for the placeholder. `<Phrase>` alone does not make the brace form safe: the compiler substitutes `{n}` before any Langsys component sees the text, inside `<Phrase>` exactly as inside `<Translate>`.
 
-`<Phrase>` **keeps**: it encodes its whole subtree — inline markup and all — into a *single* phrase, registers that one string, then reconstitutes your real elements around the translated text.
+`<Phrase>` **keeps**: it encodes its whole subtree — inline markup and all — into a _single_ phrase, registers that one string, then reconstitutes your real elements around the translated text.
 
 ```svelte
 <script>
@@ -344,17 +344,17 @@ Our tokenizer honors both families, but only ever emits its own. For the PHP att
 
 ## Reactive stores
 
-| Export | Type | Notes |
-|---|---|---|
-| `t` | `Readable<TFunction>` | Re-emits whenever translations or locale change. Use as `$t('Phrase', 'Cat')`. |
-| `currentlyLoadedLocale` | `Readable<string>` | The locale whose translations are currently loaded (lags `UserLocaleStore` until the fetch completes). |
-| `sTranslations` | `Readable<iCategories>` | Raw translation catalog. Rarely needed in app code. |
+| Export                  | Type                    | Notes                                                                                                  |
+| ----------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------ |
+| `t`                     | `Readable<TFunction>`   | Re-emits whenever translations or locale change. Use as `$t('Phrase', 'Cat')`.                         |
+| `currentlyLoadedLocale` | `Readable<string>`      | The locale whose translations are currently loaded (lags `UserLocaleStore` until the fetch completes). |
+| `sTranslations`         | `Readable<iCategories>` | Raw translation catalog. Rarely needed in app code.                                                    |
 
 ## Server-Side Rendering
 
 The main pattern is to pre-fetch translations server-side and seed them through `initialTranslations` / `initialTranslationsLocale` so the client doesn't refetch on hydration.
 
-Be clear on what that buys you. `init()` runs in `onMount`, which does not execute during SSR, so **the server HTML renders base language** and the client corrects it at hydration. Seeding removes the client's *second* catalog fetch and the flash that fetch caused — it does not server-render translated copy, and it does not give crawlers translated body text. For a translated `<title>` / `<meta>`, read `data.translations` directly on the server; the SSR guide shows how.
+Be clear on what that buys you. `init()` runs in `onMount`, which does not execute during SSR, so **the server HTML renders base language** and the client corrects it at hydration. Seeding removes the client's _second_ catalog fetch and the flash that fetch caused — it does not server-render translated copy, and it does not give crawlers translated body text. For a translated `<title>` / `<meta>`, read `data.translations` directly on the server; the SSR guide shows how.
 
 📖 **See [README-SSR.md](./README-SSR.md)** for a complete SvelteKit walkthrough.
 

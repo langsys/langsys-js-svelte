@@ -73,13 +73,16 @@ function topLevelExports(source) {
     // failure mode that gets a checker disabled rather than fixed.
     for (const m of source.matchAll(/export\s+(?:type\s+)?\{([^}]*)\}/g)) {
         for (const part of m[1].split(',')) {
-            const name = part.trim().replace(/^type\s+/, '').split(/\s+as\s+/).pop()?.trim();
+            const name = part
+                .trim()
+                .replace(/^type\s+/, '')
+                .split(/\s+as\s+/)
+                .pop()
+                ?.trim();
             if (name) names.add(name);
         }
     }
-    for (const m of source.matchAll(
-        /export\s+(?:declare\s+)?(?:const|let|var|function|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)/g,
-    )) {
+    for (const m of source.matchAll(/export\s+(?:declare\s+)?(?:const|let|var|function|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)/g)) {
         names.add(m[1]);
     }
     return names;
@@ -124,7 +127,11 @@ for (const file of DOCS) {
     // 2. Named imports from this package.
     for (const m of text.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*'langsys-js-svelte'/g)) {
         for (const part of m[1].split(',')) {
-            const name = part.trim().replace(/^type\s+/, '').split(/\s+as\s+/)[0]?.trim();
+            const name = part
+                .trim()
+                .replace(/^type\s+/, '')
+                .split(/\s+as\s+/)[0]
+                ?.trim();
             if (name && !exported.has(name)) {
                 findings.push(`${file}: import { ${name} } — not exported from the package`);
             }
