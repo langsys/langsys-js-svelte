@@ -304,9 +304,23 @@ Look for:
 - `Using pre-fetched translations for locale` — confirms the initial fetch was skipped.
 - `Locale change detected!` — fires on a subsequent locale switch.
 
-Run with `debug: true` in development and leave it on until you have seen these. A
-rejected catalog fetch is reported **only** under `debug` — without it, a 422 leaves you
-with an empty catalog, every string rendering as its base phrase, and no console output.
+Run with `debug: true` in development and leave it on until you have seen these — the
+three lines above are `Logger.log()` calls, which *are* debug-gated.
+
+A **failed** catalog fetch is not gated. `Logger.warn()` and `Logger.error()` emit
+regardless of the `debug` setting, so a rejected fetch always prints. Verified by
+executing the published SDK against the live API with `debug: false` and a locale the
+project does not have:
+
+```
+[Langsys Warning] LangsysAppAPI failed to query { …"The locale provided is not a
+                  base or target locale for this project"…, http: { status: 422 } }
+[Langsys Error]   Error HTTP 422: Unprocessable Content
+```
+
+Two lines, always. What they *don't* say is which locale was rejected or which tags the
+project accepts — so if your page renders base language, check the console before
+assuming the catalog is simply untranslated.
 
 ## Important notes
 
@@ -352,7 +366,10 @@ expected locale) — not on the rendered text.
 
 - Check that `initialTranslationsLocale` matches the `UserLocaleStore` value at init.
 - Check the locale is one of your project's configured tags (note 3 above). A
-  mismatched tag returns 422 and leaves the catalog empty — visible only with `debug: true`.
+  mismatched tag returns 422 and leaves the catalog empty. This always logs — a
+  `[Langsys Warning] LangsysAppAPI failed to query` and a `[Langsys Error] Error HTTP
+  422`, both ungated — but neither names the offending locale, so it is easy to read
+  past.
 - Verify the translations payload matches the `iCategories` shape.
 - Enable `debug: true` and look for the messages above.
 

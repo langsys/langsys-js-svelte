@@ -1,5 +1,11 @@
 ## Unreleased
 
+### Fixed (documentation)
+
+- **Corrected a claim shipped in 3.6.4: a rejected catalog fetch is *not* debug-gated.** `README-SSR.md` said a 422 leaves you with "no console output at all" unless `debug: true` is set. Wrong. `Logger.log()` checks `debugEnabled`; `Logger.warn()` and `Logger.error()` do not. Verified by executing the published SDK against the live API with `debug: false` and a locale the project does not have — two lines print every time, `[Langsys Warning] LangsysAppAPI failed to query {…}` and `[Langsys Error] Error HTTP 422: Unprocessable Content`. The real weakness is narrower and is what the guide now says: neither line names the offending locale or the project's valid targets, so it is easy to read past.
+
+    This was inherited from a peer agent's report and repeated without executing it, which is the same failure the 3.6.4 corrections were about — the previous entries were verified against the live API and the dist, this one was not. Three adjacent behaviors are gated three different ways: `canonicalizeLocale`'s invalid-tag warning *is* debug-gated, the fetch rejection is not, and the seeding XOR has no diagnostic at all. Reasoning from one to the next is what produced the error.
+
 ### Infrastructure
 
 - **CI now fails when the docs name an API that does not exist.** Markdown does not typecheck, so a code sample can call a method the SDK never had and ship. The langsys-skill agent hit exactly that — three SSR tracks calling two different invented locale helpers, the second introduced by the commit that fixed the first. `_dev_/docs-api-coverage.mjs` checks every `LangsysApp.*` / `LangsysAppAPI.*` member and every named import in `README.md`, `README-SSR.md` and `CLAUDE.md` against the built `dist/index.d.ts` — the surface a consumer's typechecker actually resolves. Our docs were clean, which is worth stating plainly: nothing had been verifying it.
