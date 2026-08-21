@@ -248,7 +248,7 @@ Use `<Translate>` for prose, marketing copy, CMS-rendered articles, forms with p
 >
 > The update mechanism doesn't matter — runes and store subscriptions fail identically. Only the token count does.
 >
-> **`{#await}` under a client-only mount is the worst cell in that table, not the safe one.** The block updates, so it looks correct — but the host is still empty when `<Translate>` tokenizes, so it takes an early return that marks the block parsed *without* tokenizing it. Nothing is ever registered: not the placeholder, not the real content. Verified by spying on the SDK's phrase lookup — zero calls client-only, `["loading"]` once hydrated. So the visibly-broken case is the one that at least tells you something, and turning SSR on converts silent non-registration into a visible freeze.
+> **`{#await}` under a client-only mount is the worst cell in that table, not the safe one.** The block updates, so it looks correct — but when `<Translate>` tokenizes, the host holds only Svelte's anchor comments and no text yet, so it tokenizes to **nothing**. Its token list stays empty for the life of the block: neither the placeholder nor the real content is ever registered. Measured directly off the live instance, and it holds whether or not the catalog has loaded. So the visibly-broken case is the one that at least tells you something, and turning SSR on converts silent non-registration into a visible freeze.
 >
 > There is a second cost even when nothing visibly breaks: **the placeholder is what gets registered.** `Loading…` reaches your catalog and the real content never does — and every block sharing that placeholder collapses onto the same entry.
 >

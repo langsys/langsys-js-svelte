@@ -1,3 +1,13 @@
+## 3.6.9 - 2026-08-21
+
+### Fixed (documentation)
+
+- **Corrected the stated mechanism behind client-only `{#await}` registering nothing (shipped in 3.6.8).** The README said the host is *empty* when `<Translate>` tokenizes, so the SDK takes an early return that marks the block parsed without tokenizing. Both halves were wrong. Captured off the live instance: the host holds **six** child nodes — Svelte's anchor comments are child nodes before any text renders — so the empty-host early return is never the path taken. The block tokenizes a subtree of pure anchors, produces zero tokens, and its token list stays empty for the life of the block.
+
+    The user-facing conclusion is unchanged and now rests on better evidence: `tokens` is empty whether or not the catalog has loaded, measured both ways, rather than on a phrase-lookup spy that — as the base-SDK agent and I established — was watching the wrong seam and could not have detected the path it was cited for. The advice was never affected; only the explanation was, which is the same defect class as the `<Phrase>` correction in 3.6.6.
+
+---
+
 ## 3.6.8 - 2026-08-21
 
 ### Fixed (documentation)
