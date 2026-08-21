@@ -1,6 +1,10 @@
-## Unreleased
+## 3.6.5 - 2026-08-21
 
 ### Fixed (documentation)
+
+- **The `%name%` guidance explained the mechanism but not the damage.** The README said a bare `{name}` in `<Translate>`/`<Phrase>` markup is compiled away by Svelte "silently breaking translation while still looking right in the base locale" — true, and still an undersell. The substituted *value* becomes part of the captured phrase, so **every distinct value registers its own content block**: `You have {count} items` mints separate catalog entries for `You have 0 items`, `You have 1 items`, and so on, one per value the component ever renders, each needing its own translation and none reusable. Measured against the shipped tokenizer in a jsdom DOM — `%count%` holds one `custom_id` (`c0ca822f…`) across every value, while the brace form produces a new one each time (`a503b1aa…`, `d813859b…`, `372154fa…`, `04e693fa…`). The `<Phrase>` JSDoc had the same gap and gets the same fix, since that is what IDE hover surfaces.
+
+    This matters for whether a reader bothers to act. "Interpolation breaks" sounds like something testing would catch; a catalog quietly filling with near-duplicates over weeks is precisely the class where nothing looks wrong until a translator opens it. Raised by the React binding agent, who found the identical framing gap in their own README.
 
 - **Corrected a claim shipped in 3.6.4: a rejected catalog fetch is *not* debug-gated.** `README-SSR.md` said a 422 leaves you with "no console output at all" unless `debug: true` is set. Wrong. `Logger.log()` checks `debugEnabled`; `Logger.warn()` and `Logger.error()` do not. Verified by executing the published SDK against the live API with `debug: false` and a locale the project does not have — two lines print every time, `[Langsys Warning] LangsysAppAPI failed to query {…}` and `[Langsys Error] Error HTTP 422: Unprocessable Content`. The real weakness is narrower and is what the guide now says: neither line names the offending locale or the project's valid targets, so it is easy to read past.
 
