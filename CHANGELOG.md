@@ -1,3 +1,13 @@
+## 3.6.6 - 2026-08-21
+
+### Fixed (documentation)
+
+- **3.6.5 gave `<Phrase>` the wrong reason for the right advice.** The new `%name%` text said a bare `{name}` "registers its own content block" — that is `<Translate>`'s mechanism, and `<Phrase>` does not use it. Verified in the published `0.6.5` dist and measured on a live DOM: `<Translate>` tokenizes the subtree and keys a content block on the token array, so the baked value changes the `custom_id`; `<Phrase>` encodes the subtree to one string via `encodeRichText` and calls `Translations.t(phrase, category)` — a plain phrase lookup, no content block and no `custom_id` — so the value lands directly in the lookup key. `%n%` holds `"Based on {n} {m0o}reviews{m0c}"` across every value; `{n}` produces `"Based on 0 …"`, `"Based on 1 …"`, one per render. The advice was never wrong, only the stated reason — which is the kind of detail that gets quoted onward as fact. Caught by the React binding agent, who nearly copied their own `<Translate>` explanation across.
+
+- **Documented that the two paths handle adjacent text oppositely.** `_walkForTokens` pushes one token per text node and never coalesces, so the arity is identity-bearing. `encodeRichText` does the reverse — it concatenates adjacent text (`out += node.nodeValue`) and collapses whitespace across the whole phrase. Measured on the same two-text-node span: `<Phrase>` yields `"Hello world"`, `<Translate>` yields `["Hello","world"]`. Two identity mechanisms with opposite text handling in one package, which matters for anyone implementing server-side rendering against either.
+
+---
+
 ## 3.6.5 - 2026-08-21
 
 ### Fixed (documentation)
