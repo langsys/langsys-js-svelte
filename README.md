@@ -229,6 +229,47 @@ Use `<Translate>` for prose, marketing copy, CMS-rendered articles, forms with p
 
 `<Translate>` props: `category?`, `custom_id?`, `label?`, `tag?` (defaults to `translate`), `class?`, `params?`, `children`.
 
+#### Don't put dynamic content directly inside `<Translate>`
+
+> [!WARNING]
+> **A `<Translate>` block whose whole content is a single phrase will stop updating once Svelte tries to change it.** Put `{#await}`, `{#if}`, or a lone reactive expression directly inside one and the block freezes on whatever it first rendered — permanently, with no error.
+>
+> The cause is in the base SDK: when a block tokenizes to exactly one phrase, it writes the translation back with `element.innerText = …`. That assignment replaces **every child** of the host, including the `<!--[-->` / `<!--]-->` anchor comments Svelte 5 uses to find the block again. Svelte's next update targets nodes that are no longer in the document, so it succeeds silently and changes nothing.
+>
+> Measured against `langsys-js-typescript@0.6.5`:
+>
+> | content | client-only | hydrated |
+> | --- | --- | --- |
+> | `{#if flag}…{:else}…{/if}` (one phrase per branch) | **frozen** | **frozen** |
+> | a single reactive expression, e.g. `{msg}` | **frozen** | **frozen** |
+> | `{#await}` | updates | **frozen** |
+> | two or more phrases in the subtree | updates | updates |
+>
+> `{#await}` surviving a client-only mount is luck, not safety: the host is still empty when the block tokenizes, so no write-back happens. Under SSR the pending branch is already in the DOM at hydration, the write lands, and it freezes.
+>
+> There is a second cost even when nothing visibly breaks: **the placeholder is what gets registered.** `Loading…` reaches your catalog and the real content never does — and every block sharing that placeholder collapses onto the same entry.
+>
+> **Keep the async or conditional boundary outside the block, and wrap the resolved content:**
+>
+> ```svelte
+> <!-- ✅ the block only ever sees settled content -->
+> {#await load()}
+>     Loading…
+> {:then page}
+>     <Translate category="Docs">{page.body}</Translate>
+> {/await}
+> ```
+>
+> ```svelte
+> <!-- ❌ freezes on "Loading…", and registers "Loading…" as the phrase -->
+> <Translate category="Docs">
+>     {#await load()}Loading…{:then page}{page.body}{/await}
+> </Translate>
+> ```
+>
+> For a value that changes rather than arrives, use `params` — `<Translate params={{ count }}>You have %count% items</Translate>` — which is the supported path for dynamic content and does not go through the write-back.
+
+
 ### `<Phrase>` — one sentence that happens to contain markup
 
 `<Translate>` **splits**: it walks its subtree and registers each translatable run as its own phrase. That's right for prose, and wrong the moment a single sentence is broken up by inline markup — because the fragments land in separate catalog entries, and a translator can't move words across them.

@@ -1,3 +1,15 @@
+## 3.6.7 - 2026-08-21
+
+### Fixed (documentation)
+
+- **Documented that dynamic content directly inside `<Translate>` freezes the block.** When a subtree tokenizes to exactly one phrase, the base SDK writes the translation back with `element.innerText = …`, which replaces every child of the host — including the `<!--[-->` / `<!--]-->` anchors Svelte 5 uses to locate the block. Svelte's next update then targets detached nodes, succeeds silently, and changes nothing. No error, no warning; the block is stuck on whatever it first rendered.
+
+    Reported by the skill agent from a production SvelteKit deployment, with the scope left open as explicitly-unmeasured inference. Measured here against `0.6.5`, running the real component in jsdom: `{#if}` toggles and a lone reactive expression freeze **in client-only apps with no SSR at all**; a subtree with two or more phrases is unaffected, since it takes the other branch. `{#await}` is the one that needs care in the telling — it freezes under hydration but *survives* a client-only mount, because the host is still empty when the block tokenizes so no write-back happens. That is timing luck, not safety, and the docs say so rather than presenting client-only as a safe configuration.
+
+    The fix for users is to keep the async or conditional boundary outside the block and wrap the resolved content; `params` with `%name%` remains the supported path for values that change. The warning also names the quieter half: the loading placeholder is what reaches the catalog, the real content never does, and every block sharing that placeholder collapses onto one entry. The write itself is base-SDK territory and is filed there; this is the warning that stands until it lands.
+
+---
+
 ## 3.6.6 - 2026-08-21
 
 ### Fixed (documentation)
