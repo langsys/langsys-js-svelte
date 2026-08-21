@@ -1,4 +1,20 @@
-## Unreleased
+## 3.6.4 - 2026-08-21
+
+### Fixed (documentation)
+
+- **The SSR guide claimed two things it does not deliver, and both were invisible to every cheap check.** `README-SSR.md` promised "better SEO with server-rendered translations" and "no flash of untranslated content". Neither holds for body copy: `init()` runs in `onMount`, which does not execute during SSR, so the catalog is empty while the server renders and `$t()` falls back to its first argument — the base phrase. The client corrects it at hydration, which *is* the flash the second bullet said was gone. Measured on a production `adapter-node` deployment serving Italian: 5,031 characters of visible SSR body text, 100% English, alongside a 133 KB inline Italian catalog. The guide now states the real benefit — one catalog fetch instead of two, translations ready at hydration, a current catalog per request — and states plainly what it does not do.
+
+- **The guide's server-fetch example used a route that resolves locales differently from the one the SDK calls.** It documented `GET /api/projects/{id}/translations?locale=…`; the SDK calls `GET /api/translations?project_id=…&locale=…`. Verified against the live API with a real project key: the documented route answers `200` for a bare `es`, while the SDK's route answers `422` — *"The locale provided is not a base or target locale for this project"* — because the project's Spanish is `es-CR` and the current route matches literally. Following the guide therefore produced a populated server payload paired with an empty client catalog, every string rendering as its base phrase. The example now uses the SDK's route and resolves the tag with `detectPreferredLocale(header, supportedLocales)` first.
+
+- **Corrected the reason `init()` belongs in `onMount`.** It is not `document is not defined`. Server-side init *works* — and then corrupts concurrent requests, because `LangsysApp` is a module-level singleton (`langsys-js-typescript@0.6.5` dist `:991`), catalog state lives in module-level signals (`:255-256`), and `Translations` subscribes to those globals in its own constructor (`:409-410`), so a per-request instance is not isolated either. The distinction is load-bearing: a reader who believes the `document` explanation concludes a `typeof window` guard makes server-side init safe, and it does not. Request-scoped translation is filed with the base SDK as the real fix.
+
+- **README's `detectPreferredLocale` example built `supportedLocales` from `getLocalesFlat()`.** That helper returns every locale Langsys knows — 573 CLDR entries, confirmed against the live endpoint — not the four your project is configured for. Passing it means nearly any `Accept-Language` "matches", so the helper returns e.g. `de-de`, you store it, and the catalog fetch 422s. The example now uses an explicit project locale list and says why.
+
+- **Documented how to get a translated `<head>`.** Removing the SEO claim without offering the alternative would have left readers worse off. `data.translations` is a plain `iCategories` object, so `categories[category][phrase]` resolves on the server with no SDK involvement and no globals — the supported way to translate `<title>`/`<meta>` until request-scoped translation lands.
+
+- **Three failure modes added to troubleshooting**, all from a production deployment. `curl | grep` cannot verify a Svelte integration — body copy translates after hydration, so a healthy page and a completely broken one are byte-identical to any check that does not run JavaScript. A stale `link:`/workspace SDK on the *deploying* machine renders every string as its category name site-wide while the build succeeds and types pass. And duplicate `hreflang` URL tokens (`zh-Hant` and `zh-Hans` both shortening to `zh`) throw `each_key_duplicate` in a keyed `{#each}`, which blanks **every page** in a SvelteKit app — so adding a locale in the Translation Manager can take a site down with no deploy.
+
+- Removed the troubleshooting bullet "confirm init runs before any rendering that calls `$t(...)`". Under the pattern this guide documents that is impossible — `onMount` runs after the first render — so it sent readers looking for a bug that is the design.
 
 ### Infrastructure
 

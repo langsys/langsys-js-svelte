@@ -14,7 +14,7 @@ Integrate the Langsys Translation Manager into your Svelte and SvelteKit applica
 
 ## Requirements
 
-- **Svelte 5** with full SSR support in SvelteKit.
+- **Svelte 5**. Runs in SvelteKit under SSR — see [Server-Side Rendering](#server-side-rendering) for what that does and does not cover.
 
 > The last version supporting Svelte 3 / 4 (client-side only) is tagged `v-last-svelte4-compat` (`1.2.1`).
 >
@@ -304,7 +304,9 @@ Our tokenizer honors both families, but only ever emits its own. For the PHP att
 
 ## Server-Side Rendering
 
-The SDK is fully SSR-compatible with SvelteKit. The main pattern is to pre-fetch translations server-side and seed them through `initialTranslations` / `initialTranslationsLocale` so the client doesn't refetch on hydration.
+The main pattern is to pre-fetch translations server-side and seed them through `initialTranslations` / `initialTranslationsLocale` so the client doesn't refetch on hydration.
+
+Be clear on what that buys you. `init()` runs in `onMount`, which does not execute during SSR, so **the server HTML renders base language** and the client corrects it at hydration. Seeding removes the client's *second* catalog fetch and the flash that fetch caused — it does not server-render translated copy, and it does not give crawlers translated body text. For a translated `<title>` / `<meta>`, read `data.translations` directly on the server; the SSR guide shows how.
 
 📖 **See [README-SSR.md](./README-SSR.md)** for a complete SvelteKit walkthrough.
 
@@ -349,8 +351,11 @@ const locale = LangsysApp.detectPreferredLocale();
 // SSR (hooks.server.ts / +page.server.ts): parses Accept-Language
 const locale = LangsysApp.detectPreferredLocale(request.headers.get('Accept-Language'));
 
-// Matched against your app's supported locales
-const supportedLocales = (await LangsysApp.getLocalesFlat()).map((l) => l.code);
+// Matched against the locales YOUR PROJECT is configured for — exact tags.
+// Don't build this list from getLocalesFlat(): that returns every locale Langsys
+// knows (~570 CLDR entries), so nearly any Accept-Language "matches" and you end
+// up storing a locale your project has no catalog for.
+const supportedLocales = ['en-US', 'es-CR', 'fr-FR', 'it-IT'];
 const locale = LangsysApp.detectPreferredLocale(
     request.headers.get('Accept-Language'),
     supportedLocales,
