@@ -1,3 +1,13 @@
+## Unreleased
+
+### Infrastructure
+
+- **CI now fails when the docs name an API that does not exist.** Markdown does not typecheck, so a code sample can call a method the SDK never had and ship. The langsys-skill agent hit exactly that — three SSR tracks calling two different invented locale helpers, the second introduced by the commit that fixed the first. `_dev_/docs-api-coverage.mjs` checks every `LangsysApp.*` / `LangsysAppAPI.*` member and every named import in `README.md`, `README-SSR.md` and `CLAUDE.md` against the built `dist/index.d.ts` — the surface a consumer's typechecker actually resolves. Our docs were clean, which is worth stating plainly: nothing had been verifying it.
+
+    Two traps, both hit while building it. The allowlist must include **class members**, not just the `export { … }` statement — `init`, `refresh`, `detectPreferredLocale` and the `getLocales*` family are all members of `LangsysAppSvelte`, and class members never appear in an export statement. A checker built from that statement alone does not under-report; it flags the entire real API as invented, which reads as a broken tool and gets switched off. Reported by the skill agent after their own guard did this. Separately, the first draft here matched `export { … }` but not `export type { … }`, and reported five real re-exported types as missing — the same failure, caught by a positive control before it reached CI. The checker is now verified in both directions: clean on real docs, and catching an injected fake method, fake API member and fake import.
+
+---
+
 ## 3.6.4 - 2026-08-21
 
 ### Fixed (documentation)

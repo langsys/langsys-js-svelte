@@ -38,3 +38,22 @@ jobs:
           node-version: 22
 
       - run: node _dev_/changelog-coverage.mjs . --strict
+
+  docs-api-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The check reads dist/index.d.ts — the surface a consumer's typechecker
+      # actually resolves — so the package must be built first. Without this the
+      # script exits 1 with "run npm run package"; it does not pass vacuously.
+      - run: npm run package
+
+      - run: node _dev_/docs-api-coverage.mjs . --strict
