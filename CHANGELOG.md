@@ -18,6 +18,47 @@
 
 ## 3.6.9 - 2026-08-21
 
+### Added
+
+- **Write-key gating and content discovery (838).** Public API keys are read-only. Whether a
+  session may register newly-discovered content is now decided **by the server, per session** —
+  the same key is write-enabled from an allow-listed address and read-only from everywhere else,
+  so nothing on the client can infer it. Three additions carry this:
+
+    - `writeEnabled` — a `Readable<boolean | undefined>`. The tri-state is load-bearing:
+      `undefined` means *not known yet*, and is what the store reports during SSR and throughout
+      hydration. Treating it as `false` tells a write-enabled session it is read-only, which it
+      cannot recover from without a reload.
+    - `writeGrant` on `init()` — for authenticated apps, whose backend mints a short-lived JWT at
+      login that the SDK sends as `X-Write-Grant`. Accepts the base SDK's `string` or provider
+      function, **plus a Svelte store**, which is this binding's only addition to the surface.
+      The store is resolved per request and cached nowhere, so `grantStore.set(next)` takes effect
+      on the very next request — a token that expires while the app runs is the normal case, not
+      the exception.
+    - `setWriteGrant()` — for when the token only exists after `init()`. It re-authorizes, so the
+      server re-evaluates the session; `await` it if you need `writeEnabled` settled.
+
+  `writeEnabled` is deliberately the one store **not** re-exported by reference. Reading the base
+  signal during hydration is a mismatch hazard specific to SvelteKit: a universal `load` re-runs
+  on the client and is awaited *before* mount, so `await LangsysApp.init()` in a load resolves
+  authorization before the first client render. The wrapper changes only *when* the value is
+  observable, never what it is. Everything else (`t`, `currentlyLoadedLocale`, `sTranslations`)
+  is still the base signal itself, so no code in this package sits in the catalog-miss path.
+
+### Fixed (documentation)
+
+- **`ssrTokenStrategy: 'client'` does not queue on the server and flush from the client.** Both
+  `README.md` and `README-SSR.md` described behavior that cannot occur. Under SSR the server
+  instance declines to collect at all (`shouldQueueForWrite()` returns `false`), and the
+  post-hydration flush runs in the browser's module instance — a different object in a different
+  process, with no channel carrying a queue client-ward.
+
+    The consequence is worth stating plainly because it is invisible: **content that renders only
+  on the server is discovered by neither lane**, with no error, no failed request, and no hint,
+  since SSR does not hint. `'server'` covers those pages, and now carries its own precondition in
+  the same breath rather than as a footnote — the flush originates from the origin server's IP,
+  which must be allow-listed or every registration is silently refused.
+
 ### Fixed (documentation)
 
 - **Corrected the stated mechanism behind client-only `{#await}` registering nothing (shipped in 3.6.8).** The README said the host is _empty_ when `<Translate>` tokenizes, so the SDK takes an early return that marks the block parsed without tokenizing. Both halves were wrong. Captured off the live instance: the host holds **six** child nodes — Svelte's anchor comments are child nodes before any text renders — so the empty-host early return is never the path taken. The block tokenizes a subtree of pure anchors, produces zero tokens, and its token list stays empty for the life of the block.

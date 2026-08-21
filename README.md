@@ -95,9 +95,23 @@ Store **BCP 47 language tags** in it (`en-US`, `pt-BR`, `zh-Hant`). Casing and `
 
 `ssrTokenStrategy` (default `'client'`) controls when missing tokens are sent during server rendering:
 
-- `'client'` — tokens collected on the server are flushed from the client after hydration. Best for performance.
+- `'client'` (default) — the server collects **nothing**. Registration happens only from the browser, for content the browser actually renders. Cheapest, and the right default; but see the discovery gap below.
 - `'server'` — tokens are sent immediately during SSR. Best for reliability and immediate registration.
 - `'auto'` — small batches (≤5) sent from server, larger queued for client.
+
+> **The discovery gap under `'client'`.** It is tempting to read "queue on the server,
+> flush from the client" into this option — the SDK does not do that, and cannot. Under SSR
+> the server instance declines to collect at all, and the post-hydration flush runs in the
+> browser's own module instance, whose queue is a different object in a different process.
+> Nothing is carried across.
+>
+> The practical consequence: **content that only ever renders on the server is discovered by
+> neither lane.** A `+page.server.ts` branch the browser never takes, or markup behind a
+> condition that is only true during SSR, will not register under `'client'` — and it leaves
+> no trace, because there is no error and no hint. Use `ssrTokenStrategy: 'server'` for those
+> pages, and note that it carries its own precondition: the flush then originates from your
+> origin server's IP, which must be allow-listed for the key, or every registration is
+> silently refused.
 
 ## Using translations
 
