@@ -99,8 +99,7 @@ export type {
  * store shape) — the wrapper adapts it to the base SDK's `Signal<string>`
  * automatically.
  */
-export interface iLangsysInitConfig
-    extends Omit<iVanillaInitConfig, 'UserLocaleStore' | 'writeGrant'> {
+export interface iLangsysInitConfig extends Omit<iVanillaInitConfig, 'UserLocaleStore' | 'writeGrant'> {
     UserLocaleStore: Writable<string>;
     /**
      * Short-lived write grant for login-walled apps. Accepts everything the base

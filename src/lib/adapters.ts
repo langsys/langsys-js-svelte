@@ -25,11 +25,7 @@ export function adaptStore<T>(w: Writable<T>): Signal<T> {
 export type WriteGrantSource = WriteGrant | Readable<string | null | undefined>;
 
 function isReadable(v: unknown): v is Readable<string | null | undefined> {
-    return (
-        typeof v === 'object' &&
-        v !== null &&
-        typeof (v as Readable<unknown>).subscribe === 'function'
-    );
+    return typeof v === 'object' && v !== null && typeof (v as Readable<unknown>).subscribe === 'function';
 }
 
 /**

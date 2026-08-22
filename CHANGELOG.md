@@ -24,9 +24,8 @@
   session may register newly-discovered content is now decided **by the server, per session** —
   the same key is write-enabled from an allow-listed address and read-only from everywhere else,
   so nothing on the client can infer it. Three additions carry this:
-
     - `writeEnabled` — a `Readable<boolean | undefined>`. The tri-state is load-bearing:
-      `undefined` means *not known yet*, and is what the store reports during SSR and throughout
+      `undefined` means _not known yet_, and is what the store reports during SSR and throughout
       hydration. Treating it as `false` tells a write-enabled session it is read-only, which it
       cannot recover from without a reload.
     - `writeGrant` on `init()` — for authenticated apps, whose backend mints a short-lived JWT at
@@ -38,12 +37,12 @@
     - `setWriteGrant()` — for when the token only exists after `init()`. It re-authorizes, so the
       server re-evaluates the session; `await` it if you need `writeEnabled` settled.
 
-  `writeEnabled` is deliberately the one store **not** re-exported by reference. Reading the base
-  signal during hydration is a mismatch hazard specific to SvelteKit: a universal `load` re-runs
-  on the client and is awaited *before* mount, so `await LangsysApp.init()` in a load resolves
-  authorization before the first client render. The wrapper changes only *when* the value is
-  observable, never what it is. Everything else (`t`, `currentlyLoadedLocale`, `sTranslations`)
-  is still the base signal itself, so no code in this package sits in the catalog-miss path.
+    `writeEnabled` is deliberately the one store **not** re-exported by reference. Reading the base
+    signal during hydration is a mismatch hazard specific to SvelteKit: a universal `load` re-runs
+    on the client and is awaited _before_ mount, so `await LangsysApp.init()` in a load resolves
+    authorization before the first client render. The wrapper changes only _when_ the value is
+    observable, never what it is. Everything else (`t`, `currentlyLoadedLocale`, `sTranslations`)
+    is still the base signal itself, so no code in this package sits in the catalog-miss path.
 
 ### Fixed (documentation)
 
@@ -54,10 +53,10 @@
   process, with no channel carrying a queue client-ward.
 
     The consequence is worth stating plainly because it is invisible: **content that renders only
-  on the server is discovered by neither lane**, with no error, no failed request, and no hint,
-  since SSR does not hint. `'server'` covers those pages, and now carries its own precondition in
-  the same breath rather than as a footnote — the flush originates from the origin server's IP,
-  which must be allow-listed or every registration is silently refused.
+    on the server is discovered by neither lane**, with no error, no failed request, and no hint,
+    since SSR does not hint. `'server'` covers those pages, and now carries its own precondition in
+    the same breath rather than as a footnote — the flush originates from the origin server's IP,
+    which must be allow-listed or every registration is silently refused.
 
 ### Fixed (documentation)
 

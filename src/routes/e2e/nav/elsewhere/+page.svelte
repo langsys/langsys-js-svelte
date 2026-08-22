@@ -17,9 +17,8 @@
     <h2>Misses on this URL</h2>
     <p>{$t(phrase('nav-elsewhere', 1, run), CATEGORY)}</p>
     <div class="expect">
-        These belong to <code>/e2e/nav/elsewhere</code>. Pending hints are keyed by captured URL, so
-        this must arrive as its <strong>own</strong> hint — one per URL — never batched with the
-        origin page's misses under a single URL.
+        These belong to <code>/e2e/nav/elsewhere</code>. Pending hints are keyed by captured URL, so this must arrive as its <strong>own</strong> hint — one per URL
+        — never batched with the origin page's misses under a single URL.
     </div>
 </div>
 
