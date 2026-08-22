@@ -80,12 +80,12 @@ WriteGrant (base-SDK union), WriteGrantSource (that union plus a Svelte store)
 
 **`writeEnabled` is the one store NOT re-exported by reference.** Everything else (`t`,
 `currentlyLoadedLocale`, `sTranslations`) is the base signal itself, so no code here sits
-in the catalog-miss path — which is what lets this package be *excluded* from an
+in the catalog-miss path — which is what lets this package be _excluded_ from an
 investigation rather than merely defended. `writeEnabled` is wrapped in `src/lib/stores.ts`
 because reading the live signal during hydration is a mismatch hazard specific to
-SvelteKit: a universal `load` re-runs on the client and is awaited *before* mount, so
+SvelteKit: a universal `load` re-runs on the client and is awaited _before_ mount, so
 `await LangsysApp.init()` in a load resolves authorization before the first client render.
-The wrapper changes only *when* the value is observable, never what it is. See
+The wrapper changes only _when_ the value is observable, never what it is. See
 `src/lib/stores.test.ts`.
 
 ## Essential commands

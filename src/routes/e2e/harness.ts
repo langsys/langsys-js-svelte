@@ -60,19 +60,11 @@ let startedUnder: string | undefined;
  * second `init()` in the same document is not a clean slate — every lane switch
  * in this testbed is therefore a full page load, not a client-side navigation.
  */
-export function initLangsys(opts: {
-    keyName: KeyName;
-    grant?: string;
-    debug?: boolean;
-}): Promise<unknown> {
+export function initLangsys(opts: { keyName: KeyName; grant?: string; debug?: boolean }): Promise<unknown> {
     const signature = `${opts.keyName}:${opts.grant ?? ''}`;
     if (started && startedUnder === signature) return started;
     if (started) {
-        return Promise.reject(
-            new Error(
-                `Langsys already initialized as "${startedUnder}"; reload rather than re-initializing as "${signature}".`,
-            ),
-        );
+        return Promise.reject(new Error(`Langsys already initialized as "${startedUnder}"; reload rather than re-initializing as "${signature}".`));
     }
 
     startedUnder = signature;

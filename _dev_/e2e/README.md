@@ -53,7 +53,7 @@ by reading the source.
 
 ### Two things that are easy to get wrong when editing this
 
-**Assert the premise, not just the result.** The hydration test checks that the *raw*
+**Assert the premise, not just the result.** The hydration test checks that the _raw_
 signal is concrete at hydration before asserting the safe store reads `undefined`.
 Without that, a run where authorization simply failed passes for entirely the wrong
 reason — everything reads `undefined` and the test looks green. That happened during
@@ -97,7 +97,7 @@ Use a **genuinely valid** grant for case B. A zero with an invalid token proves 
 it would be a rejected token rather than the degrade.
 
 Case A only exercises the allow-listed side, because a local dev server is loopback.
-Under `'server'` the flush originates from the *origin server's* IP, so an `ip_write`
+Under `'server'` the flush originates from the _origin server's_ IP, so an `ip_write`
 key requires that IP to be allow-listed; when it isn't, the SDK makes zero registration
 attempts by design and the failure is completely silent — no error, no failed request,
 nothing in the catalog, and no hint, because SSR never hints. The refused side is
@@ -105,16 +105,16 @@ covered in the backend and core suites.
 
 ## Testbed routes
 
-| Route | Covers |
-| --- | --- |
-| `/e2e/lanes?key=read\|ip_write\|write` | gate matrix; `setWriteGrant` mechanism (sends a deliberately **invalid** grant — refusal is the expected result) |
-| `/e2e/hydration` | `await init()` in a universal `load` — the mismatch path |
-| `/e2e/visibility` | CSS-hidden vs `{#if}` vs `{#await}` discovery |
-| `/e2e/params` | `<Translate params>`, `<Phrase params>`, unknown placeholders, literal `%`, unused-key warning |
-| `/e2e/vanilla` | isolation harness: same markup via the Svelte component vs the vanilla class — settles "is it core or is it the binding" |
-| `/e2e/nav` , `/e2e/nav/elsewhere` | client-side nav + `pushState` during jitter |
-| `/e2e/grant?initial=<jwt>&next=<jwt>` | the Svelte store form, incl. expiry degradation |
-| `/e2e/ssr-write?grant=1&token=<jwt>` | SSR write lane (fresh server per case) |
+| Route                                  | Covers                                                                                                                   |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `/e2e/lanes?key=read\|ip_write\|write` | gate matrix; `setWriteGrant` mechanism (sends a deliberately **invalid** grant — refusal is the expected result)         |
+| `/e2e/hydration`                       | `await init()` in a universal `load` — the mismatch path                                                                 |
+| `/e2e/visibility`                      | CSS-hidden vs `{#if}` vs `{#await}` discovery                                                                            |
+| `/e2e/params`                          | `<Translate params>`, `<Phrase params>`, unknown placeholders, literal `%`, unused-key warning                           |
+| `/e2e/vanilla`                         | isolation harness: same markup via the Svelte component vs the vanilla class — settles "is it core or is it the binding" |
+| `/e2e/nav` , `/e2e/nav/elsewhere`      | client-side nav + `pushState` during jitter                                                                              |
+| `/e2e/grant?initial=<jwt>&next=<jwt>`  | the Svelte store form, incl. expiry degradation                                                                          |
+| `/e2e/ssr-write?grant=1&token=<jwt>`   | SSR write lane (fresh server per case)                                                                                   |
 
 **The layout nav lists every route except `/e2e/ssr-write`, deliberately** — that page
 needs a freshly started server per case, and a nav link would invite clicking into it

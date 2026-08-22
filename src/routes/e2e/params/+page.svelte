@@ -70,8 +70,7 @@
             <p data-testid="tr-unknown">Hello %name%, your code is %missing%.</p>
         </Translate>
         <div class="expect">
-            Documented behavior: an unknown key stays visible in canonical form
-            (<code>&lbrace;missing&rbrace;</code>) rather than blanking — matching
+            Documented behavior: an unknown key stays visible in canonical form (<code>&lbrace;missing&rbrace;</code>) rather than blanking — matching
             <code>$t()</code>.
         </div>
     </div>
@@ -82,8 +81,8 @@
             <p data-testid="tr-unused">Only %name% appears here.</p>
         </Translate>
         <div class="expect">
-            The inverse of case 3, and what <code>findUnusedParamKeys</code> exists for: a param
-            supplied with nowhere to go should produce a debug warning naming
+            The inverse of case 3, and what <code>findUnusedParamKeys</code> exists for: a param supplied with nowhere to go should produce a debug warning
+            naming
             <code>unusedKey</code>, not silence. Rendering must be unaffected.
         </div>
     </div>
@@ -92,8 +91,7 @@
         <h2>5 — literal percent in prose</h2>
         <p data-testid="t-percent">{$t('Save 50% today — width: 100% supported', CATEGORY)}</p>
         <div class="expect">
-            Only <code>%identifier%</code> is matched, so bare percentages in copy must pass
-            through unchanged.
+            Only <code>%identifier%</code> is matched, so bare percentages in copy must pass through unchanged.
         </div>
     </div>
 {/if}

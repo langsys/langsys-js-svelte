@@ -33,10 +33,8 @@
 <h1>Visibility</h1>
 
 <div class="expect">
-    The discovery line is <strong>mounted vs. conditionally rendered</strong>, not hidden vs.
-    visible. A node that exists but is invisible still has <code>t()</code> run and its DOM walked,
-    so it registers. A node that was never mounted is invisible to discovery — the renderer's
-    session never creates it.
+    The discovery line is <strong>mounted vs. conditionally rendered</strong>, not hidden vs. visible. A node that exists but is invisible still has
+    <code>t()</code> run and its DOM walked, so it registers. A node that was never mounted is invisible to discovery — the renderer's session never creates it.
 </div>
 
 {#if error}
@@ -52,10 +50,7 @@
         <div style:display={cssHidden ? 'none' : 'block'}>
             <p>{$t(phrase('visibility-css-hidden', 1, run), CATEGORY)}</p>
         </div>
-        <div class="expect">
-            Mounted from first render regardless of the toggle, so it registers without anyone
-            clicking anything.
-        </div>
+        <div class="expect">Mounted from first render regardless of the toggle, so it registers without anyone clicking anything.</div>
     </div>
 
     <div class="card">
@@ -64,10 +59,7 @@
         {#if ifOpen}
             <p>{$t(phrase('visibility-if-block', 1, run), CATEGORY)}</p>
         {/if}
-        <div class="expect">
-            Never mounts in the renderer's session, so it is a genuine blind spot. It should appear
-            only after a human opens it here.
-        </div>
+        <div class="expect">Never mounts in the renderer's session, so it is a genuine blind spot. It should appear only after a human opens it here.</div>
     </div>
 
     <div class="card">
@@ -82,9 +74,8 @@
         {/if}
         <div class="expect">
             The dangerous one. A pending branch has never mounted, so it behaves exactly like
-            <code>{'{#if}'}</code> — but nothing about the markup <em>looks</em> conditional, and
-            this is the idiomatic SvelteKit shape for streamed <code>load</code> data. A customer
-            streaming below-the-fold content is silently undiscoverable.
+            <code>{'{#if}'}</code> — but nothing about the markup <em>looks</em> conditional, and this is the idiomatic SvelteKit shape for streamed
+            <code>load</code> data. A customer streaming below-the-fold content is silently undiscoverable.
         </div>
     </div>
 {/if}

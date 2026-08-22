@@ -28,9 +28,8 @@
 {/if}
 
 <div class="expect">
-    <code>await LangsysApp.init(...)</code> ran in a universal <code>+page.ts</code> load, which
-    SvelteKit awaits before mounting. Authorization has therefore already resolved by the first
-    client render.
+    <code>await LangsysApp.init(...)</code> ran in a universal <code>+page.ts</code> load, which SvelteKit awaits before mounting. Authorization has therefore already
+    resolved by the first client render.
 </div>
 
 <div class="card">
@@ -48,14 +47,11 @@
         </tbody>
     </table>
     <div class="expect">
-        <strong>Pass condition:</strong> the safe store reads <code>undefined</code> at init on both
-        server and client, so the hydrated markup matches. The raw signal is expected to differ
-        between the two — <code>undefined</code> on the server, concrete on the client. That
-        divergence is the bug this store exists to absorb, and it is why nothing in the app should
-        branch on the raw signal.
+        <strong>Pass condition:</strong> the safe store reads <code>undefined</code> at init on both server and client, so the hydrated markup matches. The raw
+        signal is expected to differ between the two — <code>undefined</code> on the server, concrete on the client. That divergence is the bug this store
+        exists to absorb, and it is why nothing in the app should branch on the raw signal.
         <br /><br />
-        A hydration mismatch surfaces in the browser console, not on the page. Check it: a clean
-        console is the actual result here.
+        A hydration mismatch surfaces in the browser console, not on the page. Check it: a clean console is the actual result here.
     </div>
 </div>
 
@@ -66,8 +62,7 @@
     </p>
     <div class="expect">
         Expected <code>true</code> — <code>ip_write</code> from loopback. If this stayed
-        <code>undefined</code>, the deferral never handed over and the store is broken in the other
-        direction.
+        <code>undefined</code>, the deferral never handed over and the store is broken in the other direction.
     </div>
 </div>
 
@@ -77,7 +72,6 @@
     <p>{$t(phrase('hydration', 2, run), CATEGORY)}</p>
     <div class="expect">
         These miss on the server too. Default <code>ssrTokenStrategy</code> is
-        <code>'client'</code>, so the server-side queue is deliberately not collected — server-side
-        discovery requires <code>'server'</code>.
+        <code>'client'</code>, so the server-side queue is deliberately not collected — server-side discovery requires <code>'server'</code>.
     </div>
 </div>

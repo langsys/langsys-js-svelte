@@ -30,7 +30,7 @@ const KEY_READ = process.env.VITE_LANGSYS_KEY_READ;
 if (!SECRET || !PROJECT || !KEY_READ) {
     console.error(
         'Missing env. Need LANGSYS_WRITE_GRANT_SECRET, VITE_LANGSYS_PROJECT_ID and\n' +
-            'VITE_LANGSYS_KEY_READ. Run with: node --env-file=.env _dev_/e2e/verify.mjs',
+            'VITE_LANGSYS_KEY_READ. Run with: node --env-file=.env _dev_/e2e/verify.mjs'
     );
     process.exit(2);
 }
@@ -109,12 +109,7 @@ const cellFor = (p, label) =>
 
     // Only real errors/warnings — the test phrases contain the word "hydration",
     // so matching on text alone flags the SDK's own debug logs.
-    const mismatches = msgs.filter(
-        (m) =>
-            m.type === 'pageerror' ||
-            m.type === 'error' ||
-            (m.type === 'warning' && /hydrat|mismatch/i.test(m.text)),
-    );
+    const mismatches = msgs.filter((m) => m.type === 'pageerror' || m.type === 'error' || (m.type === 'warning' && /hydrat|mismatch/i.test(m.text)));
     if (!mismatches.length) pass('no hydration mismatch / console errors', 'clean');
     else fail('no hydration mismatch / console errors', JSON.stringify(mismatches.slice(0, 3)));
 }
@@ -143,8 +138,7 @@ for (const [key, expected] of [
     const { p } = await newPage();
     const auths = [];
     p.on('request', (r) => {
-        if (r.url().includes('authorize-project'))
-            auths.push({ at: Date.now(), grant: r.headers()['x-write-grant'] ?? null });
+        if (r.url().includes('authorize-project')) auths.push({ at: Date.now(), grant: r.headers()['x-write-grant'] ?? null });
     });
     await p.goto(`${BASE}/e2e/lanes?key=read`, { waitUntil: 'networkidle' });
     await p.waitForTimeout(500);
@@ -194,8 +188,7 @@ for (const [key, expected] of [
     const capturedAfter = mountedAfter.match(/captured at mount:\s*(\S+)/)?.[1];
     if (url.includes('shallow=pushed')) pass('pushState mutated location.href', url);
     else fail('pushState mutated location.href', url);
-    if (capturedBefore === capturedAfter)
-        pass('shallow routing did not remount (captured URL stable)', capturedAfter);
+    if (capturedBefore === capturedAfter) pass('shallow routing did not remount (captured URL stable)', capturedAfter);
     else fail('shallow routing did not remount', `${capturedBefore} -> ${capturedAfter}`);
 }
 
@@ -224,8 +217,7 @@ for (const [key, expected] of [
     await p.goto(`${BASE}/e2e/lanes?key=ip_write`, { waitUntil: 'networkidle' });
     await p.waitForTimeout(800);
 
-    if (seen.some((u) => u.startsWith('http://langsys2.test/')))
-        pass('requests are genuinely cross-origin (no proxy)', seen[0]);
+    if (seen.some((u) => u.startsWith('http://langsys2.test/'))) pass('requests are genuinely cross-origin (no proxy)', seen[0]);
     else fail('requests are genuinely cross-origin (no proxy)', seen[0] ?? 'no authorize-project request');
 
     if (!failed.length) pass('no blocked requests cross-origin', 'none');
@@ -242,10 +234,9 @@ for (const [key, expected] of [
     });
 
     // Seed the store with a VALID grant at init; a read key must go write-enabled.
-    await p.goto(
-        `${BASE}/e2e/grant?initial=${encodeURIComponent(GRANT_VALID)}&next=${encodeURIComponent(GRANT_EXPIRED)}&run=grant1`,
-        { waitUntil: 'networkidle' },
-    );
+    await p.goto(`${BASE}/e2e/grant?initial=${encodeURIComponent(GRANT_VALID)}&next=${encodeURIComponent(GRANT_EXPIRED)}&run=grant1`, {
+        waitUntil: 'networkidle',
+    });
     await p.waitForTimeout(1200);
     const atInit = (await p.locator('[data-testid="we"]').textContent()).trim();
     if (atInit === 'true') pass('store-form grant flips READ key to write-enabled', atInit);
@@ -258,8 +249,7 @@ for (const [key, expected] of [
     await p.locator('button:has-text("Set next token")').click();
     await p.waitForTimeout(2500);
     const afterSwap = (await p.locator('[data-testid="we"]').textContent()).trim();
-    if (afterSwap === 'false')
-        pass('store re-read at request time (valid -> expired degrades)', `${atInit} -> ${afterSwap}`);
+    if (afterSwap === 'false') pass('store re-read at request time (valid -> expired degrades)', `${atInit} -> ${afterSwap}`);
     else fail('store re-read at request time (valid -> expired degrades)', `${atInit} -> ${afterSwap}`);
 }
 
@@ -316,16 +306,13 @@ for (const [key, expected] of [
     const origin = `${BASE}/e2e/nav?run=${RUN}`;
     const elsewhere = `${BASE}/e2e/nav/elsewhere?run=${RUN}`;
 
-    if (hints.includes(origin))
-        pass('hint names the MISS-time URL, not the fire-time one', origin);
+    if (hints.includes(origin)) pass('hint names the MISS-time URL, not the fire-time one', origin);
     else fail('hint names the MISS-time URL, not the fire-time one', `origin hint missing; got ${JSON.stringify(hints)}`);
 
-    if (hints.includes(elsewhere))
-        pass('destination page gets its own separate hint', elsewhere);
+    if (hints.includes(elsewhere)) pass('destination page gets its own separate hint', elsewhere);
     else fail('destination page gets its own separate hint', JSON.stringify(hints));
 
-    if (new Set(hints).size === hints.length && hints.length === 2)
-        pass('one hint per URL — no cross-route batching', `${hints.length} distinct`);
+    if (new Set(hints).size === hints.length && hints.length === 2) pass('one hint per URL — no cross-route batching', `${hints.length} distinct`);
     else fail('one hint per URL — no cross-route batching', JSON.stringify(hints));
 
     await ctx.close();
@@ -355,9 +342,8 @@ for (const [key, expected] of [
         })
     ).json();
     const landed = Object.keys(cat?.data?.E2E838 ?? {}).filter((k) => k.includes(RUN));
-    landed.length >= 2
-        ? pass('registered phrases present in catalog', `${landed.length} for run ${RUN}`)
-        : fail('registered phrases present in catalog', `${landed.length} for run ${RUN} — server did not persist`);
+    if (landed.length >= 2) pass('registered phrases present in catalog', `${landed.length} for run ${RUN}`);
+    else fail('registered phrases present in catalog', `${landed.length} for run ${RUN} — server did not persist`);
 
     // Hints answer 204; anything else means the discovery lane is failing silently.
     const hintCalls = callsTo('discovery/hint');
@@ -368,9 +354,8 @@ for (const [key, expected] of [
 
     // Catch-all: no API call anywhere in the suite came back 4xx/5xx.
     const errs = apiCalls.filter((c) => c.status >= 400);
-    errs.length === 0
-        ? pass('no 4xx/5xx from the API across the whole suite', `${apiCalls.length} calls checked`)
-        : fail('no 4xx/5xx from the API across the whole suite', JSON.stringify(errs.slice(0, 3)));
+    if (errs.length === 0) pass('no 4xx/5xx from the API across the whole suite', `${apiCalls.length} calls checked`);
+    else fail('no 4xx/5xx from the API across the whole suite', JSON.stringify(errs.slice(0, 3)));
 }
 
 // ---------- TEST 12: params / interpolation / <Phrase> ----------
@@ -385,38 +370,31 @@ for (const [key, expected] of [
     const text = () => p.evaluate(() => document.body.innerText);
 
     const t1 = await text();
-    /Welcome back, Sarah\. You have 3 new messages\./.test(t1)
-        ? pass('<Translate params> substitutes %name% and %count%', 'Sarah / 3')
-        : fail('<Translate params> substitutes %name% and %count%', t1.split('\n').find((l) => l.includes('Welcome')) ?? '?');
+    if (/Welcome back, Sarah\. You have 3 new messages\./.test(t1)) pass('<Translate params> substitutes %name% and %count%', 'Sarah / 3');
+    else fail('<Translate params> substitutes %name% and %count%', t1.split('\n').find((l) => l.includes('Welcome')) ?? '?');
 
     await p.fill('#pname', 'Umberto');
     await p.locator('button:has-text("add message")').click();
     await p.waitForTimeout(700);
     const t2 = await text();
-    /Welcome back, Umberto\. You have 4 new messages\./.test(t2)
-        ? pass('setParams re-renders on param change', 'Umberto / 4')
-        : fail('setParams re-renders on param change', t2.split('\n').find((l) => l.includes('Welcome')) ?? '?');
+    if (/Welcome back, Umberto\. You have 4 new messages\./.test(t2)) pass('setParams re-renders on param change', 'Umberto / 4');
+    else fail('setParams re-renders on param change', t2.split('\n').find((l) => l.includes('Welcome')) ?? '?');
 
-    /Based on 4 <?reviews/.test(t2.replace(/\s+/g, ' '))
-        ? pass('<Phrase params> substitutes %n%', 'n=4')
-        : fail('<Phrase params> substitutes %n%', t2.split('\n').find((l) => l.includes('Based on')) ?? '?');
+    if (/Based on 4 <?reviews/.test(t2.replace(/\s+/g, ' '))) pass('<Phrase params> substitutes %n%', 'n=4');
+    else fail('<Phrase params> substitutes %n%', t2.split('\n').find((l) => l.includes('Based on')) ?? '?');
 
-    (await p.locator('p[data-ls-phrase] strong, [data-ls-phrase] strong').count()) >= 1 ||
-    (await p.locator('strong:has-text("reviews")').count()) >= 1
-        ? pass('<Phrase> inline markup reconstituted', '<strong> present in DOM')
-        : fail('<Phrase> inline markup reconstituted', 'no <strong>');
+    if ((await p.locator('p[data-ls-phrase] strong, [data-ls-phrase] strong').count()) >= 1 || (await p.locator('strong:has-text("reviews")').count()) >= 1)
+        pass('<Phrase> inline markup reconstituted', '<strong> present in DOM');
+    else fail('<Phrase> inline markup reconstituted', 'no <strong>');
 
-    t2.includes('{missing}')
-        ? pass('unknown placeholder stays canonical', '{missing}')
-        : fail('unknown placeholder stays canonical', t2.split('\n').find((l) => l.includes('your code')) ?? '?');
+    if (t2.includes('{missing}')) pass('unknown placeholder stays canonical', '{missing}');
+    else fail('unknown placeholder stays canonical', t2.split('\n').find((l) => l.includes('your code')) ?? '?');
 
-    /Save 50% today — width: 100% supported/.test(t2)
-        ? pass('literal % in prose untouched', '50% / 100%')
-        : fail('literal % in prose untouched', t2.split('\n').find((l) => l.includes('Save 50')) ?? '?');
+    if (/Save 50% today — width: 100% supported/.test(t2)) pass('literal % in prose untouched', '50% / 100%');
+    else fail('literal % in prose untouched', t2.split('\n').find((l) => l.includes('Save 50')) ?? '?');
 
-    msgs.some((m) => /unusedKey/.test(m.text))
-        ? pass('unused param key warned (findUnusedParamKeys)', 'names unusedKey')
-        : fail('unused param key warned (findUnusedParamKeys)', 'no console message named unusedKey');
+    if (msgs.some((m) => /unusedKey/.test(m.text))) pass('unused param key warned (findUnusedParamKeys)', 'names unusedKey');
+    else fail('unused param key warned (findUnusedParamKeys)', 'no console message named unusedKey');
 }
 
 await browser.close();

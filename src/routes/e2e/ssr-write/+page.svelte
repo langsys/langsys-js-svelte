@@ -18,11 +18,9 @@
     <code>ssrTokenStrategy: 'server'</code> · key <code>ip_write</code> · grant
     <strong>{data.withGrant ? 'configured' : 'none'}</strong> · run <strong>{data.run}</strong>
     <br /><br />
-    Registration here originates from the <strong>Node process</strong>, so the API sees the
-    origin server's IP — not a visitor's. Under IP gating that is a different trust position
-    entirely: the customer's own server IP must be allow-listed or every server-strategy
-    registration is silently refused. This dev server is loopback, so it exercises the
-    allow-listed case.
+    Registration here originates from the <strong>Node process</strong>, so the API sees the origin server's IP — not a visitor's. Under IP gating that is a
+    different trust position entirely: the customer's own server IP must be allow-listed or every server-strategy registration is silently refused. This dev
+    server is loopback, so it exercises the allow-listed case.
 </div>
 
 <div class="card">
@@ -31,14 +29,15 @@
     <p>{$t(phrase('ssr-write', 2, data.run), CATEGORY)}</p>
     <div class="expect">
         {#if data.withGrant}
-            A grant is configured, so <code>'server'</code> <strong>degrades to
-            <code>'client'</code></strong> and warns at init. A grant makes write capability
-            per-user, while the SSR lane can only hold one process-wide decision — writing from
-            the server would apply one user's capability to every later visitor in that process.
-            These must <strong>not</strong> be registered by the server.
+            A grant is configured, so <code>'server'</code>
+            <strong
+                >degrades to
+                <code>'client'</code></strong
+            >
+            and warns at init. A grant makes write capability per-user, while the SSR lane can only hold one process-wide decision — writing from the server would
+            apply one user's capability to every later visitor in that process. These must <strong>not</strong> be registered by the server.
         {:else}
-            No grant, so the server flushes registrations itself. These must reach the catalog
-            from the server process, with no browser involved.
+            No grant, so the server flushes registrations itself. These must reach the catalog from the server process, with no browser involved.
         {/if}
     </div>
 </div>

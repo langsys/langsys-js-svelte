@@ -81,15 +81,13 @@
 {:else}
     <div class="card">
         <h2>Store read-through</h2>
-        <button onclick={swapAndRefresh} disabled={busy || !next}>
-            Set next token into store, then refresh()
-        </button>
+        <button onclick={swapAndRefresh} disabled={busy || !next}> Set next token into store, then refresh() </button>
         <ul class="mono">
             {#each log as line (line)}<li>{line}</li>{/each}
         </ul>
         <div class="expect">
-            No imperative <code>setWriteGrant()</code> here — the store is written and the value is
-            picked up on the next request. That is what a static string could not do.
+            No imperative <code>setWriteGrant()</code> here — the store is written and the value is picked up on the next request. That is what a static string could
+            not do.
         </div>
     </div>
 
@@ -98,9 +96,7 @@
             <h2>Post-grant misses</h2>
             <p>{$t(phrase('grant-store', 1, run), CATEGORY)}</p>
             <p>{$t(phrase('grant-store', 2, run), CATEGORY)}</p>
-            <div class="expect">
-                With the session now write-enabled these must register directly, on a read key.
-            </div>
+            <div class="expect">With the session now write-enabled these must register directly, on a read key.</div>
         </div>
     {/if}
 {/if}

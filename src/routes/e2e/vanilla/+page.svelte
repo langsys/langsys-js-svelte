@@ -31,8 +31,7 @@
         // Build the vanilla host's children by hand so Svelte never renders them.
         await new Promise((r) => setTimeout(r, 300));
         if (vanillaHost) {
-            vanillaHost.innerHTML =
-                '<p data-testid="vanilla-inner">Vanilla host paragraph with an attribute</p>';
+            vanillaHost.innerHTML = '<p data-testid="vanilla-inner">Vanilla host paragraph with an attribute</p>';
             new VanillaTranslate(vanillaHost, { category: CATEGORY, custom_id: '', label: '' });
         }
 

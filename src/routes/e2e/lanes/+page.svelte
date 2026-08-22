@@ -76,9 +76,8 @@
             <p>{phrase('lanes', 3, run)}</p>
         </Translate>
         <div class="expect">
-            With a write-enabled session these register directly. With a read-only session they
-            register nothing — the page is reported via the hint lane and our renderer registers
-            them instead.
+            With a write-enabled session these register directly. With a read-only session they register nothing — the page is reported via the hint lane and
+            our renderer registers them instead.
         </div>
     </div>
 
@@ -91,28 +90,26 @@
             <span class="mono muted">{grantState}</span>
         </p>
         <div class="expect">
-            <strong>This button sends a deliberately invalid grant</strong> — an API key, not a
-            signed JWT — so the server refuses it and <code>writeEnabled</code> above stays
+            <strong>This button sends a deliberately invalid grant</strong> — an API key, not a signed JWT — so the server refuses it and
+            <code>writeEnabled</code>
+            above stays
             <code>false</code>. That is the expected result here, not a failure.
             <br /><br />
-            What it proves is the <em>mechanism</em>: <code>setWriteGrant()</code> re-authorizes
-            rather than only writing config, and the re-auth request carries
-            <code>X-Write-Grant</code>. That mechanism was inert once, so it is worth exercising
-            on its own.
+            What it proves is the <em>mechanism</em>: <code>setWriteGrant()</code> re-authorizes rather than only writing config, and the re-auth request
+            carries
+            <code>X-Write-Grant</code>. That mechanism was inert once, so it is worth exercising on its own.
             <br /><br />
-            For the accepted path — a valid grant flipping a read key to write-enabled, and
-            misses after it registering directly — see <a href="/e2e/grant">/e2e/grant</a>, which
-            takes real signed JWTs via <code>?initial=</code> / <code>?next=</code>. Minting one
-            here would put the signing secret in page code, which is exactly what it must never be.
+            For the accepted path — a valid grant flipping a read key to write-enabled, and misses after it registering directly — see
+            <a href="/e2e/grant">/e2e/grant</a>, which takes real signed JWTs via <code>?initial=</code> / <code>?next=</code>. Minting one here would put the
+            signing secret in page code, which is exactly what it must never be.
         </div>
         {#if postGrant}
             <h3>Post-grant misses</h3>
             <p>{$t(phrase('lanes-post-grant', 1, run), CATEGORY)}</p>
             <p>{$t(phrase('lanes-post-grant', 2, run), CATEGORY)}</p>
             <div class="expect">
-                These must <strong>not</strong> register: the grant was refused, so the session is
-                still read-only and they belong to the hint lane. Confirmed by their absence from
-                the catalog after a run.
+                These must <strong>not</strong> register: the grant was refused, so the session is still read-only and they belong to the hint lane. Confirmed by
+                their absence from the catalog after a run.
             </div>
         {/if}
     </div>
