@@ -1,22 +1,4 @@
-## 3.6.10 - 2026-08-21
-
-### Infrastructure
-
-- **`npm run lint` works again.** It had been failing outright — not reporting findings, refusing to run — for two independent structural reasons, so the gate has been enforcing nothing. `prettier-plugin-svelte` was on the 3.x line, which cannot parse the AST Svelte 5.55 emits and dies with `unknown node type: Script` on every component; upgraded to 4.x, which declares `svelte: ^5.0.0`. Separately, ESLint 10 does not read `.eslintrc.cjs` or `.eslintignore` at all, so the config was inert; ported faithfully to `eslint.config.js` (same extends, same parsers, ignore list carried over plus `dist`), and the legacy files removed rather than left to look authoritative.
-
-    Verified with a positive control rather than a clean run: ESLint inspects 14 files including all four `.svelte` components, and injected unused-variable violations are caught in both a `.ts` and a `.svelte` file. A green lint that lints nothing is the failure this was already in.
-
-- **Prettier no longer rewrites the code samples inside the docs.** `embeddedLanguageFormatting` defaults to `auto`, which reformats fenced Svelte samples in `README.md` at `printWidth: 160` — joining separate elements onto one line and pulling trailing HTML comments onto their own. It is scoped `off` for markdown only: setting it globally breaks `prettier-plugin-svelte`, which relies on embedded formatting to print `<script>` blocks and fails with the same `unknown node type: Script`. Verified both ways, and the reasoning is a comment in the config so the next person to simplify it does not rediscover it.
-
-    Worth recording how this entry was caught: the first draft wrote the fence marker inline in prose, Prettier read it as an actual fence delimiter, and scrambled the backtick spacing across the rest of the paragraph — mangling the changelog entry about Prettier mangling markdown. Don't write a bare fence marker inside a sentence.
-
-- **CI now runs `npm run lint`.** It did not before — the workflow ran `check`, `test` and the two coverage scripts, but never the lint gate. That is why both breakages could sit there unnoticed: the script was broken, and nothing invoked it, so its failure had no way to surface. A gate no workflow calls will rot again the same way, so the step is now first in the `check` job.
-
-- Repo formatted to that config. Cosmetic only — in the docs it is table padding and emphasis style with no fenced code altered; in `src/` it collapses multi-line prop destructuring under the 160-column width. `npm run check`, the test suite, `publint` and both coverage checks pass unchanged.
-
----
-
-## 3.6.9 - 2026-08-21
+## Unreleased
 
 ### Added
 
@@ -57,6 +39,28 @@
     since SSR does not hint. `'server'` covers those pages, and now carries its own precondition in
     the same breath rather than as a footnote — the flush originates from the origin server's IP,
     which must be allow-listed or every registration is silently refused.
+
+---
+
+## 3.6.10 - 2026-08-21
+
+### Infrastructure
+
+- **`npm run lint` works again.** It had been failing outright — not reporting findings, refusing to run — for two independent structural reasons, so the gate has been enforcing nothing. `prettier-plugin-svelte` was on the 3.x line, which cannot parse the AST Svelte 5.55 emits and dies with `unknown node type: Script` on every component; upgraded to 4.x, which declares `svelte: ^5.0.0`. Separately, ESLint 10 does not read `.eslintrc.cjs` or `.eslintignore` at all, so the config was inert; ported faithfully to `eslint.config.js` (same extends, same parsers, ignore list carried over plus `dist`), and the legacy files removed rather than left to look authoritative.
+
+    Verified with a positive control rather than a clean run: ESLint inspects 14 files including all four `.svelte` components, and injected unused-variable violations are caught in both a `.ts` and a `.svelte` file. A green lint that lints nothing is the failure this was already in.
+
+- **Prettier no longer rewrites the code samples inside the docs.** `embeddedLanguageFormatting` defaults to `auto`, which reformats fenced Svelte samples in `README.md` at `printWidth: 160` — joining separate elements onto one line and pulling trailing HTML comments onto their own. It is scoped `off` for markdown only: setting it globally breaks `prettier-plugin-svelte`, which relies on embedded formatting to print `<script>` blocks and fails with the same `unknown node type: Script`. Verified both ways, and the reasoning is a comment in the config so the next person to simplify it does not rediscover it.
+
+    Worth recording how this entry was caught: the first draft wrote the fence marker inline in prose, Prettier read it as an actual fence delimiter, and scrambled the backtick spacing across the rest of the paragraph — mangling the changelog entry about Prettier mangling markdown. Don't write a bare fence marker inside a sentence.
+
+- **CI now runs `npm run lint`.** It did not before — the workflow ran `check`, `test` and the two coverage scripts, but never the lint gate. That is why both breakages could sit there unnoticed: the script was broken, and nothing invoked it, so its failure had no way to surface. A gate no workflow calls will rot again the same way, so the step is now first in the `check` job.
+
+- Repo formatted to that config. Cosmetic only — in the docs it is table padding and emphasis style with no fenced code altered; in `src/` it collapses multi-line prop destructuring under the 160-column width. `npm run check`, the test suite, `publint` and both coverage checks pass unchanged.
+
+---
+
+## 3.6.9 - 2026-08-21
 
 ### Fixed (documentation)
 
