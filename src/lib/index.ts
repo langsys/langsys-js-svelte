@@ -4,7 +4,12 @@
  * Public API:
  *   - `LangsysApp` (init accepts a Svelte `Writable<string>` for userLocale)
  *   - `t` — `Readable<TFunction>`. Use `{$t('Phrase', 'Cat', { name })}` in templates.
- *   - `currentlyLoadedLocale`, `sTranslations` — read with `$store` syntax.
+ *   - `currentlyLoadedLocale`, `sTranslations` — `Signal<T>`, which satisfies
+ *     Svelte's `Readable` contract, so read them with `$store` syntax. They are
+ *     also WRITABLE (`.set()`), and the SSR guide's server-rendering pattern
+ *     depends on that: seeding them in a layout component body is what makes
+ *     `$t()` resolve during SSR. They are process-global — see README-SSR.md
+ *     before writing to them.
  *   - `Translate` — content-block component; tokenizes each translatable run
  *     in its subtree (text nodes + translatable attributes).
  *   - `Phrase` — keeps ONE markup-bearing run as a single translatable phrase,
