@@ -1,3 +1,13 @@
+## 3.6.14 - 2026-08-30
+
+### Fixed (documentation)
+
+- **`sTranslations` and `currentlyLoadedLocale` were described as read-only.** Both the `index.ts` JSDoc — which ships in the tarball and is what IDE hover renders — and `CLAUDE.md` typed them as `Readable<T>` and said only "read with `$store` syntax". They are `Signal<T>` and writable, and `README-SSR.md` now documents a pattern that depends on writing to them, so the API description contradicted the guidance. Both now say they are writable, that the SSR server-rendering pattern depends on it, and that they are process-global.
+
+- `CLAUDE.md` also records the seeding pattern's boundaries so they are not restated loosely later: safe in a layout component body (0 wrong-locale responses in 400), unsafe anywhere that `await`s before rendering (70 of 80), and voided entirely by `compilerOptions.experimental.async`. Plus which docs ship in the tarball versus GitHub-only, since that decides whether a fix needs a publish.
+
+---
+
 ## 3.6.13 - 2026-08-30
 
 ### Fixed (documentation)

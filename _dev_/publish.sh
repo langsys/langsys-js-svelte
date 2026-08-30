@@ -164,7 +164,7 @@ log_success "Up to date with origin/main (nothing would be overwritten)"
 # Check for unpushed commits
 UNPUSHED_COMMITS=$(git rev-list origin/main..HEAD --count)
 if [ "$UNPUSHED_COMMITS" = "0" ]; then
-    handle_error "No unpushed commits found. Please make your changes and commit them before publishing."
+    handle_error "No unpushed commits found. Either you have not committed yet, or you already pushed — this script amends the last commit with the version bump, so it needs one that has not been pushed. If you pushed, commit the CHANGELOG entry for that work and re-run."
 fi
 log_success "Found $UNPUSHED_COMMITS unpushed commit(s)"
 
