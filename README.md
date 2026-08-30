@@ -356,7 +356,7 @@ The main pattern is to pre-fetch translations server-side and seed them through 
 
 Be clear on what that buys you. `init()` runs in `onMount`, which does not execute during SSR, so **the server HTML renders base language** and the client corrects it at hydration. Seeding removes the client's _second_ catalog fetch and the flash that fetch caused — it does not, on its own, server-render translated copy.
 
-If you need the server HTML itself translated, there is a second pattern: seed the catalog signals synchronously in a **layout component body**. `$t()` then resolves during SSR. It is safe because Svelte's server renderer cannot yield — a layout and its page render in one uninterrupted pass — measured clean across 400 concurrent requests, and it also removes the stale-locale flash a returning visitor would otherwise see. It must be the component body: seeding in a `hooks.server.js` hook bled 70 of 80 requests into the wrong language. Full detail, limits, and the failed-fetch case are in the SSR guide.
+If you need the server HTML itself translated, there is a second pattern: seed the catalog signals synchronously in a **layout component body**. `$t()` then resolves during SSR. It is safe because Svelte's server renderer cannot yield — a layout and its page render in one uninterrupted pass — measured clean across 400 requests with 8 locales in flight together, and it also removes the stale-locale flash a returning visitor would otherwise see. It must be the component body: seeding in a `hooks.server.js` hook bled 70 of 80 requests into the wrong language. Full detail, limits, and the failed-fetch case are in the SSR guide.
 
 📖 **See [README-SSR.md](./README-SSR.md)** for a complete SvelteKit walkthrough.
 
@@ -422,7 +422,13 @@ When changing locale mid-session, you may want to re-run dependent code once the
 <script>
     import { LangsysApp } from 'langsys-js-svelte';
 
+    import { currentlyLoadedLocale } from 'langsys-js-svelte';
+
+    // Depend on the loaded-locale store so this re-runs on each locale change.
+    // `translationsLoadingPromise` is a plain field, not reactive — an $effect that
+    // only referenced it would register no dependency and run once, at mount.
     $effect(() => {
+        void $currentlyLoadedLocale;
         LangsysApp.translationsLoadingPromise.then(() => {
             // re-render content / regenerate UI here
         });
@@ -435,10 +441,20 @@ When changing locale mid-session, you may want to re-run dependent code once the
 > whether the catalog fetch succeeded or failed — on failure the SDK logs and returns
 > without writing a catalog, and the promise still resolves. It also resolves without
 > fetching at all when the locale is unchanged and within the 60-second cache window.
-> So treat it as "the attempt is over", not as "the translations are here". If your
-> callback depends on the new copy actually being present, check the catalog itself —
-> subscribe to `sTranslations` or `currentlyLoadedLocale` — rather than trusting the
-> promise.
+> So treat it as **"the attempt is over"**, not as "the translations are here".
+>
+> The two signals answer different questions and neither answers both: the promise is
+> the only "it ended" signal, and `currentlyLoadedLocale` matching the locale you asked
+> for is the only "it worked" signal. Use a **match as the only positive** — and do not
+> derive failure from a mismatch, for two reasons. `currentlyLoadedLocale` is written
+> only on the success path, so a failed fetch never updates it. And on success it is
+> written inside a 100 ms timer, so for ~100 ms after a _successful_ load the catalog
+> is already new while the locale still reads old — an equality check treated as an
+> error condition will report failure on every normal locale switch, then flip.
+>
+> **There is no reliable failure signal.** A fetch that failed and one that succeeded
+> 50 ms ago are indistinguishable from outside: both have a resolved promise and an
+> un-updated locale. If you need an error state, supply your own timeout.
 
 ## Migrating from v2.x
 

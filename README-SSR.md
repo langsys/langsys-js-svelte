@@ -165,37 +165,68 @@ That is expected — see [What this does](#what-this-does--and-what-it-does-not)
 
 The pattern above cannot server-render body text, because `init()` runs in `onMount`.
 If you need the server HTML itself to be translated — for crawlers, for a returning
-user's first paint — seed the catalog signals **synchronously in a layout component
-body** instead:
+user's first paint — also seed the catalog signals **synchronously in the layout
+component body**.
+
+This **replaces the layout from [Step 2](#step-2-client-side-initialization)**; it
+still calls `init()`, because the seed alone gives you no locale switching and no
+missing-token registration.
 
 ```svelte
 <!-- src/routes/+layout.svelte -->
-<script>
-    import { sTranslations, currentlyLoadedLocale } from 'langsys-js-svelte';
-    let { data, children } = $props();
+<script lang="ts">
+    import { onMount } from 'svelte';
+    import { writable } from 'svelte/store';
+    import { LangsysApp, sTranslations, currentlyLoadedLocale } from 'langsys-js-svelte';
+    import type { PageData } from './$types';
 
-    // Synchronous, in the component body. Not in onMount, not in a hook.
-    sTranslations.set(data.catalog);
+    let { data, children }: { data: PageData; children: any } = $props();
+    const userLocale = writable(data.locale);
+
+    // Seed synchronously in the body: this is the only position that runs during
+    // SSR and during the hydration pass. `?? {}` matters — a null or undefined
+    // catalog makes the next `$t()` throw, not fall back.
+    sTranslations.set(data.translations ?? {});
     currentlyLoadedLocale.set(data.locale);
+
+    // The body runs ONCE per component instance. SvelteKit keeps the root layout
+    // mounted across client-side navigation, so without this effect the catalog
+    // would stay on the locale you first landed on. Effects do not run during SSR,
+    // so this does not disturb the server render.
+    $effect(() => {
+        sTranslations.set(data.translations ?? {});
+        currentlyLoadedLocale.set(data.locale);
+    });
+
+    onMount(async () => {
+        await LangsysApp.init({
+            projectid: data.projectId,
+            key: data.apiKey,
+            UserLocaleStore: userLocale,
+            baseLocale: 'en-US',
+            initialTranslations: data.translations ?? {},
+            initialTranslationsLocale: data.locale,
+            ssrTokenStrategy: 'client',
+        });
+    });
 </script>
 
 {@render children()}
 ```
 
-with `+layout.server.js` fetching the catalog as in [Step 1](#step-1-server-side-data-fetching).
-`$t(...)` in the page then resolves during SSR, and the server HTML is in the user's
-language.
+with `+layout.server.ts` fetching the catalog as in
+[Step 1](#step-1-server-side-data-fetching). `$t(...)` in the page then resolves during
+SSR, and the server HTML is in the user's language.
 
 ### Why this is safe, and exactly how far the safety goes
 
 The catalog lives in **module-level signals** — process-global, shared by every
 concurrent request. That is normally a reason not to write to them per request. It is
-safe here for one specific reason: **Svelte's server renderer cannot yield.** `render()`
-from `svelte/server` returns a string, not a promise, so a layout and the page beneath
-it render in a single uninterrupted synchronous pass. No other request can seed between
-your seed and your reads.
+safe here because a SvelteKit page render is one uninterrupted synchronous pass: the
+layout body and the page beneath it run without yielding, so no other request can seed
+between your seed and your reads.
 
-Measured on a production `adapter-node` build, 8 locales all in flight:
+Measured on a production `adapter-node` build, 8 locales in flight together:
 
 | placement of the seed                                | requests | wrong-locale responses |
 | ---------------------------------------------------- | -------- | ---------------------- |
@@ -212,13 +243,23 @@ Measured on a production `adapter-node` build, 8 locales all in flight:
 > rather than scattering, so sampling a few responses looks like a config error rather
 > than a race.
 
-Two limits that remain:
+> [!CAUTION]
+> **This depends on Svelte's default synchronous SSR, and one config flag removes it.**
+> `render()` from `svelte/server` returns a `RenderOutput` — an object carrying
+> `body`/`head`, which is also a thenable. In the default mode it is fully populated
+> synchronously. Turning on `compilerOptions.experimental.async` switches the renderer
+> to an async path that genuinely awaits mid-tree, and SvelteKit awaits the result
+> accordingly. That is a one-line config change with no change to your components, and
+> it reintroduces exactly the cross-request bleeding this section says cannot happen.
+> If you enable it, this pattern is no longer safe and you need request-scoped state.
 
-- **`{#await}` and streamed `load` promises still render nothing server-side.** They
-  cannot leak a wrong locale — Svelte never resolves them during SSR, so no read
-  happens at all — but the `:then` content is absent from the server HTML. Anything
-  that must reach a crawler cannot sit behind one.
-- **A failed catalog fetch must reset, not return early.** See
+Two further limits:
+
+- **`{#await}` and streamed `load` promises still render nothing server-side** (in the
+  default sync mode). They cannot leak a wrong locale — Svelte never resolves them
+  during SSR, so no read happens at all — but the `:then` content is absent from the
+  server HTML. Anything that must reach a crawler cannot sit behind one.
+- **A failed catalog fetch needs handling.** See
   [When the catalog fetch fails](#when-the-catalog-fetch-fails).
 
 ### It also removes the stale-locale flash
@@ -235,12 +276,12 @@ after init() lands        : "Hola"
 ```
 
 Under SSR that is worse, not better: correct server HTML is _replaced_ at hydration by
-the stale locale. The component-body seed closes it, because it runs during the
-hydration render pass before any child reads:
+the stale locale. The body seed closes it, because it runs during the hydration render
+pass before any child reads:
 
 ```
-without a component-body seed   after hydration: "Ciao"
-with a component-body seed      after hydration: "Hola es-ES"    (no flash)
+without a body seed   after hydration: "Ciao"
+with a body seed      after hydration: "Hola es-ES"    (no flash)
 ```
 
 `init({ initialTranslations })` in `onMount` does **not** close it — `onMount` runs
@@ -248,39 +289,46 @@ after hydration, so the stale paint has already happened.
 
 ## When the catalog fetch fails
 
-Do not return early. The catalog signals are process-global, so an early return leaves
-them holding **the previous request's** catalog, and the failing request renders in
-that language under its own `<html lang>`:
+**Return an empty catalog, never `null` or `undefined`.** `$t()` reads
+`catalog[category][phrase]`; the optional chain is on the _second_ hop, so a nullish
+catalog throws a `TypeError` on the first lookup — a 500 during SSR, and the same throw
+again at hydration. An empty object falls back to base language, which is what you
+want.
+
+```javascript
+// src/routes/+layout.server.ts
+let translations;
+try {
+    translations = await fetchCatalog(locale);
+} catch {
+    translations = {}; // base language, not null
+}
+return { locale, translations, projectId, apiKey };
+```
+
+Do the fallback **here, in `load`** — not by skipping the seed in the component. The
+component body must seed unconditionally: it is the only write, and the signals are
+process-global, so a request that skips it renders with whatever the _previous_ request
+left behind. That is how you get Italian served under `<html lang="es-ES">`:
 
 ```
 GET /it-IT  ->  "Ciao"   (fine)
 GET /es-ES  ->  "Ciao"   <-- Italian, served as lang="es-ES"
 ```
 
-Mislabelled content, which search engines treat worse than untranslated content. It
-persists until something else succeeds.
-
-This is invisible from a cold process — with nothing cached yet, the failing request
-falls back to base language and looks correct. It only appears once any locale has
-succeeded, which in a long-lived server is the normal state. Test it warm.
-
-Reset explicitly instead:
-
-```javascript
-try {
-    catalog = await fetchCatalog(locale);
-} catch {
-    sTranslations.set({});              // not an early return
-    currentlyLoadedLocale.set(BASE_LOCALE);
-    catalog = null;
-}
-```
-
-Verified stable across alternating warm and failing requests.
+Mislabelled content, which search engines treat worse than untranslated content, and it
+persists until something else succeeds. It is invisible from a cold process — with
+nothing cached yet the failing request falls back to base language and looks correct —
+so test it warm.
 
 ## Translated `<head>` for SEO
 
-Because `$t` renders base language on the server, `<title>` and `<meta>` resolved
+> [!NOTE]
+> This section applies to the `onMount` pattern. If you use the
+> [body seed](#server-rendering-translated-copy), `$t()` resolves during SSR and
+> works directly in `<svelte:head>` — you do not need the manual lookup below.
+
+Because `$t` renders base language on the server under that pattern, `<title>` and `<meta>` resolved
 through `$t` are base language too — which is the one place it actually costs you.
 
 Fix it by reading the server-fetched catalog directly. `data.translations` is a plain
@@ -303,8 +351,8 @@ globals, and it works during SSR:
 </svelte:head>
 ```
 
-This is a deliberate bypass, not a workaround for a bug: it is the supported way to get
-translated `<head>` content until request-scoped translation lands in the base SDK.
+Under the `onMount` pattern this is the supported way to get translated `<head>`
+content — a deliberate bypass, not a workaround for a bug.
 
 ## Locale switching
 
@@ -396,8 +444,9 @@ LangsysApp.init({
 - Simple configuration.
 - Full TypeScript support, including compile-time-checked interpolation params on `$t()`.
 
-> Not on this list, deliberately: server-rendered translated body copy, and the SEO
-> benefit that would follow from it. See [What this does](#what-this-does--and-what-it-does-not).
+> Not on this list for the `onMount` pattern, deliberately: server-rendered translated
+> body copy, and the SEO benefit that would follow from it. The
+> [body seed](#server-rendering-translated-copy) does deliver both.
 
 ## Configuration options
 
@@ -477,7 +526,7 @@ assuming the catalog is simply untranslated.
 
 ## Troubleshooting
 
-### `curl` cannot tell you whether this is working
+### `curl` cannot tell you whether this is working — under the `onMount` pattern
 
 Body copy translates _after_ hydration, so `curl https://… | grep` shows base language
 on a perfectly healthy page — and on a completely broken one. A page with an empty
@@ -488,6 +537,10 @@ Verify in a real browser after hydration, or with a headless browser that execut
 scripts. If you need a server-side check, assert on the seeded payload (that the inline
 `__INITIAL_TRANSLATIONS__` / `data.translations` blob is present, non-empty, and for the
 expected locale) — not on the rendered text.
+
+Under the [body seed](#server-rendering-translated-copy) this inverts: the server HTML
+_is_ translated, so base language in `curl` output is a genuine failure signal and one
+of the cheapest checks you have.
 
 ### Translations not appearing
 
