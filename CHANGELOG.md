@@ -1,3 +1,25 @@
+## 3.6.11 - 2026-08-30
+
+### Fixed (documentation)
+
+- **`README-SSR.md` said server-rendered translated copy was not achievable. That was true of the pattern it documented and false as a statement about SvelteKit.** `init({ initialTranslations })` in `onMount` genuinely cannot server-render body text. Seeding `sTranslations` / `currentlyLoadedLocale` synchronously in a **layout component body** can, and does. Measured on a production `adapter-node` build with the concurrency harness the React binding published, so the numbers are comparable across bindings:
+
+    | placement of the seed                                | requests in flight | wrong-locale responses |
+    | ---------------------------------------------------- | ------------------ | ---------------------- |
+    | layout component body                                | 400                | 0                      |
+    | layout component body, base locale excluded          | 350                | 0                      |
+    | `hooks.server.js` `handle()`, awaiting before render | 80                 | 70                     |
+
+    Writing per-request data into process-global signals is normally unsafe. It holds here for a structural reason worth stating rather than assuming: **Svelte's server renderer cannot yield.** `render()` from `svelte/server` returns a string, not a promise, so a layout and the page beneath it render in one uninterrupted synchronous pass and no other request can seed in between. That is a property of the renderer, not of any particular app, so it survives refactors. React and Vue have no equivalent guarantee — both bleed when anything suspends between the seed and the read.
+
+    The guide now documents both patterns, and carries the placement warning: a `hooks.server.js` seed is the natural place to put per-request setup and is the one placement that breaks.
+
+- **Documented the stale-locale flash, and that the same seed placement fixes it.** `sTranslations` is persisted to `localStorage` and re-seeded from it at module load, before `init()`; `currentlyLoadedLocale` is not persisted, so the stored catalog carries no locale tag and nothing can tell it is stale. A returning visitor's first paint renders the locale they previously viewed. Under SSR this is worse rather than better — correct server HTML is replaced at hydration by the stale locale, which lands on exactly the crawler audience the seeding exists for. The component-body seed closes it because it runs during the hydration render pass before any child reads; `init({ initialTranslations })` in `onMount` does not, because the stale paint precedes it.
+
+- **Documented the failed-fetch case.** An early return on a failed catalog fetch leaves the process-global signals holding the previous request's catalog, so the failing locale renders in that language under its own `<html lang>` — mislabelled rather than untranslated. Invisible from a cold process and only appears once any locale has succeeded, which in a long-lived server is the normal state. The guide now shows an explicit reset instead, verified stable across alternating warm and failing requests.
+
+---
+
 ## 3.6.10 - 2026-08-21
 
 ### Infrastructure

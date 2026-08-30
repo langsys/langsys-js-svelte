@@ -354,7 +354,9 @@ Our tokenizer honors both families, but only ever emits its own. For the PHP att
 
 The main pattern is to pre-fetch translations server-side and seed them through `initialTranslations` / `initialTranslationsLocale` so the client doesn't refetch on hydration.
 
-Be clear on what that buys you. `init()` runs in `onMount`, which does not execute during SSR, so **the server HTML renders base language** and the client corrects it at hydration. Seeding removes the client's _second_ catalog fetch and the flash that fetch caused — it does not server-render translated copy, and it does not give crawlers translated body text. For a translated `<title>` / `<meta>`, read `data.translations` directly on the server; the SSR guide shows how.
+Be clear on what that buys you. `init()` runs in `onMount`, which does not execute during SSR, so **the server HTML renders base language** and the client corrects it at hydration. Seeding removes the client's _second_ catalog fetch and the flash that fetch caused — it does not, on its own, server-render translated copy.
+
+If you need the server HTML itself translated, there is a second pattern: seed the catalog signals synchronously in a **layout component body**. `$t()` then resolves during SSR. It is safe because Svelte's server renderer cannot yield — a layout and its page render in one uninterrupted pass — measured clean across 400 concurrent requests, and it also removes the stale-locale flash a returning visitor would otherwise see. It must be the component body: seeding in a `hooks.server.js` hook bled 70 of 80 requests into the wrong language. Full detail, limits, and the failed-fetch case are in the SSR guide.
 
 📖 **See [README-SSR.md](./README-SSR.md)** for a complete SvelteKit walkthrough.
 
