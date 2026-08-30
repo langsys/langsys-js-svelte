@@ -416,7 +416,7 @@ The matcher tries exact match first (e.g. `en-US`), then language-only (`en` mat
 
 ### Waiting for translations to load
 
-When changing locale mid-session, you may want to re-run dependent code after the new translations arrive:
+When changing locale mid-session, you may want to re-run dependent code once the fetch has settled:
 
 ```svelte
 <script>
@@ -429,6 +429,16 @@ When changing locale mid-session, you may want to re-run dependent code after th
     });
 </script>
 ```
+
+> [!WARNING]
+> **This promise settling does not mean translations arrived.** It resolves identically
+> whether the catalog fetch succeeded or failed — on failure the SDK logs and returns
+> without writing a catalog, and the promise still resolves. It also resolves without
+> fetching at all when the locale is unchanged and within the 60-second cache window.
+> So treat it as "the attempt is over", not as "the translations are here". If your
+> callback depends on the new copy actually being present, check the catalog itself —
+> subscribe to `sTranslations` or `currentlyLoadedLocale` — rather than trusting the
+> promise.
 
 ## Migrating from v2.x
 

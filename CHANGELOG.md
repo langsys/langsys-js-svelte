@@ -1,3 +1,11 @@
+## 3.6.12 - 2026-08-30
+
+### Fixed (documentation)
+
+- **`translationsLoadingPromise` was documented as meaning "the new translations arrived". It does not.** Verified in the published `0.6.5` dist: `change()` awaits `getTranslations()`, whose error branch logs, calls `readyResolve()` and returns _before_ writing a catalog — so the promise resolves identically on success and on failure. It also resolves without any fetch when the locale is unchanged and within the 60-second cache window. Nothing about the promise settling distinguishes "loaded" from "failed and gave up". The README now says to treat it as "the attempt is over" and to check `sTranslations` / `currentlyLoadedLocale` if the callback actually depends on the copy being present. Raised by the React binding agent, who found the same overstatement in their own docs.
+
+---
+
 ## 3.6.11 - 2026-08-30
 
 ### Fixed (documentation)
