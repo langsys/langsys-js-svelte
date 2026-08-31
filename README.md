@@ -116,6 +116,23 @@ than fetching twice. A tag that isn't valid BCP 47 at all — `english`, `en-USA
 > origin server's IP, which must be allow-listed for the key, or every registration is
 > silently refused.
 
+### Where discoverable content should live
+
+**Put content you want discovered in `+page`, not `+layout`.**
+
+Content discovery records a miss **per URL**. A component in a layout does not remount on a
+client-side navigation, and nothing re-evaluates its `$t(...)` expressions — measured, not
+assumed: a layout phrase counted `+0` re-entries across a real navigation. So a phrase rendered
+in a layout is attributed to the **first** URL of the session and to no other.
+
+Nothing is broken by this and nothing is lost — the phrase registers, and the first URL is
+reported. But if you are relying on discovery to tell you which pages contain which content, a
+layout-level phrase will only ever name one of them. Page-level content re-enters on every
+navigation and is attributed correctly.
+
+This is a property of the framework's rendering model, not of the SDK, and it applies equally to
+any persistent component: a header, a nav, a footer, a shell.
+
 ## Using translations
 
 ### `$t(phrase, category?, params?)` — the everyday API

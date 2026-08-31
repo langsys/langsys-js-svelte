@@ -1,5 +1,20 @@
 ## Unreleased
 
+### Documentation
+
+- **Discoverable content belongs in `+page`, not `+layout`.** Discovery records a miss per URL,
+  and a layout does not remount on a client-side navigation — measured at **+0 re-entries** across
+  a real navigation, with the layout provably not remounted. So a layout-level phrase is attributed
+  to the first URL of the session and no other. Nothing is lost (the phrase registers, the first URL
+  is reported), but discovery cannot tell you which _other_ pages contain it. A property of the
+  rendering model rather than of the SDK, and equally true of any persistent component.
+
+- **`<DontTranslate>`'s `data-ls-dont-translate` attribute is inert and now says so.** Exclusion is
+  decided entirely by `translate="no"` — the base SDK's `isTranslationExcluded()` checks that and
+  `data-notrans`, and does not know the bespoke attribute at all. Documented as presentational with
+  a deprecation note rather than removed: this line is published and a `[data-ls-dont-translate]`
+  selector may exist in consumer CSS, so removal belongs to a release wave with its own entry.
+
 ### Fixed
 
 - **Locale canonicalization was documented backwards, in shipped source and in the README.**
