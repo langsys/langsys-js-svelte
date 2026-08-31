@@ -21,10 +21,10 @@
      *
      * The inline markup never reaches the translator — it's replaced with
      * neutral tokens and the real elements are reconstituted at render (see
-     * richtext.ts in the base SDK). The host carries `data-ls-phrase` so a
+     * richtext.ts in the base SDK). The host carries the core's `PHRASE_MARKER_ATTR` so a
      * wrapping <Translate> skips it and lets this handler own it.
      */
-    import { Phrase as VanillaPhrase, type ParamPrimitive } from 'langsys-js-typescript';
+    import { PHRASE_MARKER_ATTR, Phrase as VanillaPhrase, type ParamPrimitive } from 'langsys-js-typescript';
     import type { Snippet } from 'svelte';
     import { onDestroy } from 'svelte';
 
@@ -37,6 +37,16 @@
     }
 
     let { class: clazz = '', tag = 'span', category = '', params = {}, children }: Props = $props();
+
+    /**
+     * The skip marker, spread so the attribute NAME comes from the core rather
+     * than being restated here. `Translate`/`tokenizeElement` skip a marked
+     * subtree via `isPhraseMarked()`, which reads the core's own constant — so a
+     * hardcoded literal that drifted from it would stop this host being skipped,
+     * and the markup-bearing run would be tokenized in pieces. That is precisely
+     * the split `<Phrase>` exists to prevent, and it would fail silently.
+     */
+    const markerAttr = { [PHRASE_MARKER_ATTR]: '' };
 
     let host = $state<HTMLElement>();
     let instance: VanillaPhrase | undefined;
@@ -58,6 +68,6 @@
     });
 </script>
 
-<svelte:element this={tag} data-ls-phrase="" class={clazz} bind:this={host}>
+<svelte:element this={tag} {...markerAttr} class={clazz} bind:this={host}>
     {@render children?.()}
 </svelte:element>

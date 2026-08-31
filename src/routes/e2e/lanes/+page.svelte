@@ -55,6 +55,12 @@
 <div class="expect">
     <strong>writeEnabled:</strong>
     <span class="mono">{$writeEnabled === undefined ? 'undefined (unknown)' : String($writeEnabled)}</span>
+    <!--
+        Painted separately and bare, so a capability assertion can read what the USER sees
+        rather than what a store holds. A binding can carry a correct signal and still fail
+        to paint it; a suite that only reads stores cannot tell the two apart.
+    -->
+    <span class="mono" data-testid="we-rendered">{String($writeEnabled)}</span>
     <br />
     Expected: <code>read</code> → false · <code>ip_write</code> from loopback → true ·
     <code>write</code> → true. Never <code>false</code> as a stand-in for "not known yet".

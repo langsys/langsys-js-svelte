@@ -62,7 +62,11 @@ export { writeEnabled } from './stores.js';
 // API client (vanilla — no Svelte concerns)
 export { LangsysAppAPI } from 'langsys-js-typescript';
 
-// Locale canonicalization (vanilla) — BCP 47 casing, e.g. 'en-us' → 'en-US'.
+// Locale canonicalization (vanilla). Canonicalizes via `Intl.getCanonicalLocales`
+// and then LOWERCASES: 'en_us', 'en-US' and 'EN-us' all become 'en-us'. Lowercase
+// is the wire form the spec requires (WIRE-3) and the form used internally for
+// cache keys and equality, so 'en-US' from a host app's locale store resolves to
+// the same entry rather than fetching twice.
 export { canonicalizeLocale } from 'langsys-js-typescript';
 
 // Components

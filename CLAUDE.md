@@ -88,6 +88,25 @@ SvelteKit: a universal `load` re-runs on the client and is awaited _before_ moun
 The wrapper changes only _when_ the value is observable, never what it is. See
 `src/lib/stores.test.ts`.
 
+## Commit conventions
+
+**Do not add `Co-Authored-By:` or `Claude-Session:` trailers to commits in this repo.** Fleet
+convention across the Langsys SDKs; the history here should read as the project's, not as a
+record of which tool produced it. Applies to every commit, including WIP.
+
+## Conformance
+
+`CONFORMANCE.md` maps this binding to the published SDK behaviour spec
+(`langsys2:docs/sdk-spec.mdx`), rule id → grade → evidence. Two norms are load-bearing and easy
+to erode:
+
+- **Nothing mock-evidenced grades `implemented`** (CONF-2). This repo's integration suite is
+  `live` — real browser, real base SDK, real API — which is why its rows can reach that grade.
+  If the suite is ever doubled, the grades move down with it.
+- **Every `delegated` row states a non-zero count for the control that would have found
+  participation.** "We found nothing" is worthless unless the same search demonstrably finds
+  something where it does live.
+
 ## Essential commands
 
 - `npm run dev` — Vite dev server with the demo at `src/routes/+page.svelte`. Needs `.env` with `VITE_LANGSYS_PROJECT_ID` and `VITE_LANGSYS_API_KEY` (see `.env.example`).

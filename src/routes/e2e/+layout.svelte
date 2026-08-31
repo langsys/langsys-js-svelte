@@ -1,6 +1,27 @@
 <script lang="ts">
     import type { Snippet } from 'svelte';
     import { page } from '$app/state';
+    import { t } from '$lib/index.js';
+
+    /**
+     * Re-entry probe for BIND-5. The core records a discovery miss PER URL, before
+     * its registration dedup — so whether a phrase rendered in a persistent
+     * component re-enters `t()` on a client-side navigation decides whether that
+     * phrase is ever attributed to the second URL.
+     *
+     * Angular's pipe memo suppressed exactly this. Svelte has no memo in the path,
+     * but "no memo" and "re-enters" are different claims: a layout does not remount
+     * across navigation, so re-entry depends on Svelte's own invalidation, not on us.
+     * Counted rather than assumed. Exposed on `window` for the harness to read.
+     */
+    let reentryCount = 0;
+    function countedT(phrase: string, category: string): string {
+        reentryCount += 1;
+        if (typeof window !== 'undefined') {
+            (window as unknown as Record<string, unknown>).__lsReentry = reentryCount;
+        }
+        return $t(phrase, category);
+    }
 
     let { children }: { children: Snippet } = $props();
 
@@ -42,6 +63,8 @@
             {/each}
         </nav>
     </header>
+    <!-- Rendered in the LAYOUT, so it survives client-side navigation without remounting. -->
+    <p class="mono muted" data-testid="layout-phrase">{countedT('E2E 838 · layout · persistent phrase', 'E2E838')}</p>
     {@render children()}
 </div>
 

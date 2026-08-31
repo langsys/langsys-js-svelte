@@ -1,5 +1,28 @@
 ## Unreleased
 
+### Fixed
+
+- **Locale canonicalization was documented backwards, in shipped source and in the README.**
+  `src/lib/index.ts` and `README.md` both said `canonicalizeLocale` produces `en-US`. It produces
+  **`en-us`** — `Intl.getCanonicalLocales()` followed by `.toLowerCase()`, on both the valid and
+  the invalid-tag branch. Lowercase is the wire form the SDK spec requires (WIRE-3) and the form
+  used internally for cache keys and equality, so a host store holding `en-US` resolves to the
+  same catalog entry rather than fetching twice.
+
+    Found by calling the function, not by re-reading either the doc or the code — the same way two
+    sibling SDKs found the identical defect in a test double and a docstring. Now pinned by
+    `src/lib/locale.test.ts`, which asserts against the **re-exported function**; a fixture that
+    restated the expected casing would have agreed with the wrong doc perfectly.
+
+    The 3.2.0 entry below still contains the old claim. It is left as released history rather than
+    rewritten — correcting a shipped section is the defect corrected earlier on this branch.
+
+- **`<Phrase>` hardcoded the core's marker attribute.** The host emitted the literal
+  `data-ls-phrase`. `Translate` skips a marked subtree via the core's `isPhraseMarked()`, which
+  reads the core's own constant — so a literal that drifted from it would have stopped the host
+  being skipped and split a markup-bearing run, silently, which is precisely what `<Phrase>`
+  exists to prevent. The attribute **name** now comes from the imported `PHRASE_MARKER_ATTR`.
+
 ### Added
 
 - **Write-key gating and content discovery (838).** Public API keys are read-only. Whether a

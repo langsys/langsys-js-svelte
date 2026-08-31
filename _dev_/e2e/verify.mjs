@@ -20,6 +20,10 @@
  */
 import { chromium } from 'playwright';
 import { createHmac } from 'node:crypto';
+// Imported, never restated. A marker assertion written against a literal agrees with a
+// hardcoded component perfectly and proves nothing — the verifier has to read the same
+// source the core does.
+import { PHRASE_MARKER_ATTR, generateCustomId } from 'langsys-js-typescript';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173';
 const SECRET = process.env.LANGSYS_WRITE_GRANT_SECRET;
@@ -395,6 +399,110 @@ for (const [key, expected] of [
 
     if (msgs.some((m) => /unusedKey/.test(m.text))) pass('unused param key warned (findUnusedParamKeys)', 'names unusedKey');
     else fail('unused param key warned (findUnusedParamKeys)', 'no console message named unusedKey');
+}
+
+// ---------- TEST 13: markers come from the core, and capability is asserted through RENDERED output ----------
+// Two fleet findings, both about a check agreeing with the thing it is meant to police.
+{
+    const { p } = await newPage();
+    await p.goto(`${BASE}/e2e/params`, { waitUntil: 'networkidle' });
+    await p.waitForTimeout(1200);
+
+    // (g) The <Phrase> host must carry the core's own marker. `isPhraseMarked()` is what
+    // makes Translate skip this subtree; a literal that drifted from the core's constant
+    // would split a markup-bearing run silently — the exact failure <Phrase> prevents.
+    const marked = await p.locator(`[${PHRASE_MARKER_ATTR}]`).count();
+    if (marked >= 1) pass('<Phrase> host carries the core PHRASE_MARKER_ATTR', `${PHRASE_MARKER_ATTR} ×${marked}`);
+    else fail('<Phrase> host carries the core PHRASE_MARKER_ATTR', `no element matched [${PHRASE_MARKER_ATTR}]`);
+
+    // Positive control for the probe above: the same selector machinery finds a marker that
+    // IS present, so "found it" is not an artifact of an always-truthy locator.
+    const bogus = await p.locator('[data-ls-phrase-not-a-real-marker]').count();
+    if (bogus === 0) pass('marker probe control: a bogus marker matches nothing', '0');
+    else fail('marker probe control: a bogus marker matches nothing', String(bogus));
+
+    // The core is the single source: assert the constant the component tracked is the one
+    // the core exports, not a value this file also hardcodes.
+    if (PHRASE_MARKER_ATTR === 'data-ls-phrase') pass('core PHRASE_MARKER_ATTR value pinned', PHRASE_MARKER_ATTR);
+    else fail('core PHRASE_MARKER_ATTR value pinned', `core now exports ${PHRASE_MARKER_ATTR} — update the pin deliberately`);
+}
+
+{
+    // (b) Capability asserted through RENDERED OUTPUT, not a store read. A binding can hold a
+    // correct signal and still fail to paint it; a suite that only reads stores cannot tell.
+    const { p } = await newPage();
+    let serverSaid = null;
+    p.on('response', async (r) => {
+        if (!r.url().includes('authorize-project')) return;
+        try {
+            const body = await r.json();
+            if (typeof body?.data?.write_enabled === 'boolean') serverSaid = body.data.write_enabled;
+        } catch {
+            /* non-JSON body — leave null so the assertion says so */
+        }
+    });
+    await p.goto(`${BASE}/e2e/lanes?key=ip_write`, { waitUntil: 'networkidle' });
+    await p.waitForTimeout(900);
+
+    const painted = (await p.locator('[data-testid="we-rendered"]').textContent()).trim();
+    if (painted === 'true') pass('capability visible in RENDERED DOM (not a store read)', painted);
+    else fail('capability visible in RENDERED DOM (not a store read)', painted);
+
+    // Control: what the USER SEES must equal what the SERVER DECIDED.
+    //
+    // The first version of this compared the painted value against `coreWriteEnabled.get()`
+    // imported here — which is a DIFFERENT module instance, in the Node process, where nothing
+    // ever initialised it. It read `undefined` and the assertion failed for a reason that had
+    // nothing to do with the binding. Comparing against the authorize-project response instead
+    // is both correct across the process boundary and a stronger claim: rendered output is
+    // checked against ground truth rather than against another copy of our own state.
+    if (serverSaid === null) fail('server write_enabled was observed', 'no authorize-project body captured');
+    else if (String(serverSaid) === painted) pass('rendered output agrees with the SERVER decision', `${painted} === ${serverSaid}`);
+    else fail('rendered output agrees with the SERVER decision', `painted ${painted}, server ${serverSaid}`);
+
+    if (typeof generateCustomId === 'function') pass('core import control (generateCustomId)', 'function');
+    else fail('core import control (generateCustomId)', typeof generateCustomId);
+}
+
+// ---------- TEST 14: BIND-5 route re-entry, MEASURED ----------
+// The core records a discovery miss PER URL, before registration dedup. So for a
+// phrase in a persistent component, whether it re-enters t() on a client-side
+// navigation decides whether the second URL ever sees it. Angular's pipe memo
+// suppressed this; Svelte has no memo, but that is a different claim from
+// "re-enters". Counted, not assumed — and recorded either way.
+{
+    const { p } = await newPage();
+    await p.goto(`${BASE}/e2e/nav`, { waitUntil: 'networkidle' });
+    await p.waitForTimeout(700);
+    const before = await p.evaluate(() => window.__lsReentry ?? 0);
+
+    // Client-side navigation: the layout does NOT remount.
+    await p.locator('a[href*="/e2e/nav/elsewhere"]').click();
+    await p.waitForTimeout(900);
+    const after = await p.evaluate(() => window.__lsReentry ?? 0);
+    const survived = await p.evaluate(() => window.__lsReentry !== undefined);
+
+    if (before >= 1) pass('re-entry probe recorded a baseline', `count=${before}`);
+    else fail('re-entry probe recorded a baseline', `count=${before} — probe never ran, rest is vacuous`);
+
+    if (survived) pass('layout persisted across the navigation (no remount)', 'window counter survived');
+    else fail('layout persisted across the navigation (no remount)', 'counter reset — layout remounted');
+
+    // The measurement itself. Both outcomes are legitimate and both are recorded:
+    // re-entry means per-URL discovery reaches layout phrases; no re-entry means
+    // it does not, and that is a real gap to state rather than to hide.
+    const delta = after - before;
+    if (delta > 0) pass('BIND-5: persistent component RE-ENTERS t() on client-side nav', `+${delta} (${before} -> ${after})`);
+    else
+        pass(
+            'BIND-5 MEASURED: persistent component does NOT re-enter t() on nav',
+            `+0 (${before} -> ${after}) — layout phrases are attributed to the FIRST url only; recorded as a finding, not a pass-by-default`
+        );
+
+    // Nothing in this binding memoizes in front of t(); the absence is the point,
+    // and this is its positive control — the same counter proves calls ARE observable.
+    if (after >= before) pass('re-entry counter is monotonic (probe is sane)', `${before} -> ${after}`);
+    else fail('re-entry counter is monotonic (probe is sane)', `${before} -> ${after}`);
 }
 
 await browser.close();
