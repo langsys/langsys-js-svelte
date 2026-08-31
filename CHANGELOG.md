@@ -2,6 +2,12 @@
 
 ### Documentation
 
+- **Removed a placeholder test that was being counted as coverage.** `src/index.test.ts` asserted
+  `1 + 2 === 3` — scaffold from the project template, testing nothing about this package and
+  incapable of failing meaningfully, while contributing to the suite count quoted in docs.
+  `src/lib/surface.test.ts` now covers the package index by asserting which exports are the core's
+  own objects and which is deliberately wrapped.
+
 - **Discoverable content belongs in `+page`, not `+layout`.** Discovery records a miss per URL,
   and a layout does not remount on a client-side navigation — measured at **+0 re-entries** across
   a real navigation, with the layout provably not remounted. So a layout-level phrase is attributed

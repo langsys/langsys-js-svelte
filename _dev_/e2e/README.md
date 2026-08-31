@@ -41,15 +41,16 @@ jitter window twice over — see below.
 
 ## What it covers
 
-**39 assertions** (34 static call sites; TEST 2 loops over three keys and TEST 9 over
-four grant cases): hydration safety, the read/ip_write/write gate matrix, cross-origin
+**49 assertions** (TEST 2 loops over three keys, TEST 9 over four grant cases; the rest are
+straight-line): hydration safety, the read/ip_write/write gate matrix, cross-origin
 requests and `X-Write-Grant` preflight, grant validity (valid / expired / no-`exp` /
 none, all self-minted), the Svelte store form of `writeGrant`, server **acceptance** of
 registrations, the three visibility shapes, params/interpolation and `<Phrase>`,
 client-side navigation and shallow routing, and hint URL attribution.
 
-Re-run before quoting that number — it is the count the harness prints, not one derived
-by reading the source.
+Re-run before quoting that number — it is the count the harness prints, not one derived by
+reading the source. This paragraph said **39** for one commit _after_ the suite reached 49,
+in the same commit that raised it: the instruction was here and was not followed.
 
 ### Two things that are easy to get wrong when editing this
 

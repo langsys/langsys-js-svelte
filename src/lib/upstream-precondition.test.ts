@@ -14,6 +14,17 @@ import * as core from 'langsys-js-typescript';
  * It asserts symbol PRESENCE AND TYPE — `typeof` rather than truthiness, since
  * an `undefined` export and a missing one are indistinguishable to a bare check.
  *
+ * **Mutating this correctly is fiddly, and the first attempt produced the wrong
+ * red.** Pointing the symlink at an extracted registry tarball with its own nested
+ * `node_modules` made the file fail to COLLECT — `Cannot find package
+ * '@formatjs/fast-memoize'` — so vitest reported "1 failed, no tests" and the
+ * positive control never ran. That is red, but it is the red that cannot tell a
+ * missing surface from a broken bench, which is the one distinction this file
+ * exists to draw. Place the registry build INSIDE `node_modules` (e.g.
+ * `node_modules/.registry-x/package`) so module resolution walks up to the real
+ * transitive deps; then the failure is three symbol assertions with the control
+ * PASSING.
+ *
  * The positive control is the point: `generateCustomId` ships in every published
  * version. If it is absent the package did not load at all, and the failure is a
  * broken bench rather than a wrong one — a distinction worth reading off the
