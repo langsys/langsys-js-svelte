@@ -3,7 +3,8 @@
  *
  * Public API:
  *   - `LangsysApp` (init accepts a Svelte `Writable<string>` for userLocale)
- *   - `t` — `Readable<TFunction>`. Use `{$t('Phrase', 'Cat', { name })}` in templates.
+ *   - `t` — `Signal<TFunction>`; read it, never write it. Its `subscribe` fires
+ *     immediately, so use `{$t('Phrase', 'Cat', { name })}` in templates.
  *   - `currentlyLoadedLocale`, `sTranslations` — `Signal<T>`, which satisfies
  *     Svelte's `Readable` contract, so read them with `$store` syntax. They are
  *     also WRITABLE (`.set()`), and the SSR guide's server-rendering pattern

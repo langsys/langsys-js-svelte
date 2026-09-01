@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 README.md                         # ships in the tarball
-README-SSR.md                     # GitHub-only; SSR patterns, incl. the component-body seed
+README-SSR.md                     # ships in the tarball (since 3.6.15); SSR patterns, incl. the component-body seed
 src/lib/
     index.ts                      # public exports — LangsysApp wrapper, t store, components, type re-exports
     adapters.ts                   # writable<T> → Signal<T> adapter (svelte/store get → .get())
@@ -120,7 +120,7 @@ The three trust-handshake strings must stay in sync, or CI will fail at the publ
 
 - **`sTranslations` / `currentlyLoadedLocale` are writable, process-global signals, and `README-SSR.md` documents writing to them.** Seeding them synchronously in a layout component body is what makes `$t()` resolve during SSR — measured clean at 400 concurrent requests, because Svelte's default server renderer completes a page in one uninterrupted synchronous pass. That safety is narrower than it looks: seeding anywhere that `await`s before rendering (a `hooks.server.js` hook, an async server module) bled 70/80 requests into the wrong language, and `compilerOptions.experimental.async` switches Svelte to a renderer that yields mid-tree, which removes the guarantee entirely. Do not restate or extend that guidance without re-measuring — the numbers are in the CHANGELOG for 3.6.11 and 3.6.13.
 
-- **Docs that ship:** `README.md` and the `src/lib/**` JSDoc go into the npm tarball (the JSDoc is what IDE hover shows); `README-SSR.md` and `CHANGELOG.md` are GitHub-only. A fix to a shipped doc only reaches npmjs.com on publish.
+- **Docs that ship:** `README.md`, `README-SSR.md`, and the `src/lib/**` JSDoc go into the npm tarball (the JSDoc is what IDE hover shows); `CHANGELOG.md` is GitHub-only. `README-SSR.md` is listed in `files` — it did not ship before 3.6.15, which left `README.md` pointing at a document installed users did not have, and the failed-fetch reset rule reachable only from GitHub. A fix to a shipped doc only reaches npmjs.com on publish.
 
 - **Do not reimplement base-SDK behavior here.** API client, lookup logic, missing-token flow, persistence, SSR strategies all belong in `langsys-js-typescript`. If you need to extend any of that, the change goes in the base package and we re-export.
 - **Keep `<Translate>` to mount/destroy glue.** The DOM walking lives in the vanilla `Translate` class in `langsys-js-typescript`. Don't fork the tokenizer here.

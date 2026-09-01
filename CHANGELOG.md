@@ -1,3 +1,15 @@
+## 3.6.15 - 2026-09-01
+
+### Fixed (documentation, packaging)
+
+- **`README-SSR.md` was not in the npm tarball.** `files` listed only `dist`, and npm auto-adds `README.md` alone — so the shipped README pointed at `./README-SSR.md`, a document an installed user did not have. That guide is where the failed-fetch reset rule lives, which made the reachable path: install, read the README, implement the body seed correctly, and never encounter the condition that stops a failing locale rendering in the previous request's language. `README-SSR.md` is now listed in `files`, verified against `npm pack`, and the reset rule is inlined into `README.md` as well so the pattern cannot ship without its safety condition.
+
+- **The "Reactive stores" table contradicted the SSR section ten lines below it.** It typed `currentlyLoadedLocale` and `sTranslations` as `Readable<T>` and annotated the catalog "Rarely needed in app code" — while the next section describes seeding that exact store as the whole mechanism for server-rendering translated copy. Both are `Signal<T>` with a public `.set()` (verified against the `langsys-js-typescript@0.6.5` tarball). The table now types them accurately, notes they are writable and process-global, and explains that `Signal` satisfies Svelte's `Readable` contract so `$store` still works. 3.6.14 corrected this same claim in the `index.ts` JSDoc and `CLAUDE.md` and missed the README table; the `t` row's type is corrected here too, with "never write to it" stated rather than implied by a narrower type.
+
+- Both defects were found by the Langsys skill agent diffing the published tarball against its own SvelteKit guidance. It had carried the identical `Readable` / "rarely needed" annotation, and reports that single line hid the seeding path from it for months.
+
+---
+
 ## 3.6.14 - 2026-08-30
 
 ### Fixed (documentation)
