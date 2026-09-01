@@ -3,7 +3,8 @@
  *
  * Public API:
  *   - `LangsysApp` (init accepts a Svelte `Writable<string>` for userLocale)
- *   - `t` — `Readable<TFunction>`. Use `{$t('Phrase', 'Cat', { name })}` in templates.
+ *   - `t` — `Signal<TFunction>`; read it, never write it. Its `subscribe` fires
+ *     immediately, so use `{$t('Phrase', 'Cat', { name })}` in templates.
  *   - `currentlyLoadedLocale`, `sTranslations` — `Signal<T>`, which satisfies
  *     Svelte's `Readable` contract, so read them with `$store` syntax. They are
  *     also WRITABLE (`.set()`), and the SSR guide's server-rendering pattern
@@ -50,9 +51,10 @@ import {
 import type { Readable, Writable } from 'svelte/store';
 import { adaptStore, adaptWriteGrant, type WriteGrantSource } from './adapters.js';
 
-// Stores — the underlying Signals already satisfy Svelte's Readable contract.
-// We re-export them under Svelte-native types so IDE hovers and consumers see
-// the familiar shape.
+// Stores — re-exported unchanged. They are `Signal<T>`, which is what an IDE
+// hover shows; `Signal` structurally satisfies Svelte's `Readable` contract, so
+// `$store` syntax works with no adapter. Two of them are also writable — see the
+// JSDoc above and README-SSR.md before writing to them.
 export { currentlyLoadedLocale, sTranslations, tSignal as t } from 'langsys-js-typescript';
 
 // `writeEnabled` is the one store we do NOT re-export by reference — reading the
@@ -193,6 +195,16 @@ export const LangsysApp = new Proxy(_LangsysApp, {
     },
 }) as unknown as LangsysAppSvelte;
 
-// Narrow type for the `t` re-export so consumers see it as a Svelte Readable.
-// (The Signal implementation under the hood is structurally compatible.)
+/**
+ * Read-only Svelte view of the `t` store.
+ *
+ * Note this is NOT the type of the `t` export — `t` is `Signal<TFunction>`, and
+ * that is what an IDE hover shows. `Signal` is structurally assignable to
+ * `Readable`, so this alias is a convenience for consumers who want to accept
+ * `t` under a Svelte-native type. Prefer `Signal<TFunction>` when you mean `t`.
+ */
 export type TStore = Readable<TFunction>;
+
+// `Signal<T>` is the actual type of the three store exports. Re-exported so
+// consumers can name it without reaching into `langsys-js-typescript`.
+export type { Signal } from 'langsys-js-typescript';

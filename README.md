@@ -18,7 +18,7 @@ Integrate the Langsys Translation Manager into your Svelte and SvelteKit applica
 
 > The last version supporting Svelte 3 / 4 (client-side only) is tagged `v-last-svelte4-compat` (`1.2.1`).
 >
-> The last version with the `$_['Category']['Token']` proxy access pattern (Svelte 5) is tagged `v-last-proxy-compat` (`2.0.0`). v3 replaces it with `$t(phrase, category?, params?)` — see the [3.0.0 CHANGELOG](./CHANGELOG.md) for migration notes.
+> The last version with the `$_['Category']['Token']` proxy access pattern (Svelte 5) is tagged `v-last-proxy-compat` (`2.0.0`). v3 replaces it with `$t(phrase, category?, params?)` — see the [3.0.0 CHANGELOG](https://github.com/langsys/langsys-js-svelte/blob/main/CHANGELOG.md) for migration notes.
 
 ## How it's layered
 
@@ -378,12 +378,19 @@ Our tokenizer honors both families, but only ever emits its own. For the PHP att
 
 ## Reactive stores
 
-| Export                  | Type                             | Notes                                                                                                  |
-| ----------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `t`                     | `Readable<TFunction>`            | Re-emits whenever translations or locale change. Use as `$t('Phrase', 'Cat')`.                         |
-| `currentlyLoadedLocale` | `Readable<string>`               | The locale whose translations are currently loaded (lags `UserLocaleStore` until the fetch completes). |
-| `sTranslations`         | `Readable<iCategories>`          | Raw translation catalog. Rarely needed in app code.                                                    |
-| `writeEnabled`          | `Readable<boolean \| undefined>` | Whether the server has granted this session permission to register content. **Tri-state** — see below. |
+| Export                  | Type                             | Notes                                                                                                                                                 |
+| ----------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `t`                     | `Signal<TFunction>`              | Re-emits whenever translations or locale change. Use as `$t('Phrase', 'Cat')`. Never write to it.                                                     |
+| `currentlyLoadedLocale` | `Signal<string>`                 | The locale whose translations are currently loaded (lags `UserLocaleStore` until the fetch completes).                                                |
+| `sTranslations`         | `Signal<iCategories>`            | The raw translation catalog.                                                                                                                          |
+| `writeEnabled`          | `Readable<boolean \| undefined>` | Whether the server has granted this session permission to register content. **Tri-state**, and the one store that is genuinely READ-ONLY — see below. |
+
+`Signal<T>` structurally satisfies Svelte's `Readable<T>` contract — `subscribe` fires
+immediately — so you read all three with `$store` syntax and no adapter.
+
+`currentlyLoadedLocale` and `sTranslations` are also **writable**: `.set()` is public, and
+they are process-global. That is not a detail to route around — writing them is the
+documented mechanism for server-rendering translated copy, described next.
 
 ### `writeEnabled` and write grants
 
@@ -442,7 +449,17 @@ The main pattern is to pre-fetch translations server-side and seed them through 
 
 Be clear on what that buys you. `init()` runs in `onMount`, which does not execute during SSR, so **the server HTML renders base language** and the client corrects it at hydration. Seeding removes the client's _second_ catalog fetch and the flash that fetch caused — it does not, on its own, server-render translated copy.
 
-If you need the server HTML itself translated, there is a second pattern: seed the catalog signals synchronously in a **layout component body**. `$t()` then resolves during SSR. It is safe because Svelte's server renderer cannot yield — a layout and its page render in one uninterrupted pass — measured clean across 400 requests with 8 locales in flight together, and it also removes the stale-locale flash a returning visitor would otherwise see. It must be the component body: seeding in a `hooks.server.js` hook bled 70 of 80 requests into the wrong language. Full detail, limits, and the failed-fetch case are in the SSR guide.
+If you need the server HTML itself translated, there is a second pattern: seed the catalog signals synchronously in a **layout component body**. `$t()` then resolves during SSR. It is safe because Svelte's server renderer, **in its default mode**, cannot yield — a layout and its page render in one uninterrupted pass — measured clean across 400 requests with 8 locales in flight together, and it also removes the stale-locale flash a returning visitor would otherwise see. It must be the component body: seeding in a `hooks.server.js` hook bled 70 of 80 requests into the wrong language.
+
+Three conditions ride along with that pattern, and none of them is optional:
+
+- **Seed on every request, unconditionally.** The signals are process-global and, during SSR, the layout body is the only write — so a request that skips the seed renders with whatever the _previous_ request left behind. That is how Italian gets served under `<html lang="es-ES">`.
+- **A failed catalog fetch must fall back to `{}` in `load`, never `null` or `undefined`.** `$t()` reads `catalog[category][phrase]` and the optional chain is on the _second_ hop, so a nullish catalog throws on the first lookup: a 500 during SSR, and the same throw again at hydration. An empty object falls back to base language, which is what you want.
+- **Keep Svelte's default synchronous SSR.** `compilerOptions.experimental.async` switches to a renderer that awaits mid-tree, which voids the guarantee this whole pattern rests on — the same cross-request bleeding as the hook placement, reintroduced by a config flag with no change to any component.
+
+The two failure modes are not equally visible, which is the part worth planning around. A **skipped seed** is invisible from a cold process: with nothing cached yet it falls back to base language and looks correct, so it only appears once the process is warm — test it warm. A **nullish catalog** is the opposite, a 500 on the first lookup, but only once a catalog fetch actually fails, which is rarely the day you ship.
+
+Full detail, the measurements behind those numbers, and the SEO and troubleshooting consequences are in the SSR guide.
 
 📖 **See [README-SSR.md](./README-SSR.md)** for a complete SvelteKit walkthrough.
 
@@ -544,7 +561,7 @@ When changing locale mid-session, you may want to re-run dependent code once the
 
 ## Migrating from v2.x
 
-The v2.x proxy-based API was replaced in v3.0.0 with `$t()`. See [CHANGELOG.md](./CHANGELOG.md) for the full diff.
+The v2.x proxy-based API was replaced in v3.0.0 with `$t()`. See the [CHANGELOG](https://github.com/langsys/langsys-js-svelte/blob/main/CHANGELOG.md) for the full diff.
 
 Quick conversion:
 

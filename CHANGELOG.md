@@ -113,6 +113,57 @@
 
 ---
 
+## 3.6.17 - 2026-09-01
+
+### Changed (documentation)
+
+- **The `experimental.async` caution is now measured rather than reasoned, and the flag alone turns out not to be the trigger.** 3.6.13 through 3.6.16 asserted that turning on `compilerOptions.experimental.async` "switches the renderer to an async path that genuinely awaits mid-tree" and so reintroduces cross-request bleeding. That was derived from reading the renderer, not from a run — and an earlier harness had measured 0 bleeds with the flag on, which looked like a contradiction. Both were right about different shapes. Measured on Svelte 5.55.8 with four locales rendering concurrently:
+
+    | Shape                                         | `experimental.async` | Wrong-locale responses |
+    | --------------------------------------------- | -------------------- | ---------------------- |
+    | No `await` in the tree                        | off                  | 0 / 4                  |
+    | No `await` in the tree                        | on                   | 0 / 4                  |
+    | `await` in a parent's script, read in a child | on                   | 0 / 4                  |
+    | `await` then read **in the same script**      | on                   | **3 / 4**              |
+
+    The compiler hoists an await into `$$renderer.run([...])` and keeps rendering children synchronously, so an await in a parent with the read in a child does not break anything — that is what the earlier 0 measured, with the flag genuinely on (the compiled output imports `svelte/internal/flags/async`, and the same source fails to compile without it: `experimental_async`). What breaks it is the read landing _after_ the await in the same closure, which Svelte defers into the async continuation. The caution now states that condition instead of blaming the flag, and keeps the conclusion: with the flag on, the pattern is not safe.
+
+- The earlier claim that "there is no component-tree construction in Svelte that puts an await between the seed and the read" was false, and is the reason the weaker conclusion held for four releases. The shape that does it is the most natural one to write.
+
+---
+
+## 3.6.16 - 2026-09-01
+
+### Fixed (documentation, types)
+
+Six defects in 3.6.15, found by a correctness review of that commit. The release that inlined a safety condition so it could not be missed introduced a sentence denying it.
+
+- **`README.md` contradicted itself two lines apart.** The new SSR block ended "Both failures are invisible from a cold process — with nothing cached yet, the bad request falls back to base language and looks correct" — directly under a bullet stating that a nullish catalog throws "a 500 during SSR, and the same throw again at hydration". A 500 on the first request is the loudest signal there is. `README-SSR.md` scopes that invisibility to the skipped-seed case only; generalizing it to "both" while inlining inverted it. A reader would conclude the null-catalog case needs warm load testing to detect, and deprioritize the `?? {}` guard the bullet exists to sell. The two failure modes are now described separately, with the asymmetry stated: a skipped seed is silent until the process is warm, a nullish catalog is loud but only once a fetch actually fails.
+
+- **The inlined conditions were presented as exhaustive, and the pointer to the ones left out was deleted in the same edit.** "Two conditions ride along with that pattern, and neither is optional" omitted the third, which `CLAUDE.md` records as voiding the guarantee entirely: `compilerOptions.experimental.async`. `README.md` still said flatly that the server renderer "cannot yield" while `README-SSR.md` — now shipping beside it in the same tarball — says a one-line config change makes it await mid-tree. Now three conditions, "in its default mode" restored to the safety claim, and the pointer to the guide's full limits put back.
+
+- **The store table named a type consumers cannot import.** `Signal<T>` was not in `index.ts`'s type re-exports, so `import type { Signal } from 'langsys-js-svelte'` failed with TS2305 against the published 3.6.15 — verified by compiling against both tarballs. The previous `Readable<T>` was at least importable from `svelte/store`. This also broke this repo's own rule that consumers should not reach into `langsys-js-typescript` for routine types. `Signal` is now re-exported. `docs-api-coverage.mjs` did not catch it: it validates names in code fences, not types named in prose or tables.
+
+- **`README-SSR.md` shipped pointing at two files that do not.** It told installed users to "see `CLAUDE.md`" (a maintainer-only file, which also leaked its existence to consumers) and to consult `CHANGELOG.md` for breaking changes. The same defect the release was fixing, recreated by the fix. Also corrected two long-standing dead `./CHANGELOG.md` links in `README.md` itself — the doc that always shipped had carried them the whole time. All now absolute GitHub URLs.
+
+- **The failed-fetch sample was not runnable.** Bare statements under a `+layout.server.ts` header with no enclosing `load`, calling an undefined `fetchCatalog`. Rewritten as a real `load` that mirrors Step 1's — including `response.ok`, since a non-2xx is not an exception and would otherwise put `undefined` into the catalog by the path the section warns about. The first rewrite of it dropped `projectId`/`apiKey` from the return, which lines further down read; caught before commit, and it is the same defect class that shipped in 3.6.11.
+
+- **`index.ts` still asserted the corrected claim.** The comment above the store exports said they are "re-exported under Svelte-native types so IDE hovers and consumers see the familiar shape" — no re-typing happens, hovers show `Signal<T>`. And the shipped `TStore = Readable<TFunction>` was documented as "the narrow type for the `t` re-export so consumers see it as a Svelte Readable", which it is not, since it is not applied to `t`. `TStore` is unchanged (removing a public type is breaking) but now documents what it actually is.
+
+---
+
+## 3.6.15 - 2026-09-01
+
+### Fixed (documentation, packaging)
+
+- **`README-SSR.md` was not in the npm tarball.** `files` listed only `dist`, and of the docs npm auto-adds only `README.md` (alongside `LICENSE` and `package.json`) — so the shipped README pointed at `./README-SSR.md`, a document an installed user did not have. That guide is where the failed-fetch reset rule lives, which made the reachable path: install, read the README, implement the body seed correctly, and never encounter the condition that stops a failing locale rendering in the previous request's language. `README-SSR.md` is now listed in `files`, verified against `npm pack`, and the reset rule is inlined into `README.md` as well. (3.6.16 corrects the overreach in that last clause: only two of the pattern's three conditions were inlined.)
+
+- **The "Reactive stores" table contradicted the SSR section ten lines below it.** It typed `currentlyLoadedLocale` and `sTranslations` as `Readable<T>` and annotated the catalog "Rarely needed in app code" — while the next section describes seeding that exact store as the whole mechanism for server-rendering translated copy. Both are `Signal<T>` with a public `.set()` (verified against the `langsys-js-typescript@0.6.5` tarball). The table now types them accurately, notes they are writable and process-global, and explains that `Signal` satisfies Svelte's `Readable` contract so `$store` still works. 3.6.14 corrected this same claim in the `index.ts` JSDoc and `CLAUDE.md` and missed the README table; the `t` row's type is corrected here too, with "never write to it" stated rather than implied by a narrower type.
+
+- Both defects were found by the Langsys skill agent diffing the published tarball against its own SvelteKit guidance. It had carried the identical `Readable` / "rarely needed" annotation, and reports that single line hid the seeding path from it for months.
+
+---
+
 ## 3.6.14 - 2026-08-30
 
 ### Fixed (documentation)

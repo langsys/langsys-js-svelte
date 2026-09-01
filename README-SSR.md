@@ -247,11 +247,27 @@ Measured on a production `adapter-node` build, 8 locales in flight together:
 > **This depends on Svelte's default synchronous SSR, and one config flag removes it.**
 > `render()` from `svelte/server` returns a `RenderOutput` — an object carrying
 > `body`/`head`, which is also a thenable. In the default mode it is fully populated
-> synchronously. Turning on `compilerOptions.experimental.async` switches the renderer
-> to an async path that genuinely awaits mid-tree, and SvelteKit awaits the result
-> accordingly. That is a one-line config change with no change to your components, and
-> it reintroduces exactly the cross-request bleeding this section says cannot happen.
-> If you enable it, this pattern is no longer safe and you need request-scoped state.
+> synchronously. Turning on `compilerOptions.experimental.async` lets you write a
+> component that awaits, and if the `$t()` read lands after that await, the seed and
+> the read are no longer in one pass. **Measured on Svelte 5.55.8, four locales
+> rendering concurrently:**
+>
+> | Shape                                         | `experimental.async` | Wrong-locale responses |
+> | --------------------------------------------- | -------------------- | ---------------------- |
+> | No `await` in the tree                        | off                  | 0 / 4                  |
+> | No `await` in the tree                        | on                   | 0 / 4                  |
+> | `await` in a parent's script, read in a child | on                   | 0 / 4                  |
+> | `await` then read **in the same script**      | on                   | **3 / 4**              |
+>
+> So the flag alone does not break the pattern — the compiler hoists an await into
+> `$$renderer.run(…)` and keeps rendering children synchronously, which is why the
+> first three rows are clean. What breaks it is an await with the read positioned
+> _after_ it in the same closure, because Svelte then defers the read into the async
+> continuation, by which time another request has re-seeded the process globals. That
+> is also the most natural way to write it — `const data = await something;` and then
+> read — and the failures converge on whichever request seeded last rather than
+> scattering, so sampling a few responses looks like a config error. If you enable the
+> flag, this pattern is no longer safe and you need request-scoped state.
 
 Two further limits:
 
@@ -295,15 +311,30 @@ catalog throws a `TypeError` on the first lookup — a 500 during SSR, and the s
 again at hydration. An empty object falls back to base language, which is what you
 want.
 
-```javascript
-// src/routes/+layout.server.ts
-let translations;
-try {
-    translations = await fetchCatalog(locale);
-} catch {
-    translations = {}; // base language, not null
+```typescript
+// src/routes/+layout.server.ts — the Step 1 load, with the fetch made failure-safe
+export async function load({ fetch, request, locals }) {
+    const detected = locals.userLocale || LangsysApp.detectPreferredLocale(request.headers.get('accept-language'), SUPPORTED);
+    const locale = typeof detected === 'string' && SUPPORTED.includes(detected) ? detected : BASE_LOCALE;
+
+    // A non-2xx is not an exception, so check `response.ok` as well as catching.
+    let translations: iCategories = {};
+    try {
+        const response = await fetch(`https://api.langsys.dev/api/translations?project_id=${LANGSYS_PROJECT_ID}&locale=${locale}`, {
+            headers: { 'x-Authorization': LANGSYS_API_KEY, 'Content-Type': 'application/json' },
+        });
+        if (response.ok) translations = ((await response.json()).data ?? {}) as iCategories;
+    } catch {
+        // leave it `{}` — base language, never null
+    }
+
+    return {
+        locale,
+        translations,
+        projectId: LANGSYS_PROJECT_ID,
+        apiKey: PUBLIC_LANGSYS_API_KEY,
+    };
 }
-return { locale, translations, projectId, apiKey };
 ```
 
 Do the fallback **here, in `load`** — not by skipping the seed in the component. The
@@ -574,7 +605,7 @@ of the cheapest checks you have.
 Almost always a stale `langsys-js-typescript`. If your bundler inlines a `link:`,
 `file:`, or workspace copy of the SDK, **the deploying machine's checkout is what
 ships** — an old build there produces this across the entire site while the build
-succeeds and type-checks cleanly. Depend on the published npm package (see `CLAUDE.md`),
+succeeds and type-checks cleanly. Depend on the published npm package,
 and check the resolved version in your lockfile, not in a local `node_modules`.
 
 ### Still seeing duplicate API calls
@@ -619,4 +650,4 @@ call-site difference is template usage:
 <h1>{$t('Welcome', 'HomePage')}</h1>
 ```
 
-See `CHANGELOG.md` for the full breaking-change list.
+See the [CHANGELOG](https://github.com/langsys/langsys-js-svelte/blob/main/CHANGELOG.md) for the full breaking-change list.
