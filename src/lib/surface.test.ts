@@ -156,3 +156,42 @@ describe('LangsysApp — overrides are exactly the two that need adaptation', ()
         expect(binding.LangsysApp.debug).toBeDefined();
     });
 });
+
+/**
+ * The surface a Svelte consumer actually reaches.
+ *
+ * This binding exposes no `setContext`/`getContext` — verified, not assumed — so
+ * the module's exports ARE the reach surface, and a class-only identity test
+ * would miss most of it. These assertions are generated from the module object
+ * rather than a list, for the same reason the core enumeration is: a list covers
+ * exactly what someone remembered on the day.
+ */
+describe('module surface — what a consumer imports', () => {
+    const exported = Object.keys(binding).sort();
+
+    it('positive control: the module exports a surface worth checking', () => {
+        expect(exported.length).toBeGreaterThan(8);
+        expect(exported).toContain('LangsysApp');
+        expect(exported).toContain('t');
+    });
+
+    it.each(Object.keys(binding).sort())('export `%s` is defined', (name) => {
+        expect((binding as Record<string, unknown>)[name]).toBeDefined();
+    });
+
+    /**
+     * Store-shaped exports must satisfy Svelte's Readable contract, because `$x`
+     * in a template is a compile-time contract — a value that looks right but
+     * lacks `subscribe` fails at the consumer's build, not here.
+     */
+    it.each(['t', 'currentlyLoadedLocale', 'sTranslations', 'writeEnabled'])('`%s` satisfies the Readable contract consumers rely on for `$store`', (name) => {
+        const store = (binding as Record<string, { subscribe?: unknown }>)[name];
+        expect(typeof store.subscribe).toBe('function');
+    });
+
+    it('components are exported as component constructors', () => {
+        for (const c of ['Translate', 'Phrase', 'DontTranslate']) {
+            expect((binding as Record<string, unknown>)[c]).toBeTruthy();
+        }
+    });
+});

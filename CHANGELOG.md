@@ -2,6 +2,13 @@
 
 ### Changed
 
+- **`_dev_/enumerate-core-surface.mjs`** — publishes the core-surface measurement rather than
+  leaving it as a one-off command. Prints the module path it actually imports plus that checkout's
+  branch and SHA (the shared clone has moved four times this ticket), carries a `--self-test`
+  positive control that hides a real member and proves the detector detects, and prints a
+  **PRIVATE-IN-DTS** column — the column that turns "13 dropped members" into "13 members
+  TypeScript erased, 0 public dropped".
+
 - **`LangsysApp` is now a Proxy over the core singleton rather than a hand-enumerated wrapper
   class.** Only `init` and `setWriteGrant` are overridden — the two that adapt Svelte stores;
   everything else forwards, bound to the core so destructuring keeps working and getters resolve
