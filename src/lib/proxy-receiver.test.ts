@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createForwardingHandler } from './proxy-handler.js';
 
 /**
  * The `#private` trap, pinned with a control that fails first.
@@ -33,16 +34,18 @@ const naiveProxy = <T extends object>(target: T): T =>
         },
     });
 
-/** The shape shipped in index.ts: receiver is the target, functions bound to it. */
-const shippedProxy = <T extends object>(target: T): T =>
-    new Proxy(target, {
-        get(t, p) {
-            const value = Reflect.get(t, p, t); // ← receiver is the TARGET
-            return typeof value === 'function' ? value.bind(t) : value;
-        },
-    });
+/**
+ * THE SHIPPED HANDLER — imported, never re-declared.
+ *
+ * An earlier version of this file re-implemented the handler locally. The copy
+ * agreed with `index.ts` until they diverged, and then hid exactly the bug this
+ * file exists to catch: mutating the real handler to forward with the proxy as
+ * receiver left all 100 tests green, because the fixture was checking its own
+ * copy. Importing it is the whole point.
+ */
+const shippedProxy = <T extends object>(target: T): T => new Proxy(target, createForwardingHandler<T, Record<string, never>>({}));
 
-describe('#private forwarding — the control fails before it passes', () => {
+describe('#private forwarding — the SHIPPED handler, with a control that fails first', () => {
     const fixture = new FixtureWithPrivate();
 
     it('control: the fixture really does have a private field to lose', () => {

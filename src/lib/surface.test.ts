@@ -136,9 +136,34 @@ describe('LangsysApp — overrides are exactly the two that need adaptation', ()
         expect([...binding.OVERRIDDEN_MEMBERS].sort()).toEqual(['init', 'setWriteGrant']);
     });
 
-    it('an overridden member is NOT the core function', () => {
-        expect(binding.LangsysApp.init).not.toBe(core.LangsysApp.init);
-        expect(binding.LangsysApp.setWriteGrant).not.toBe(core.LangsysApp.setWriteGrant);
+    /**
+     * `not.toBe(core.x)` was VACUOUS here: forwarded members are bound copies, so
+     * nothing is ever `toBe` the core's own function — the assertion stayed green
+     * with the override removed entirely. It has to distinguish "overridden" from
+     * "merely forwarded", which the function's name does: a bound forward is
+     * named `bound <x>`, an override is not.
+     */
+    it('an overridden member is the override, not a bound forward', () => {
+        expect(binding.LangsysApp.init.name).not.toMatch(/^bound /);
+        expect(binding.LangsysApp.setWriteGrant.name).not.toMatch(/^bound /);
+    });
+
+    it('control: a NON-overridden member IS a bound forward', () => {
+        // Without this, the assertion above would pass for a binding that
+        // overrode nothing and forwarded nothing either.
+        expect(binding.LangsysApp.refresh.name).toMatch(/^bound /);
+    });
+
+    it('`constructor` resolves to the core class, not Object', () => {
+        // The override lookup used `prop in overrides`, and `in` walks the
+        // prototype chain — so `constructor` and `__proto__` matched
+        // Object.prototype and were served as though this binding overrode them,
+        // making `LangsysApp.constructor` report `Object`. `Object.hasOwn` does
+        // not walk. (Identity is not the assertion: forwarded functions are bound
+        // copies by design, so `toBe` could never hold here.)
+        // Forwarded functions are bound, so the name is `bound LangsysAppClass`.
+        expect(binding.LangsysApp.constructor.name).toContain(core.LangsysApp.constructor.name);
+        expect(binding.LangsysApp.constructor.name).not.toContain('Object');
     });
 
     it('a non-overridden member forwards through, callable unbound', () => {

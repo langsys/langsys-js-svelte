@@ -50,6 +50,7 @@ import {
 } from 'langsys-js-typescript';
 import type { Readable, Writable } from 'svelte/store';
 import { adaptStore, adaptWriteGrant, type WriteGrantSource } from './adapters.js';
+import { createForwardingHandler } from './proxy-handler.js';
 
 // Stores — re-exported unchanged. They are `Signal<T>`, which is what an IDE
 // hover shows; `Signal` structurally satisfies Svelte's `Readable` contract, so
@@ -178,22 +179,17 @@ const SVELTE_OVERRIDES = {
     },
 } as const;
 
-/** Names this binding overrides — exported for the surface test, not for consumers. */
+/**
+ * The members whose behaviour differs from the core's documentation.
+ *
+ * Public on purpose, and described as *behaviour* rather than mechanism: a
+ * consumer whose `init` does not match the core's docs gets a definitive answer
+ * here. Deliberately NOT described as "what the proxy overrides" — that would
+ * publish the adaptation mechanism and make changing it a breaking change.
+ */
 export const OVERRIDDEN_MEMBERS = Object.keys(SVELTE_OVERRIDES) as ReadonlyArray<string>;
 
-export const LangsysApp = new Proxy(_LangsysApp, {
-    get(target, prop) {
-        if (typeof prop === 'string' && prop in SVELTE_OVERRIDES) {
-            return SVELTE_OVERRIDES[prop as keyof typeof SVELTE_OVERRIDES];
-        }
-        // Receiver is the CORE, deliberately — see the note above.
-        const value = Reflect.get(target, prop, target);
-        return typeof value === 'function' ? value.bind(target) : value;
-    },
-    has(target, prop) {
-        return (typeof prop === 'string' && prop in SVELTE_OVERRIDES) || Reflect.has(target, prop);
-    },
-}) as unknown as LangsysAppSvelte;
+export const LangsysApp = new Proxy(_LangsysApp, createForwardingHandler(SVELTE_OVERRIDES)) as unknown as LangsysAppSvelte;
 
 /**
  * Read-only Svelte view of the `t` store.

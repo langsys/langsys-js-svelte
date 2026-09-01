@@ -30,7 +30,7 @@ That's the entire surface. Every other concern — HTTP, missing-token registrat
 
 ## How the wrapping works
 
-1. **`LangsysApp.init({ UserLocaleStore: writable })`** — the wrapper class (`LangsysAppSvelte` in `index.ts`) accepts a Svelte `Writable<string>` for the user locale. Internally it adapts it via `adaptStore` (in `adapters.ts`) to satisfy the base SDK's `Signal<string>` contract (Svelte writables expose `subscribe/set/update` — the adapter synthesizes `.get()` via `svelte/store`'s `get` helper). Every other `LangsysApp.*` method is a direct delegation.
+1. **`LangsysApp.init({ UserLocaleStore: writable })`** — `LangsysApp` is a **Proxy over the core singleton** (`index.ts`, handler in `proxy-handler.ts`), not a wrapper class. `init` is one of exactly two overrides: it accepts a Svelte `Writable<string>` and adapts it via `adaptStore` (in `adapters.ts`) to the base SDK's `Signal<string>` contract (Svelte writables expose `subscribe/set/update` — the adapter synthesizes `.get()` via `svelte/store`'s `get` helper). `setWriteGrant` is the other. Every other member forwards to the core, bound to it, so a member the core gains later is exposed without anyone remembering to list it.
 
 2. **`t` as a Svelte store** — the underlying `tSignal` from `langsys-js-typescript` is a `Signal<TFunction>` that re-emits a fresh closure on every translations/locale change. `Signal` structurally satisfies Svelte's `Readable<T>` contract (subscribe-fires-immediately semantics), so we re-export it under the type `Readable<TFunction>` with no runtime wrapping. `$t('Phrase', 'Cat')` works because:
     - `$t` unboxes the store, returning the current `TFunction`

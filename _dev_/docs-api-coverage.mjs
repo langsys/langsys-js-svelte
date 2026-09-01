@@ -23,8 +23,10 @@
  *        --strict exits 1 on any finding (use in CI); default reports and exits 0.
  */
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+
+const SRC_LIB = new URL('../src/lib', import.meta.url).pathname;
 
 const args = process.argv.slice(2);
 const strict = args.includes('--strict');
@@ -88,15 +90,69 @@ function topLevelExports(source) {
     return names;
 }
 
+/**
+ * The `LangsysApp` surface as a consumer's typechecker sees it: the core class's
+ * public members, minus what the binding omits, plus what it adds back.
+ * Resolved from the exported TYPE rather than from a class declaration, because
+ * the class no longer exists and its absence is what made this gate lie.
+ */
+function svelteAppSurface(dtsText, baseDtsText) {
+    const m = dtsText.match(/type LangsysAppSvelte = Omit<typeof (\w+), ([^>]*)> & \{([\s\S]*?)\n\};/);
+    if (!m) return null;
+    const [, coreIdent, omitted, added] = m;
+    // The core class is declared in the BASE SDK's d.ts — this package re-exports
+    // its types rather than redeclaring them, so looking only in our own build is
+    // how the previous resolver came up empty.
+    const core =
+        classMembers(dtsText, 'LangsysAppClass') ??
+        classMembers(dtsText, coreIdent) ??
+        (baseDtsText ? (classMembers(baseDtsText, 'LangsysAppClass') ?? classMembers(baseDtsText, coreIdent)) : null);
+    if (!core) return null;
+    const drop = new Set([...omitted.matchAll(/'([^']+)'/g)].map((x) => x[1]));
+    const names = new Set([...core].filter((n) => !drop.has(n)));
+    for (const a of added.matchAll(/^\s*(?:\/\*[\s\S]*?\*\/\s*)?([A-Za-z_$][\w$]*)\s*[(?:]/gm)) names.add(a[1]);
+    return names;
+}
+
 const dts = readFileSync(DTS, 'utf8');
 const exported = topLevelExports(dts);
 
 const surfaces = new Map();
 // `LangsysApp` is the Svelte wrapper instance, not the base SDK singleton — its
 // surface is whatever LangsysAppSvelte declares, which is deliberately narrower.
-const svelteApp = classMembers(dts, 'LangsysAppSvelte');
+//
+// `LangsysApp` used to be a hand-written class, and this gate located it by
+// parsing `declare class LangsysAppSvelte` out of the built d.ts. That class was
+// deleted when the wrapper became a Proxy — and the gate kept reporting 54/54,
+// exit 0, for eleven days, because `dist/` is gitignored and the stale artifact
+// on disk still contained it. It was validating a build nobody had produced from
+// the tree it was run against.
+//
+// Two changes so that cannot recur: the surface is resolved through the EXPORTED
+// TYPE (`type LangsysAppSvelte = Omit<typeof _LangsysApp, …> & { … }`), which is
+// what a consumer's typechecker actually resolves; and a stale build is refused
+// outright rather than silently believed.
+const newestSrc = Math.max(
+    ...readdirSync(SRC_LIB, { recursive: true })
+        .map((f) => join(SRC_LIB, String(f)))
+        .filter((f) => statSync(f).isFile())
+        .map((f) => statSync(f).mtimeMs)
+);
+if (statSync(DTS).mtimeMs < newestSrc) {
+    console.error(
+        'docs-api-coverage: dist/index.d.ts is OLDER than src/lib — refusing to validate a stale build.\n' +
+            '  run `npm run package` first. (This gate reported 54/54 against an 11-day-old artifact.)'
+    );
+    process.exit(1);
+}
+
+const baseDts = existsSync(BASE_DTS) ? readFileSync(BASE_DTS, 'utf8') : null;
+const svelteApp = svelteAppSurface(dts, baseDts);
 if (!svelteApp) {
-    console.error('docs-api-coverage: could not locate `declare class LangsysAppSvelte` in dist/index.d.ts.');
+    console.error(
+        'docs-api-coverage: could not resolve the LangsysApp surface from dist/index.d.ts.\n' +
+            '  expected `type LangsysAppSvelte = Omit<typeof _LangsysApp, ...> & { ... }` plus the core class.'
+    );
     process.exit(1);
 }
 surfaces.set('LangsysApp', svelteApp);

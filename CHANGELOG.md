@@ -1,5 +1,13 @@
 ## Unreleased
 
+### Fixed
+
+- **`docs-api-coverage` was validating an eleven-day-old build.** It located the binding's surface by
+  parsing a class declaration that no longer exists, and `dist/` is gitignored — so the stale artifact
+  on disk still contained it and the gate reported success against a build nobody had produced from
+  the tree it ran on. It now resolves the surface through the exported **type**, and refuses a `dist`
+  older than the newest file in `src/lib`. Real count against a fresh build: 57.
+
 ### Changed
 
 - **`_dev_/enumerate-core-surface.mjs`** — publishes the core-surface measurement rather than
@@ -25,7 +33,7 @@
     where the enumerated version would have omitted it silently with nothing failing. Pinned by
     per-member assertions generated from the core prototype, an exactly-two override set, and an
     unbound-forwarding check; both mutations red (hiding an override reds 1, dropping a forwarded
-    member reds 2).
+    member reds 1).
 
 ### Documentation
 

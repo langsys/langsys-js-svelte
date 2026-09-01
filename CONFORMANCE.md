@@ -4,13 +4,13 @@
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Spec text read             | `docs/sdk-spec.mdx` blob `06ae105a0a1f7b5245ec32929f0b3885c63f0336`, from `langsys2` `origin/main` @ `7bee50d63e7889696b037aec313578d981c7354a`                                                                                                                                                                                                                                                                                                              |
 | Read at                    | 2026-08-31T21:01:10Z, via `git show` — not from a working copy                                                                                                                                                                                                                                                                                                                                                                                               |
-| Repo state                 | branch `feature/838_write_key_gating_reland`, rebased on `main` @ `a00a32f`                                                                                                                                                                                                                                                                                                                                                                                  |
+| Repo state                 | resolved, not transcribed: `git merge-base HEAD origin/main` → `242433e` at the run behind this file (an earlier revision said `a00a32f`, transcribed).                                                                                                                                                                                                                                                                                                      |
 | Base SDK under test        | resolved by `node _dev_/enumerate-core-surface.mjs`, which prints the module path it actually imports plus that checkout's branch and SHA. At the run behind this file: `feature/838_write_key_gating_reland` @ `cfe8d40`. **Do not quote this** — the shared clone has moved four times during this ticket (`6bae61d`→`8839c2b`→`e0c2d7b`→`82678b6`→`cfe8d40`); `dist/` is gitignored there, so a git ref carries no build and only resolution is truthful. |
 | Why resolved, not quoted   | The symlink points at a shared working copy whose HEAD moves. This row first read `e0c2d7b` — correct when the lane opened, now an ancestor — a stale citation in the provenance line itself. `dist/` is gitignored there, so a git ref carries no build: you get whatever that clone has checked out and built at the moment you look. **Resolve it, never transcribe it.**                                                                                 |
 | Profiles binding this repo | **browser** + **binding** + **all**                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | Rules in the spec          | **67**                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | In profile scope           | **66** — only `HINT-2` (server) is out                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| Unit suite                 | **100 tests / 6 files**. Evidence is **mixed and stated per row**: most import the real core, but `stores.test.ts` `vi.mock`s it to drive the signal deterministically. An earlier version of this row claimed "no doubles" for the whole suite — false, and corrected here.                                                                                                                                                                                 |
+| Unit suite                 | **102 tests / 7 files**. Evidence is **mixed and stated per row**: most import the real core, but `stores.test.ts` `vi.mock`s it to drive the signal deterministically. An earlier version of this row claimed "no doubles" for the whole suite — false, and corrected here.                                                                                                                                                                                 |
 | Integration suite          | **49 assertions**, evidence **`live`** — real browser, real base SDK, real API, real catalog reads                                                                                                                                                                                                                                                                                                                                                           |
 
 The spec blob is byte-identical to the one the Angular lane read (`06ae105a`) from an earlier
@@ -155,6 +155,38 @@ this binding demonstrably does not touch would be forty rows that cannot fail.
 
 ## 6 — Corrections recorded as corrections
 
+- **`docs-api-coverage` reported 54/54 exit 0 against a build nobody had produced.** The gate
+  located the binding's surface by parsing `declare class LangsysAppSvelte` out of `dist/index.d.ts`.
+  That class was deleted when the wrapper became a Proxy — and `dist/` is gitignored, so the
+  artifact on disk was **eleven days old** and still contained it. Two commits cited the gate;
+  neither could have measured it against a build of its own tree, and `prepublishOnly → package`
+  would have turned it red at release.
+
+    Rewritten to resolve the surface through the **exported type** (`type LangsysAppSvelte = Omit<…>`
+    plus the core class from the base SDK's own `.d.ts`, which is where it is declared), and to
+    **refuse a `dist` older than the newest file in `src/lib`** rather than silently believing it.
+    Real number against a fresh build: **57**, not 54. Falsifiable both ways — a bogus API name in a
+    doc exits 1, and a stale build exits 1.
+
+    A second flaw in my own citation: I had been running the gate **without `--strict`**, in which
+    mode it prints findings and exits 0. CI passes `--strict`, so CI was sound; my evidence line was
+    not. That is a third instance of citing a run that could not fail.
+
+- **The `#private` fixture tested a re-implementation, not the shipped handler.** `proxy-receiver.test.ts`
+  declared its own copy of the forwarding shape. The copy agreed with `index.ts` until they diverged:
+  mutating the real handler to forward with the **proxy** as receiver — the exact bug the fixture
+  exists to catch — left all 100 tests green. The handler is now `src/lib/proxy-handler.ts`, imported
+  by both the export and the test; the same mutation now reds the fixture.
+
+- **`prop in SVELTE_OVERRIDES` walked `Object.prototype`**, so `constructor` and `__proto__` matched
+  and were served as overrides — `LangsysApp.constructor` reported `Object`. Now `Object.hasOwn` in
+  both traps, with an assertion that `constructor` resolves to the core class.
+
+- **A vacuous assertion.** "an overridden member is NOT the core function" compared a bound copy to
+  the original, which can never be equal — it stayed green with the override removed entirely.
+  Replaced with a name-based check that distinguishes an override from a bound forward, plus its own
+  control asserting a non-overridden member _is_ a bound forward.
+
 - **BIND-6: the wrapper was replaced, but not for the reason the fleet gave.** Grade before:
   `implemented` (hand-enumerated wrapper). Grade after: `implemented` (Proxy). The grade did not
   move; the justification did, in both directions.
@@ -213,7 +245,7 @@ this binding demonstrably does not touch would be forty rows that cannot fail.
 # spec, read the way this file read it
 cd ../langsys2 && git fetch origin && git show origin/main:docs/sdk-spec.mdx
 
-# unit suite (100 / 6 files)
+# unit suite (102 / 7 files)
 npm test -- --run
 
 # the symlink precondition must be RED against the registry build
