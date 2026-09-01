@@ -247,11 +247,27 @@ Measured on a production `adapter-node` build, 8 locales in flight together:
 > **This depends on Svelte's default synchronous SSR, and one config flag removes it.**
 > `render()` from `svelte/server` returns a `RenderOutput` — an object carrying
 > `body`/`head`, which is also a thenable. In the default mode it is fully populated
-> synchronously. Turning on `compilerOptions.experimental.async` switches the renderer
-> to an async path that genuinely awaits mid-tree, and SvelteKit awaits the result
-> accordingly. That is a one-line config change with no change to your components, and
-> it reintroduces exactly the cross-request bleeding this section says cannot happen.
-> If you enable it, this pattern is no longer safe and you need request-scoped state.
+> synchronously. Turning on `compilerOptions.experimental.async` lets you write a
+> component that awaits, and if the `$t()` read lands after that await, the seed and
+> the read are no longer in one pass. **Measured on Svelte 5.55.8, four locales
+> rendering concurrently:**
+>
+> | Shape                                         | `experimental.async` | Wrong-locale responses |
+> | --------------------------------------------- | -------------------- | ---------------------- |
+> | No `await` in the tree                        | off                  | 0 / 4                  |
+> | No `await` in the tree                        | on                   | 0 / 4                  |
+> | `await` in a parent's script, read in a child | on                   | 0 / 4                  |
+> | `await` then read **in the same script**      | on                   | **3 / 4**              |
+>
+> So the flag alone does not break the pattern — the compiler hoists an await into
+> `$$renderer.run(…)` and keeps rendering children synchronously, which is why the
+> first three rows are clean. What breaks it is an await with the read positioned
+> _after_ it in the same closure, because Svelte then defers the read into the async
+> continuation, by which time another request has re-seeded the process globals. That
+> is also the most natural way to write it — `const data = await something;` and then
+> read — and the failures converge on whichever request seeded last rather than
+> scattering, so sampling a few responses looks like a config error. If you enable the
+> flag, this pattern is no longer safe and you need request-scoped state.
 
 Two further limits:
 

@@ -1,3 +1,22 @@
+## 3.6.17 - 2026-09-01
+
+### Changed (documentation)
+
+- **The `experimental.async` caution is now measured rather than reasoned, and the flag alone turns out not to be the trigger.** 3.6.13 through 3.6.16 asserted that turning on `compilerOptions.experimental.async` "switches the renderer to an async path that genuinely awaits mid-tree" and so reintroduces cross-request bleeding. That was derived from reading the renderer, not from a run — and an earlier harness had measured 0 bleeds with the flag on, which looked like a contradiction. Both were right about different shapes. Measured on Svelte 5.55.8 with four locales rendering concurrently:
+
+    | Shape                                         | `experimental.async` | Wrong-locale responses |
+    | --------------------------------------------- | -------------------- | ---------------------- |
+    | No `await` in the tree                        | off                  | 0 / 4                  |
+    | No `await` in the tree                        | on                   | 0 / 4                  |
+    | `await` in a parent's script, read in a child | on                   | 0 / 4                  |
+    | `await` then read **in the same script**      | on                   | **3 / 4**              |
+
+    The compiler hoists an await into `$$renderer.run([...])` and keeps rendering children synchronously, so an await in a parent with the read in a child does not break anything — that is what the earlier 0 measured, with the flag genuinely on (the compiled output imports `svelte/internal/flags/async`, and the same source fails to compile without it: `experimental_async`). What breaks it is the read landing _after_ the await in the same closure, which Svelte defers into the async continuation. The caution now states that condition instead of blaming the flag, and keeps the conclusion: with the flag on, the pattern is not safe.
+
+- The earlier claim that "there is no component-tree construction in Svelte that puts an await between the seed and the read" was false, and is the reason the weaker conclusion held for four releases. The shape that does it is the most natural one to write.
+
+---
+
 ## 3.6.16 - 2026-09-01
 
 ### Fixed (documentation, types)
