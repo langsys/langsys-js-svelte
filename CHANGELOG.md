@@ -32,8 +32,15 @@
     What the change actually buys: a public member the core adds later is exposed automatically,
     where the enumerated version would have omitted it silently with nothing failing. Pinned by
     per-member assertions generated from the core prototype, an exactly-two override set, and an
-    unbound-forwarding check; both mutations red (hiding an override reds 1, dropping a forwarded
-    member reds 1; deleting the `init` override reds 2 — the set-equality row and the name-based row added by the same review, both firing on that one mutation).
+    unbound-forwarding check. Three distinct mutations, each naming the rows it fires:
+    - **Hide `init` from the exported `OVERRIDDEN_MEMBERS` list** while the override itself stays
+      active → **1 red**, the set-equality row. The name-based row still passes, correctly: `init`
+      really is still the override.
+    - **Delete the `init` override** so it falls through to the core → **2 reds**, set-equality
+      _and_ the name-based row, because `init` becomes a bound forward. The pair is the point —
+      the two rows fail on different mutations, so neither is redundant.
+    - **Hide a forwarded member (`getCountries`) behind the Proxy** → **1 red**, the generated
+      reachability row for that member.
 
 ### Documentation
 
