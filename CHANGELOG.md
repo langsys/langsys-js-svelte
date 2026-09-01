@@ -33,7 +33,7 @@
     where the enumerated version would have omitted it silently with nothing failing. Pinned by
     per-member assertions generated from the core prototype, an exactly-two override set, and an
     unbound-forwarding check; both mutations red (hiding an override reds 1, dropping a forwarded
-    member reds 1).
+    member reds 1; deleting the `init` override reds 2 — the set-equality row and the name-based row added by the same review, both firing on that one mutation).
 
 ### Documentation
 
