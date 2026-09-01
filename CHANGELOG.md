@@ -1,5 +1,25 @@
 ## Unreleased
 
+### Changed
+
+- **`LangsysApp` is now a Proxy over the core singleton rather than a hand-enumerated wrapper
+  class.** Only `init` and `setWriteGrant` are overridden — the two that adapt Svelte stores;
+  everything else forwards, bound to the core so destructuring keeps working and getters resolve
+  against the real instance.
+
+    The reason is forward-looking, and the fleet report that prompted it does not hold here. A
+    runtime prototype scan shows 33 core members against the old wrapper's 20, which reads as
+    thirteen dropped methods — five matching names other bindings reported missing. **All thirteen
+    are `private` in the core's `.d.ts`.** TypeScript's `private` is erased at runtime, so a
+    prototype scan surfaces implementation detail and cannot distinguish it from API. The old
+    wrapper exposed every public member; no public surface was ever unreachable.
+
+    What the change actually buys: a public member the core adds later is exposed automatically,
+    where the enumerated version would have omitted it silently with nothing failing. Pinned by
+    per-member assertions generated from the core prototype, an exactly-two override set, and an
+    unbound-forwarding check; both mutations red (hiding an override reds 1, dropping a forwarded
+    member reds 2).
+
 ### Documentation
 
 - **Removed a placeholder test that was being counted as coverage.** `src/index.test.ts` asserted

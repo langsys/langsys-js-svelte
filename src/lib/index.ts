@@ -118,97 +118,80 @@ export interface iLangsysInitConfig extends Omit<iVanillaInitConfig, 'UserLocale
 }
 
 /**
- * Svelte SDK entry point. Delegates everything to the underlying `langsys-js-typescript`
- * singleton; the only behavior change is that `init` accepts a Svelte
- * `Writable<string>` for the user locale and adapts it before passing through.
+ * Svelte SDK entry point.
+ *
+ * A **Proxy over the core singleton**, not a hand-written wrapper class. Only the
+ * two methods that genuinely need Svelte adaptation are overridden; everything
+ * else forwards.
+ *
+ * **The reason is forward-looking, not a present defect — and the first version of
+ * this note got that wrong.** A runtime scan of the core's prototype reports 33
+ * members against the old wrapper's 20, which looks like thirteen dropped methods,
+ * five of them matching names another binding had reported missing. All thirteen
+ * are declared `private` in the core's `.d.ts`. TypeScript's `private` is erased at
+ * runtime, so `getOwnPropertyNames` surfaces implementation detail and cannot tell
+ * it from API. The old wrapper covered **every public member**; nothing public was
+ * ever unreachable.
+ *
+ * What the proxy actually buys: a public member the core adds tomorrow is exposed
+ * automatically. The enumerated version would have omitted it silently, and no test
+ * would have failed — which is a real hazard, just not one that had already fired.
+ *
+ * Forwarding rules that matter:
+ * - `Reflect.get(target, prop, target)` — the receiver is the CORE, never the
+ *   proxy, so getters resolve against the real instance and any future `#private`
+ *   field keeps working. Passing the proxy as receiver is the standard way this
+ *   breaks.
+ * - Functions are bound to the core before being handed out, so a destructured
+ *   `const { refresh } = LangsysApp` still works.
  */
-class LangsysAppSvelte {
+type LangsysAppSvelte = Omit<typeof _LangsysApp, 'init' | 'setWriteGrant'> & {
     /** Initialize Langsys. Pass a Svelte `writable<string>` as `UserLocaleStore`. */
-    public init(config: iLangsysInitConfig): Promise<iLangsysResponse> {
-        return _LangsysApp.init({
-            ...config,
-            UserLocaleStore: adaptStore(config.UserLocaleStore),
-            writeGrant: adaptWriteGrant(config.writeGrant),
-        });
-    }
-
+    init(config: iLangsysInitConfig): Promise<iLangsysResponse>;
     /**
      * Supply the write grant after `init()` — for apps whose token only exists
      * once the user has logged in. Re-authorizes so the server re-evaluates the
      * session with the new grant, so `await` it if you need `writeEnabled`
      * settled before the next assertion.
      */
-    public setWriteGrant(grant: WriteGrantSource | undefined): Promise<void> {
+    setWriteGrant(grant: WriteGrantSource | undefined): Promise<void>;
+};
+
+/**
+ * The only members this binding overrides. Kept as a named set so a test can
+ * assert set-equality against it: an override that quietly stops being one, or a
+ * new one added without thought, both show up as a failing count rather than as
+ * nothing at all.
+ */
+const SVELTE_OVERRIDES = {
+    init(config: iLangsysInitConfig): Promise<iLangsysResponse> {
+        return _LangsysApp.init({
+            ...config,
+            UserLocaleStore: adaptStore(config.UserLocaleStore),
+            writeGrant: adaptWriteGrant(config.writeGrant),
+        });
+    },
+    setWriteGrant(grant: WriteGrantSource | undefined): Promise<void> {
         return _LangsysApp.setWriteGrant(adaptWriteGrant(grant));
-    }
+    },
+} as const;
 
-    public get Translations() {
-        return _LangsysApp.Translations;
-    }
+/** Names this binding overrides — exported for the surface test, not for consumers. */
+export const OVERRIDDEN_MEMBERS = Object.keys(SVELTE_OVERRIDES) as ReadonlyArray<string>;
 
-    public get translationsLoadingPromise() {
-        return _LangsysApp.translationsLoadingPromise;
-    }
-
-    /** Current translation function. Reads fresh state on every call (not reactive on its own — use `$t` in templates). */
-    public get t(): TFunction {
-        return _LangsysApp.t;
-    }
-
-    public get debug() {
-        return _LangsysApp.debug;
-    }
-
-    public refresh() {
-        return _LangsysApp.refresh();
-    }
-
-    public getCountries(inLocale?: string) {
-        return _LangsysApp.getCountries(inLocale);
-    }
-    public getCountryName(forCountryCode: string, inLocale?: string) {
-        return _LangsysApp.getCountryName(forCountryCode, inLocale);
-    }
-    public getCurrencies(inLocale?: string) {
-        return _LangsysApp.getCurrencies(inLocale);
-    }
-    public getCurrencyName(forCurrencyCode: string, inLocale?: string) {
-        return _LangsysApp.getCurrencyName(forCurrencyCode, inLocale);
-    }
-    public getDialCodes(inLocale?: string) {
-        return _LangsysApp.getDialCodes(inLocale);
-    }
-
-    public getLocales(inLocale?: string) {
-        return _LangsysApp.getLocales(inLocale);
-    }
-    public getLocalesFlat(inLocale?: string) {
-        return _LangsysApp.getLocalesFlat(inLocale);
-    }
-    public getLocalesData(inLocale?: string, forceRefresh?: boolean) {
-        return _LangsysApp.getLocalesData(inLocale, forceRefresh);
-    }
-    public getLocalesFormat(format: '' | 'flat' | 'data' = '', inLocale?: string) {
-        return _LangsysApp.getLocalesFormat(format, inLocale);
-    }
-    public getLocaleName(forLocale: string, shortName?: boolean, inLocale?: string) {
-        return _LangsysApp.getLocaleName(forLocale, shortName, inLocale);
-    }
-    public getLocaleNameWithLookup(forLocale: string, shortName?: boolean, inLocale?: string) {
-        return _LangsysApp.getLocaleNameWithLookup(forLocale, shortName, inLocale);
-    }
-
-    /** @deprecated use `getLocaleNameWithLookup` or `getLocaleName` */
-    public getLanguageName(forLocale: string, shortName?: boolean, inLocale?: string) {
-        return _LangsysApp.getLanguageName(forLocale, shortName, inLocale);
-    }
-
-    public detectPreferredLocale(acceptLanguageHeader?: string | null, supportedLocales?: string[]) {
-        return _LangsysApp.detectPreferredLocale(acceptLanguageHeader, supportedLocales);
-    }
-}
-
-export const LangsysApp = new LangsysAppSvelte();
+export const LangsysApp = new Proxy(_LangsysApp, {
+    get(target, prop) {
+        if (typeof prop === 'string' && prop in SVELTE_OVERRIDES) {
+            return SVELTE_OVERRIDES[prop as keyof typeof SVELTE_OVERRIDES];
+        }
+        // Receiver is the CORE, deliberately — see the note above.
+        const value = Reflect.get(target, prop, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+    },
+    has(target, prop) {
+        return (typeof prop === 'string' && prop in SVELTE_OVERRIDES) || Reflect.has(target, prop);
+    },
+}) as unknown as LangsysAppSvelte;
 
 // Narrow type for the `t` re-export so consumers see it as a Svelte Readable.
 // (The Signal implementation under the hood is structurally compatible.)
