@@ -295,15 +295,30 @@ catalog throws a `TypeError` on the first lookup — a 500 during SSR, and the s
 again at hydration. An empty object falls back to base language, which is what you
 want.
 
-```javascript
-// src/routes/+layout.server.ts
-let translations;
-try {
-    translations = await fetchCatalog(locale);
-} catch {
-    translations = {}; // base language, not null
+```typescript
+// src/routes/+layout.server.ts — the Step 1 load, with the fetch made failure-safe
+export async function load({ fetch, request, locals }) {
+    const detected = locals.userLocale || LangsysApp.detectPreferredLocale(request.headers.get('accept-language'), SUPPORTED);
+    const locale = typeof detected === 'string' && SUPPORTED.includes(detected) ? detected : BASE_LOCALE;
+
+    // A non-2xx is not an exception, so check `response.ok` as well as catching.
+    let translations: iCategories = {};
+    try {
+        const response = await fetch(`https://api.langsys.dev/api/translations?project_id=${LANGSYS_PROJECT_ID}&locale=${locale}`, {
+            headers: { 'x-Authorization': LANGSYS_API_KEY, 'Content-Type': 'application/json' },
+        });
+        if (response.ok) translations = ((await response.json()).data ?? {}) as iCategories;
+    } catch {
+        // leave it `{}` — base language, never null
+    }
+
+    return {
+        locale,
+        translations,
+        projectId: LANGSYS_PROJECT_ID,
+        apiKey: PUBLIC_LANGSYS_API_KEY,
+    };
 }
-return { locale, translations, projectId, apiKey };
 ```
 
 Do the fallback **here, in `load`** — not by skipping the seed in the component. The
@@ -558,7 +573,7 @@ of the cheapest checks you have.
 Almost always a stale `langsys-js-typescript`. If your bundler inlines a `link:`,
 `file:`, or workspace copy of the SDK, **the deploying machine's checkout is what
 ships** — an old build there produces this across the entire site while the build
-succeeds and type-checks cleanly. Depend on the published npm package (see `CLAUDE.md`),
+succeeds and type-checks cleanly. Depend on the published npm package,
 and check the resolved version in your lockfile, not in a local `node_modules`.
 
 ### Still seeing duplicate API calls
@@ -603,4 +618,4 @@ call-site difference is template usage:
 <h1>{$t('Welcome', 'HomePage')}</h1>
 ```
 
-See `CHANGELOG.md` for the full breaking-change list.
+See the [CHANGELOG](https://github.com/langsys/langsys-js-svelte/blob/main/CHANGELOG.md) for the full breaking-change list.
