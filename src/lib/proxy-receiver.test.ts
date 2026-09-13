@@ -78,3 +78,57 @@ describe('#private forwarding — the SHIPPED handler, with a control that fails
         expect(reveal()).toBe(42);
     });
 });
+
+/**
+ * Accessor values are values, not methods — they are never bound.
+ *
+ * The handler used to bind every function it handed out. That is right for a
+ * method and wrong for a function a getter RETURNS: the core's `t` getter hands out
+ * the current `TFunction`, whose identity is the reactivity contract, and binding
+ * it produced a different function on every read. Pinned against a fixture with the
+ * same shape, with a bind-everything proxy as the control that has to fail first.
+ */
+class FixtureWithAccessor {
+    #current = function current(): string {
+        return 'value';
+    };
+    get current(): () => string {
+        return this.#current;
+    }
+    method(): this {
+        return this;
+    }
+}
+
+/** The shape shipped before the accessor check: every function bound. */
+const bindEverythingProxy = <T extends object>(target: T): T =>
+    new Proxy(target, {
+        get(t, p) {
+            const v = Reflect.get(t, p, t);
+            return typeof v === 'function' ? v.bind(t) : v;
+        },
+    });
+
+describe('accessor values — forwarded unbound by the SHIPPED handler, with a control that fails first', () => {
+    const fixture = new FixtureWithAccessor();
+
+    it('control: the fixture getter returns the SAME function on every read', () => {
+        expect(fixture.current).toBe(fixture.current);
+    });
+
+    it('BIND-EVERYTHING proxy breaks accessor identity (the defect)', () => {
+        const bad = bindEverythingProxy(fixture);
+        expect(bad.current).not.toBe(bad.current);
+    });
+
+    it('SHIPPED handler: an accessor value is the target’s own value, read after read', () => {
+        const proxied = shippedProxy(fixture);
+        expect(proxied.current).toBe(fixture.current);
+        expect(proxied.current).toBe(proxied.current);
+    });
+
+    it('SHIPPED handler: a method is still bound to the target', () => {
+        const { method } = shippedProxy(fixture);
+        expect(method()).toBe(fixture);
+    });
+});

@@ -1,7 +1,8 @@
 <script lang="ts">
     /**
      * Grant lane, driven through the SVELTE STORE form of `writeGrant` — the one
-     * piece of surface that exists only in this binding.
+     * piece of surface that exists only in this binding — and through the binding's
+     * own `setWriteGrant` override.
      *
      * The store is passed straight to `init()`; `adaptWriteGrant` turns it into a
      * provider function rather than a snapshot, so the base SDK resolves it fresh
@@ -16,7 +17,7 @@
     import { onMount } from 'svelte';
     import { writable } from 'svelte/store';
     import { page } from '$app/state';
-    import { LangsysApp, LangsysAppAPI, t, writeEnabled } from '$lib/index.js';
+    import { LangsysApp, t, writeEnabled } from '$lib/index.js';
     import { BASE_URL, CATEGORY, DEFAULT_RUN, KEYS, PROJECT_ID, phrase, userLocale } from '../harness.js';
 
     const run = $derived(page.url.searchParams.get('run') ?? DEFAULT_RUN);
@@ -36,13 +37,15 @@
     onMount(async () => {
         grantStore.set(page.url.searchParams.get('initial') ?? '');
         try {
-            LangsysAppAPI.setBaseUrl(BASE_URL);
             await LangsysApp.init({
                 projectid: PROJECT_ID,
                 key: KEYS.read,
                 UserLocaleStore: userLocale,
                 baseLocale: 'en-US',
                 debug: true,
+                // The seam the README documents, not `LangsysAppAPI.setBaseUrl()` —
+                // using it here is what proves it survives this binding's `init` override.
+                apiUrl: BASE_URL,
                 writeGrant: grantStore,
             });
             ready = true;
@@ -59,6 +62,19 @@
         note(`store set to: ${next ? next.slice(0, 18) + '…' : '(empty)'}`);
         await LangsysApp.refresh();
         note('refresh() complete — writeEnabled re-derived from the store');
+        showPostGrant = true;
+        busy = false;
+    }
+
+    /**
+     * The imperative path, through the binding's `setWriteGrant` override. It must
+     * RE-AUTHORIZE: capability is the server's decision, so the flip has to arrive in
+     * the authorization response rather than from config written on this side.
+     */
+    async function setGrantImperatively() {
+        busy = true;
+        await LangsysApp.setWriteGrant(next);
+        note(`setWriteGrant(${next ? next.slice(0, 18) + '…' : '(empty)'}) resolved`);
         showPostGrant = true;
         busy = false;
     }
@@ -91,12 +107,24 @@
         </div>
     </div>
 
+    <div class="card">
+        <h2>Imperative <code>setWriteGrant()</code></h2>
+        <button onclick={setGrantImperatively} disabled={busy || !next}>setWriteGrant(next)</button>
+        <div class="expect">
+            Open with no <code>?initial=</code>, so the read key starts read-only. The call must re-authorize: the flip above has to come from the server's
+            answer, and misses rendered after it register directly.
+        </div>
+    </div>
+
     {#if showPostGrant}
         <div class="card">
             <h2>Post-grant misses</h2>
             <p>{$t(phrase('grant-store', 1, run), CATEGORY)}</p>
             <p>{$t(phrase('grant-store', 2, run), CATEGORY)}</p>
-            <div class="expect">With the session now write-enabled these must register directly, on a read key.</div>
+            <div class="expect">
+                Rendered after the grant changed. They register directly only if the server now says the session is write-enabled — a valid grant, not an
+                expired one.
+            </div>
         </div>
     {/if}
 {/if}

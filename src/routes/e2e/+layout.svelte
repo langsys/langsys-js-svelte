@@ -18,7 +18,13 @@
     function countedT(phrase: string, category: string): string {
         reentryCount += 1;
         if (typeof window !== 'undefined') {
-            (window as unknown as Record<string, unknown>).__lsReentry = reentryCount;
+            const w = window as unknown as { __lsReentry?: number; __lsEntries?: { where: string; url: string }[] };
+            w.__lsReentry = reentryCount;
+            // The URL each entry happened at — which is what HINT-4 turns on: a persistent
+            // layout that never re-enters captures no URL for the route it now sits under.
+            // `nav/elsewhere` records its page-level entries into the same list as the
+            // positive control.
+            (w.__lsEntries ??= []).push({ where: 'layout', url: window.location.href });
         }
         return $t(phrase, category);
     }

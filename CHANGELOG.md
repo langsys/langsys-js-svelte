@@ -2,6 +2,32 @@
 
 ### Fixed
 
+- **`LangsysApp.t` was a different function on every read.** The proxy bound every function it
+  forwarded, including the `TFunction` the core's `t` getter returns — so `LangsysApp.t ===
+LangsysApp.t` was `false` while the core's own `t` was stable. That identity is the reactivity
+  contract: `Signal.set` drops an `Object.is`-equal value, so a fresh function per emit is the only
+  thing that tells a subscriber anything changed. Values reached through a getter now pass through
+  unbound; methods are still bound, so destructuring keeps working. Pinned against a fixture — with a
+  bind-everything proxy as the control that fails first — and against the core's own accessors;
+  removing the check reds 3.
+
+- **The `'server'` strategy's allow-list precondition was a trailing sentence.** In both `README.md`
+  and `README-SSR.md` it closed a callout about something else. It is now an `[!IMPORTANT]` callout
+  of its own in each, pinned by `src/docs.test.ts`, whose control rejects the old footnote shape.
+
+- **`apiUrl` was undocumented in this README.** `README.md` gains "Pointing the SDK at another API",
+  including why `LangsysAppAPI.setBaseUrl()` called after `init()` leaves the SDK inert. The testbed
+  had been using exactly that order-sensitive call; it now uses `apiUrl`.
+
+- **Three new or existing checks could not fail.** E2E TEST 5's shallow-routing check read the first
+  `.mono.muted` on the page — the layout's re-entry phrase, not the nav card — so both regexes matched
+  nothing and `undefined === undefined` passed; it is now scoped by text and has a premise. TEST 8's
+  "store re-read" row checked only the value after the swap, so a mutation that dropped the grant from
+  `init` passed it as `false -> false`; it now requires the flip at init as well. And a new
+  served-bytes assertion imported `CONTENT_BLOCK_MARKER_ATTR` from the core's main entry, where it is
+  `undefined`, so `not.toContain(undefined)` passed against any body. The unit run was green;
+  `svelte-check` caught it. It now imports from `langsys-js-typescript/pure`, with a control.
+
 - **`docs-api-coverage` was validating an eleven-day-old build.** It located the binding's surface by
   parsing a class declaration that no longer exists, and `dist/` is gitignored — so the stale artifact
   on disk still contained it and the gate reported success against a build nobody had produced from

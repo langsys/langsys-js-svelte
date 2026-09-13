@@ -2,7 +2,7 @@
     import { onMount } from 'svelte';
     import { page } from '$app/state';
     import { LangsysApp, t, writeEnabled, Translate } from '$lib/index.js';
-    import { CATEGORY, DEFAULT_RUN, KEYS, isKeyName, initLangsys, phrase } from '../harness.js';
+    import { CATEGORY, DEFAULT_RUN, KEYS, exposeIdentityForVerifier, isKeyName, initLangsys, phrase } from '../harness.js';
 
     const keyName = $derived(isKeyName(page.url.searchParams.get('key')) ? (page.url.searchParams.get('key') as 'read' | 'ip_write' | 'write') : 'read');
     const run = $derived(page.url.searchParams.get('run') ?? DEFAULT_RUN);
@@ -16,6 +16,7 @@
     let grantState = $state<'none' | 'setting' | 'set' | 'failed'>('none');
 
     onMount(async () => {
+        exposeIdentityForVerifier();
         try {
             await initLangsys({ keyName });
             status = 'ready';

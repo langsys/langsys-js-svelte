@@ -12,6 +12,12 @@ node_modules
 .env.*
 !.env.example
 
+# One row per spec rule id in a format a reviewer-side checker parses. Prettier pads
+# every cell to its column's widest, so a single evidence edit rewrote all 79 rows and
+# the canonical header lines stopped reading as written. Checked instead by
+# `node _dev_/conformance-summary.mjs --check`.
+CONFORMANCE.md
+
 # Ignore files for PNPM, NPM and YARN
 pnpm-lock.yaml
 package-lock.json

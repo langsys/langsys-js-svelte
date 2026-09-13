@@ -36,17 +36,25 @@ npm run dev                                      # terminal 1 — must be 127.0.
 node --env-file=.env _dev_/e2e/verify.mjs        # terminal 2
 ```
 
-~90 seconds. The hint-attribution assertions deliberately wait out the SDK's 5–30s
-jitter window twice over — see below.
+About two minutes (127 s at the last count). The hint-attribution assertions deliberately wait
+out the SDK's 5–30s jitter window twice over — see below. Start the dev server fresh before a
+run you intend to cite: the hydration route initializes the singleton on the server, and a
+long-lived process keeps whatever the first `init()` left there.
 
 ## What it covers
 
-**49 assertions** (TEST 2 loops over three keys, TEST 9 over four grant cases; the rest are
+**61 assertions** (TEST 2 loops over three keys, TEST 9 over four grant cases; the rest are
 straight-line): hydration safety, the read/ip_write/write gate matrix, cross-origin
 requests and `X-Write-Grant` preflight, grant validity (valid / expired / no-`exp` /
 none, all self-minted), the Svelte store form of `writeGrant`, server **acceptance** of
 registrations, the three visibility shapes, params/interpolation and `<Phrase>`,
-client-side navigation and shallow routing, and hint URL attribution.
+client-side navigation and shallow routing, hint URL attribution, MARK-1 (a `<Translate>`
+host's stamp re-derived by the core's tokenizer, TEST 15), `setWriteGrant()` flipping a read
+key on the server's answer with later misses landing in the catalog (TEST 16), and HINT-4's
+per-URL re-entry measurement with a page-level positive control (TEST 14).
+
+The SDK is pointed at the local API with `init({ apiUrl })` — the seam the README documents —
+not with `LangsysAppAPI.setBaseUrl()`, which only works if it runs before `init()`.
 
 Re-run before quoting that number — it is the count the harness prints, not one derived by
 reading the source. This paragraph said **39** for one commit _after_ the suite reached 49,

@@ -5,7 +5,11 @@
  * this sits alongside them safely. Nothing here ships in the package; the
  * published surface is `src/lib` only.
  */
-import { LangsysApp, LangsysAppAPI } from '$lib/index.js';
+import { LangsysApp } from '$lib/index.js';
+import { generateCustomId, tokenizeElement } from 'langsys-js-typescript';
+// Only exported from `/pure`; from the main entry it is `undefined`, and a selector built
+// from it would match nothing and make the MARK-1 check vacuous.
+import { CONTENT_BLOCK_MARKER_ATTR } from 'langsys-js-typescript/pure';
 import { writable, type Writable } from 'svelte/store';
 
 /**
@@ -68,16 +72,28 @@ export function initLangsys(opts: { keyName: KeyName; grant?: string; debug?: bo
     }
 
     startedUnder = signature;
-    LangsysAppAPI.setBaseUrl(BASE_URL);
     started = LangsysApp.init({
         projectid: PROJECT_ID,
         key: KEYS[opts.keyName],
         UserLocaleStore: userLocale,
         baseLocale: 'en-US',
         debug: opts.debug ?? true,
+        // The documented seam (README, "Pointing the SDK at another API"). This used to be
+        // `LangsysAppAPI.setBaseUrl()` before init, which works only in that order — so the
+        // harness was proving an undocumented path rather than the one integrators are told to use.
+        apiUrl: BASE_URL,
         ...(opts.grant ? { writeGrant: opts.grant } : {}),
     });
     return started;
+}
+
+/**
+ * Hands the verifier the core's own identity functions, so MARK-1 is checked by
+ * RE-DERIVING a host's id from its subtree rather than by reading back the attribute
+ * the renderer just wrote — which would prove only that a write happened.
+ */
+export function exposeIdentityForVerifier(): void {
+    (window as unknown as { __lsIdentity: unknown }).__lsIdentity = { tokenizeElement, generateCustomId, CONTENT_BLOCK_MARKER_ATTR };
 }
 
 export function missingEnv(): string[] {

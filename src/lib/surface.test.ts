@@ -183,6 +183,45 @@ describe('LangsysApp — overrides are exactly the two that need adaptation', ()
 });
 
 /**
+ * Accessor values reach the consumer as the core's own values.
+ *
+ * `LangsysApp.t` is a getter on the core returning the current `TFunction`. Its
+ * identity is the reactivity contract (see the header of this file), so the proxy
+ * must hand it out unbound. It did not: every read was a fresh `bound fn`. These rows
+ * are generated from the core's accessors, so a getter the core adds later is covered
+ * without anyone listing it.
+ */
+function accessorsOf(obj: object): string[] {
+    const names = new Set<string>();
+    for (let o: object | null = obj; o && o !== Object.prototype; o = Object.getPrototypeOf(o)) {
+        for (const k of Object.getOwnPropertyNames(o)) if (Object.getOwnPropertyDescriptor(o, k)?.get) names.add(k);
+    }
+    return [...names].sort();
+}
+
+describe('LangsysApp — accessor values are forwarded as values, never bound', () => {
+    const accessors = accessorsOf(core.LangsysApp);
+
+    it('control: the core has accessors, `t` among them, and `t` is stable between emits', () => {
+        // Without this, a core with no getters would make the generated rows vacuous,
+        // and a `t` that changed on every read would make the identity row unfalsifiable.
+        expect(accessors).toContain('t');
+        expect(core.LangsysApp.t).toBe(core.LangsysApp.t);
+    });
+
+    it('`t` read through the binding IS the core’s current TFunction', () => {
+        expect(binding.LangsysApp.t).toBe(core.LangsysApp.t);
+        expect(binding.LangsysApp.t).toBe(binding.LangsysApp.t);
+    });
+
+    it.each(accessors)('accessor `%s` is not a bound copy', (name) => {
+        const value = asRecord(binding.LangsysApp)[name];
+        if (typeof value === 'function') expect(value.name).not.toMatch(/^bound /);
+        expect(value).toBe(asRecord(core.LangsysApp)[name]);
+    });
+});
+
+/**
  * The surface a Svelte consumer actually reaches.
  *
  * This binding exposes no `setContext`/`getContext` — verified, not assumed — so

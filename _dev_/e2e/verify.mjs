@@ -8,8 +8,8 @@
  *     npm run dev                       # terminal 1, must be 127.0.0.1:5173
  *     node --env-file=.env _dev_/e2e/verify.mjs
  *
- * Takes ~90s: the hint-attribution assertion deliberately waits out the SDK's
- * 5–30s jitter window.
+ * Takes about two minutes: the hint-attribution assertion deliberately waits out
+ * the SDK's 5–30s jitter window. Start the dev server fresh before a run you cite.
  *
  * NOT covered here, by design — the SSR write lane (`ssrTokenStrategy:'server'`).
  * `LangsysApp` is a process-wide singleton and the dev server is long-lived, so
@@ -126,7 +126,13 @@ for (const [key, expected] of [
 ]) {
     const { p } = await newPage();
     await p.goto(`${BASE}/e2e/lanes?key=${key}`, { waitUntil: 'networkidle' });
-    await p.waitForTimeout(600);
+    // Wait for authorization to resolve rather than for a fixed 600ms: a slow
+    // authorize-project answer read as `undefined` and failed the ip_write case once.
+    // A session that never resolves still fails below — the wait only stops timing
+    // from masquerading as a capability result.
+    await p
+        .waitForFunction(() => !/writeEnabled:\s*undefined/.test(document.querySelector('.expect')?.textContent ?? ''), null, { timeout: 5000 })
+        .catch(() => {});
     const txt = (await p.locator('.expect').first().textContent()).trim();
     const m = txt.match(/writeEnabled:\s*(\S+)/);
     const got = m ? m[1] : '?';
@@ -183,16 +189,20 @@ for (const [key, expected] of [
     const { p } = await newPage();
     await p.goto(`${BASE}/e2e/nav`, { waitUntil: 'networkidle' });
     await p.waitForTimeout(500);
-    const mountedBefore = await p.locator('.mono.muted').first().textContent();
+    // Scoped by text, not `.first()`. The layout's re-entry phrase is also `.mono.muted` and
+    // renders first, so `.first()` read IT: both regexes matched nothing, and
+    // `undefined === undefined` passed the remount check for as long as that phrase existed.
+    const captured = async () => (await p.locator('.mono.muted:has-text("captured at mount")').textContent()).match(/captured at mount:\s*(\S+)/)?.[1];
+    const capturedBefore = await captured();
     await p.locator('button:has-text("pushState")').click();
     await p.waitForTimeout(400);
     const url = p.url();
-    const mountedAfter = await p.locator('.mono.muted').first().textContent();
-    const capturedBefore = mountedBefore.match(/captured at mount:\s*(\S+)/)?.[1];
-    const capturedAfter = mountedAfter.match(/captured at mount:\s*(\S+)/)?.[1];
+    const capturedAfter = await captured();
+    if (capturedBefore) pass('premise: the captured-at-mount URL was actually read', capturedBefore);
+    else fail('premise: the captured-at-mount URL was actually read', 'nothing matched — the remount check below would be vacuous');
     if (url.includes('shallow=pushed')) pass('pushState mutated location.href', url);
     else fail('pushState mutated location.href', url);
-    if (capturedBefore === capturedAfter) pass('shallow routing did not remount (captured URL stable)', capturedAfter);
+    if (capturedBefore && capturedBefore === capturedAfter) pass('shallow routing did not remount (captured URL stable)', capturedAfter);
     else fail('shallow routing did not remount', `${capturedBefore} -> ${capturedAfter}`);
 }
 
@@ -253,7 +263,10 @@ for (const [key, expected] of [
     await p.locator('button:has-text("Set next token")').click();
     await p.waitForTimeout(2500);
     const afterSwap = (await p.locator('[data-testid="we"]').textContent()).trim();
-    if (afterSwap === 'false') pass('store re-read at request time (valid -> expired degrades)', `${atInit} -> ${afterSwap}`);
+    // Both ends, not just the last one. Checking `afterSwap` alone passed a mutation run in
+    // which `init` dropped the grant entirely — `false -> false` reads as "degraded" when the
+    // session was never write-enabled to begin with.
+    if (atInit === 'true' && afterSwap === 'false') pass('store re-read at request time (valid -> expired degrades)', `${atInit} -> ${afterSwap}`);
     else fail('store re-read at request time (valid -> expired degrades)', `${atInit} -> ${afterSwap}`);
 }
 
@@ -476,11 +489,20 @@ for (const [key, expected] of [
     await p.waitForTimeout(700);
     const before = await p.evaluate(() => window.__lsReentry ?? 0);
 
-    // Client-side navigation: the layout does NOT remount.
+    // Client-side navigation: the layout does NOT remount. Wait for the ROUTER to arrive, not
+    // for a fixed delay — a navigation that never happened reads exactly like a layout that
+    // never re-entered, and so does a location that never moved.
     await p.locator('a[href*="/e2e/nav/elsewhere"]').click();
+    await p.waitForURL('**/e2e/nav/elsewhere**', { timeout: 5000 }).catch(() => {});
     await p.waitForTimeout(900);
     const after = await p.evaluate(() => window.__lsReentry ?? 0);
     const survived = await p.evaluate(() => window.__lsReentry !== undefined);
+
+    // Control 1 of 2 for HINT-4: the URL genuinely moved, read from the page's own
+    // `window.location` rather than from Playwright's view of it.
+    const movedTo = await p.evaluate(() => window.location.pathname);
+    if (movedTo === '/e2e/nav/elsewhere') pass('HINT-4 control: the page’s own location moved to the new route', movedTo);
+    else fail('HINT-4 control: the page’s own location moved to the new route', `${movedTo} — rest of this test is vacuous`);
 
     if (before >= 1) pass('re-entry probe recorded a baseline', `count=${before}`);
     else fail('re-entry probe recorded a baseline', `count=${before} — probe never ran, rest is vacuous`);
@@ -503,6 +525,109 @@ for (const [key, expected] of [
     // and this is its positive control — the same counter proves calls ARE observable.
     if (after >= before) pass('re-entry counter is monotonic (probe is sane)', `${before} -> ${after}`);
     else fail('re-entry counter is monotonic (probe is sane)', `${before} -> ${after}`);
+
+    // HINT-4, measured PER URL. Every counted t() call records the URL it ran at. The
+    // destination page records its own entries into the same list, which is the positive
+    // control: without it, "the layout recorded nothing at the new URL" could equally mean
+    // the probe cannot see that URL at all.
+    const entries = await p.evaluate(() => window.__lsEntries ?? []);
+    const DEST = '/e2e/nav/elsewhere';
+    const layoutAtOrigin = entries.filter((e) => e.where === 'layout' && !e.url.includes(DEST)).length;
+    const pageAtDest = entries.filter((e) => e.where === 'page' && e.url.includes(DEST)).length;
+    const layoutAtDest = entries.filter((e) => e.where === 'layout' && e.url.includes(DEST)).length;
+
+    if (layoutAtOrigin >= 1) pass('HINT-4 premise: the layout entered t() at the ORIGIN url', String(layoutAtOrigin));
+    else fail('HINT-4 premise: the layout entered t() at the ORIGIN url', 'no url recorded — rest is vacuous');
+
+    if (pageAtDest >= 1) pass('HINT-4 control: an ordinary page enters t() at the NEW url', `${pageAtDest} entr${pageAtDest === 1 ? 'y' : 'ies'}`);
+    else fail('HINT-4 control: an ordinary page enters t() at the NEW url', '0 — the probe cannot see the new url, so the layout result below means nothing');
+
+    // The measurement. Recorded either way, like BIND-5 above; it is the grade's evidence,
+    // not an assertion that can go red.
+    pass(
+        layoutAtDest === 0
+            ? 'HINT-4 MEASURED: the persistent layout captures NO url for the new route'
+            : 'HINT-4 MEASURED: the persistent layout re-entered at the new route',
+        `layout entries at ${DEST}: ${layoutAtDest}`
+    );
+}
+
+// ---------- TEST 15: MARK-1 — a <Translate> host's stamp equals an id RE-DERIVED from its subtree ----------
+// Reading the attribute back would prove only that a write happened. The id is re-derived
+// in the page by running the core's own tokenizer over the rendered host and hashing the
+// tokens with the core's own generateCustomId: two paths to one value.
+{
+    const { p } = await newPage();
+    await p.goto(`${BASE}/e2e/lanes?key=read&run=mark1`, { waitUntil: 'networkidle' });
+    await p.waitForTimeout(900);
+    const hosts = await p.evaluate((category) => {
+        const id = window.__lsIdentity;
+        if (!id) return null;
+        return [...document.querySelectorAll(`[${id.CONTENT_BLOCK_MARKER_ATTR}]`)].map((host) => {
+            const { tokens } = id.tokenizeElement(host);
+            return {
+                stamped: host.getAttribute(id.CONTENT_BLOCK_MARKER_ATTR),
+                derived: id.generateCustomId(category, tokens),
+                perturbed: id.generateCustomId(category, [...tokens, 'perturbed']),
+            };
+        });
+    }, 'E2E838');
+
+    if (!hosts) fail('MARK-1: a rendered <Translate> host carries the stamp', 'window.__lsIdentity missing — rest is vacuous');
+    else if (!hosts.length) fail('MARK-1: a rendered <Translate> host carries the stamp', 'no stamped host on /e2e/lanes');
+    else {
+        pass('MARK-1: a rendered <Translate> host carries the stamp', `${hosts.length} host(s)`);
+        const wrong = hosts.filter((h) => h.stamped !== h.derived);
+        if (!wrong.length) pass('MARK-1: stamp equals the id re-derived by the tokenizer', hosts[0].derived);
+        else fail('MARK-1: stamp equals the id re-derived by the tokenizer', JSON.stringify(wrong[0]));
+        // Control: the comparison can fail. A perturbed token list must not match the stamp.
+        if (hosts.every((h) => h.perturbed !== h.stamped)) pass('MARK-1 control: a perturbed token list does not match', 'distinct');
+        else fail('MARK-1 control: a perturbed token list does not match', 'comparison cannot fail');
+    }
+}
+
+// ---------- TEST 16: GRANT-3/4 — setWriteGrant() re-authorizes, the SERVER flips capability, later misses register ----------
+// TEST 3 proves the mechanism fires. This proves it has the effect the rule exists for: no
+// grant at init, then the binding's own setWriteGrant override with a valid token. The painted
+// capability must flip because the re-authorization RESPONSE said so, and misses rendered after
+// it must land in the catalog — server state, not a captured request.
+{
+    const RUN = 'grant3' + Math.floor((Date.now() / 1000) % 100000);
+    const { p } = await newPage();
+    const decisions = [];
+    p.on('response', async (r) => {
+        if (!r.url().includes('authorize-project')) return;
+        try {
+            decisions.push((await r.json())?.data?.write_enabled);
+        } catch {
+            /* non-JSON body — the assertion below reports what was captured */
+        }
+    });
+    await p.goto(`${BASE}/e2e/grant?next=${encodeURIComponent(GRANT_VALID)}&run=${RUN}`, { waitUntil: 'networkidle' });
+    await p.waitForTimeout(1200);
+    const painted = async () => (await p.locator('[data-testid="we"]').textContent()).trim();
+
+    const before = await painted();
+    if (before === 'false') pass('GRANT-3 premise: READ key with no grant is read-only', before);
+    else fail('GRANT-3 premise: READ key with no grant is read-only', `${before} — rest is vacuous`);
+
+    const seenBefore = decisions.length;
+    await p.locator('button:has-text("setWriteGrant(next)")').click();
+    await p.waitForTimeout(2500);
+    const after = await painted();
+    const reauth = decisions.slice(seenBefore);
+
+    if (after === 'true') pass('GRANT-3: setWriteGrant() flips a READ key to write-enabled', `${before} -> ${after}`);
+    else fail('GRANT-3: setWriteGrant() flips a READ key to write-enabled', `${before} -> ${after}`);
+
+    if (reauth.at(-1) === true) pass('GRANT-3: the flip is the re-authorization response’s decision', `write_enabled ${reauth.join(',')}`);
+    else fail('GRANT-3: the flip is the re-authorization response’s decision', JSON.stringify(reauth));
+
+    await p.waitForTimeout(4000); // let the post-grant registration flush
+    const cat = await (await fetch(`${API}/translations?project_id=${PROJECT}&locale=en-US`, { headers: { 'x-Authorization': KEY_READ } })).json();
+    const landed = Object.keys(cat?.data?.E2E838 ?? {}).filter((k) => k.includes('grant-store') && k.includes(RUN));
+    if (landed.length >= 2) pass('GRANT-4: misses rendered after the grant registered directly (catalog)', `${landed.length} for run ${RUN}`);
+    else fail('GRANT-4: misses rendered after the grant registered directly (catalog)', `${landed.length} for run ${RUN}`);
 }
 
 await browser.close();

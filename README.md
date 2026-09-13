@@ -94,6 +94,16 @@ Store **BCP 47 language tags** in it (`en-US`, `pt-BR`, `zh-Hant`). Casing and `
 compares internally, so a store holding `en-US` resolves to the same catalog entry rather
 than fetching twice. A tag that isn't valid BCP 47 at all — `english`, `en-USA` — is passed through best-effort rather than rejected, which means it simply fails to match a catalog and the page renders base language. That looks exactly like a locale you haven't translated yet, so run with `debug: true` in development: the SDK warns on an invalid tag at the point where it can still tell the difference.
 
+### Pointing the SDK at another API
+
+`apiUrl` redirects every request — to a staging API, or to a test double in integration tests — without touching the built package. Defaults to `https://api.langsys.dev/api`.
+
+```ts
+await LangsysApp.init({ projectid, key, UserLocaleStore, apiUrl: 'http://langsys2.test/api' });
+```
+
+Pass it to `init()` rather than calling `LangsysAppAPI.setBaseUrl()`. `setBaseUrl` only works if it runs **before** `init()`; called after, the SDK has already authorized against the default host and stays inert for the life of the page — nothing throws, and translations simply never arrive. `apiUrl` is applied inside `init()`, before authorization, so the order cannot go wrong.
+
 ### SSR token strategy
 
 `ssrTokenStrategy` (default `'client'`) controls when missing tokens are sent during server rendering:
@@ -101,6 +111,13 @@ than fetching twice. A tag that isn't valid BCP 47 at all — `english`, `en-USA
 - `'client'` (default) — the server collects **nothing**. Registration happens only from the browser, for content the browser actually renders. Cheapest, and the right default; but see the discovery gap below.
 - `'server'` — tokens are sent immediately during SSR. Best for reliability and immediate registration.
 - `'auto'` — small batches (≤5) sent from server, larger queued for client.
+
+> [!IMPORTANT]
+> **`'server'` requires your origin server's address to be allow-listed for the key.**
+> Registrations under `'server'` originate from your server process, so the API sees your
+> origin server's IP, not a visitor's. If that address is not allow-listed, the SDK makes zero
+> registration attempts by design — no error, no request, nothing in the catalog, and no
+> discovery hint. `'auto'` sends its small batches the same way and has the same precondition.
 
 > **The discovery gap under `'client'`.** It is tempting to read "queue on the server,
 > flush from the client" into this option — the SDK does not do that, and cannot. Under SSR

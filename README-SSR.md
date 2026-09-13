@@ -506,10 +506,14 @@ during SSR — a branch the browser never takes, anything gated on `!browser` �
 the browser's collector and was never collected on the server either. It fails silently: no
 error, no failed request, and no discovery hint, because SSR does not hint.
 
-Reach for `ssrTokenStrategy: 'server'` on those pages. It has its own precondition worth
-stating up front rather than as a footnote: the flush then originates from your **origin
-server's IP**, so that address must be allow-listed for the key — otherwise the SDK makes
-zero registration attempts by design and the failure is, again, completely silent.
+Reach for `ssrTokenStrategy: 'server'` on those pages — after checking the precondition below.
+
+> [!IMPORTANT]
+> **`'server'` requires your origin server's address to be allow-listed for the key.**
+> Registrations under `'server'` originate from your server process, so the API sees your
+> **origin server's IP**, not a visitor's. If that address is not allow-listed, the SDK makes
+> zero registration attempts by design — no error, no request, nothing in the catalog, and no
+> discovery hint. `'auto'` sends its small batches the same way and has the same precondition.
 
 ### Debug mode
 

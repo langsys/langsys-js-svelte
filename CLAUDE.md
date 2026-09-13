@@ -105,7 +105,17 @@ to erode:
   If the suite is ever doubled, the grades move down with it.
 - **Every `delegated` row states a non-zero count for the control that would have found
   participation.** "We found nothing" is worthless unless the same search demonstrably finds
-  something where it does live.
+  something where it does live. `node _dev_/delegation-probe.mjs --check` enforces it: one
+  pattern per rule id, comments stripped on both sides, binding 0 and core above 0.
+- **The file's shape is machine-checked, so keep it canonical.** Header rows
+  `| **Spec revision read** | … blob <sha> |` and `| **Profiles** | … |`; one table headed
+  `| Rule | Status | Tier | Evidence |`; one row per spec rule id, never a family row.
+  `node _dev_/conformance-summary.mjs --check` reads the ids out of the cited blob. Re-derive the
+  blob with `git ls-tree` on every write — never carry it. `CONFORMANCE.md` is in
+  `.prettierignore` on purpose: Prettier pads every row to the widest evidence cell.
+- **Tier records the evidence for the property the rule governs**, not whether a double appears
+  in a test: `live` only where the API's answer decides the property; `n/a (pure)` for in-process
+  behaviour, artifact inspection with a control, and meta-rules; `delegated` rows take `-`.
 
 ## Essential commands
 
