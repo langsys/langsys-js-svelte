@@ -40,14 +40,19 @@ Every item below was found by running something against this binding, not by rea
    it. All three fixed with premises.
 8. **The previous file graded family names, not rules.** Expanded it covered 57 of 79 ids and
    contradicted itself in seven places, and its summary script counted grade cells rather than ids.
+9. **The documented seed does not leak between concurrent visitors — for a Svelte-specific reason.**
+   React, Solid and Angular each leaked a process-global seed under SSR. Measured here: 0 of 800
+   wrong-locale through the component-body seed, 377 of 800 when the same seed sits before an `await`.
+   Svelte's default server render is one synchronous pass, so placement, not the seed, decides it.
 
 ## Gaps, ranked by cost
 
 1. **SRV-1** — `<Translate>` and `<Phrase>` content reaches crawlers, link previews and no-JS readers
    in the base language under a localised URL. SEO cost lands on the customer, silently.
 2. **SRV-2** — no request-scoped catalog. Correct today only because Svelte's default renderer is
-   synchronous; `experimental.async` with an await before a read in the same script served the wrong
-   locale 3 times in 4. Intermittent, under traffic.
+   synchronous: 0 of 800 wrong-locale through the documented seed, against 377 of 800 with the seed before an
+   await. `experimental.async` with an await before a read in the same script served the wrong locale
+   3 times in 4 (README-SSR; not committed). Intermittent, under traffic.
 3. **HINT-4** — layout-level content is never attributed to any URL after the first. Discovery cannot
    say which other pages carry it. Documented mitigation: discoverable content in `+page`.
 4. **SRV-4** — no tested hydration hand-off, and the documented seed bypasses the core's `seedCatalog`.
@@ -115,8 +120,8 @@ JS Server 0.2.0 adapters or in each binding is an open operator decision.
 | SSR-1 | delegated | - | core row SSR-1 (provisional, mock) · probe `/shouldQueueForWrite/` binding 0, core 2 · both READMEs state that `'client'` collects nothing server-side |
 | SSR-2 | delegated | - | core row SSR-2 (provisional, mock) · probe `/ssrWriteEnabled/` binding 0, core 3 · corroborated once through the binding by the `/e2e/ssr-write` procedure (a valid grant degrades `'server'` and registers 0; no grant registers 2), not re-run at this write |
 | SSR-3 | implemented | n/a (pure) | src/docs.test.ts: README.md and README-SSR.md, both shipped, each carry an `[!IMPORTANT]` callout that leads with the allow-list precondition. Controls: the parser finds README-SSR's known `[!WARNING]`, and rejects README.md's plain discovery-gap blockquote, which mentions the allow-list in its last sentence — the footnote shape the rule forbids, and the shape both READMEs had before this write. Mutation: callout demoted to a blockquote reds 1. The refused side belongs to the core and the backend and cannot be produced here |
-| SRV-1 | partial | n/a (pure) | src/ssr-measure/served-bytes.test.ts, on served bytes. Under README-SSR's component-body seed, `$t()` serves the request locale and the base language for a genuine miss in the same render; control: an empty catalog serves base. `<Translate>` and `<Phrase>` serve base language with the translation present under both lookup shapes, because both construct their handler in `$effect`, which SSR never runs — pinned as GAP rows that go red when it closes. `$t()`'s half rests on a process-global write (SRV-2). Not built, per the plan |
-| SRV-2 | not implemented | - | No request scope exists. The catalog is the core's module-global `sTranslations`, and README-SSR's seed writes it per request — which the rule's MUST forbids by construction. The pattern's concurrency safety is a property of Svelte's synchronous renderer, measured and published in README-SSR: 0 of 400 wrong-locale responses seeded in a layout body, 70 of 80 seeded in a hook that awaits, 3 of 4 under `experimental.async` with an await before the read in the same script. Those harnesses are not committed, so they explain this grade and support no conformance claim |
+| SRV-1 | partial | n/a (pure) | src/ssr-measure/served-bytes.test.ts, on served bytes. Under README-SSR's component-body seed, `$t()` serves the request locale and the base language for a genuine miss in the same render; control: an empty catalog serves base. Concurrency through that same seed, measured by `_dev_/e2e/srv-concurrency.mjs` on a freshly started dev server, rendering `it-it` and `de-de` 8 at a time and reading served bytes: the body seed served 0 of 800 responses in the wrong locale, while the same harness with the seed placed before an `await` in `load` — the positive control — served 377 of 800 wrong. So `$t()`'s half is correct per visitor, but only because Svelte's default server render is one synchronous pass (SRV-2). `<Translate>` and `<Phrase>` serve base language with the translation present under both lookup shapes, because both construct their handler in `$effect`, which SSR never runs — pinned as GAP rows that go red when it closes. Not built, per the plan |
+| SRV-2 | not implemented | - | No request scope exists. The catalog is the core's module-global `sTranslations`, and README-SSR's seed writes it per request — which the rule's MUST forbids by construction. The pattern's concurrency safety is a property of Svelte's synchronous renderer, measured and published in README-SSR: 0 of 400 wrong-locale responses seeded in a layout body, 70 of 80 seeded in a hook that awaits, 3 of 4 under `experimental.async` with an await before the read in the same script. The first two shapes are now re-measured by the committed `_dev_/e2e/srv-concurrency.mjs`: body seed 0 of 800 wrong-locale, seed-then-await in `load` 377 of 800 (SRV-1). The `experimental.async` shape is not, because a component that awaits in its script needs that compiler flag, and turning it on for the testbed would change the renderer under every other route. None of the counts changes this grade: the MUST is violated by construction |
 | SRV-3 | not implemented | - | Nothing orders collection after the response flush. Under the default `'client'` the server collects nothing, so neither MUST can be observed failing; under `'server'` the core's debounced flush runs in Node with no tie to SvelteKit's response lifecycle. No test asserts the order of events. The core rows SRV-3 profile-n/a for itself |
 | SRV-4 | not implemented | - | The rule splits. Core half: `seedCatalog` is synchronous (core row SRV-4) and reachable through this binding's proxy with no override (surface.test.ts generated reachability). Binding half — calling it before hydration so the first client render matches the served HTML, with the mismatch control — has no test. README-SSR's seed writes `sTranslations` and `currentlyLoadedLocale` directly instead of calling `seedCatalog`, which also injects `__uncategorized__`, stamps `__category__` and marks the locale loaded: a second implementation of seeding, in user code. Not rewritten here, because README-SSR's measured guidance is not restated without re-measuring |
 | SRV-5 | not implemented | - | No server-side child capture exists: `<Translate>` and `<Phrase>` do nothing during SSR (served-bytes.test.ts GAP rows), so there is no per-subtree count to assert and no uncapturable child to fail loudly on. Measurable once capture lands |
@@ -173,6 +178,9 @@ and their absence halves use the same instrument and the same control.
 #       the local project seeded with langsys2's SdkIntegrationSeeder; the core symlinked
 npm run dev                                   # 127.0.0.1:5173, freshly started
 node --env-file=.env _dev_/e2e/verify.mjs     # 61/61 at this write, 127 s
+
+# SRV concurrency — its own freshly started server; no API, no .env
+node _dev_/e2e/srv-concurrency.mjs            # body seed 0 of 800 wrong-locale; control 377 of 800
 ```
 
 Re-run on demand at this write, from a freshly started dev server. The reproducibility boundary is

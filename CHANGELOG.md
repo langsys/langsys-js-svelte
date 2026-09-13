@@ -1,5 +1,16 @@
 ## Unreleased
 
+### Added
+
+- **`_dev_/e2e/srv-concurrency.mjs` measures whether README-SSR's seed leaks between concurrent
+  visitors.** It renders `it-it` and `de-de` eight at a time on a fresh dev server and reads the
+  served bytes, through the documented component-body seed and through a positive control that seeds
+  in `load` and then awaits. Sibling bindings measured a process-global seed leaking under SSR; this
+  one does not in Svelte's default mode, because the server render is one synchronous pass — so the
+  placement of the seed, not the seed itself, is what decides it. The counts are in `CONFORMANCE.md`
+  under SRV-1 and SRV-2. The `experimental.async` shape stays unmeasured here: a component that awaits
+  needs that compiler flag, and enabling it would change the renderer for every other testbed route.
+
 ### Fixed
 
 - **`LangsysApp.t` was a different function on every read.** The proxy bound every function it

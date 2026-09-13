@@ -112,22 +112,42 @@ attempts by design and the failure is completely silent — no error, no failed 
 nothing in the catalog, and no hint, because SSR never hints. The refused side is
 covered in the backend and core suites.
 
+## SRV concurrency is a separate run, too
+
+`_dev_/e2e/srv-concurrency.mjs` asks whether concurrent server renders in different locales
+see each other's catalog through README-SSR's process-global seed. It renders `it-it` and
+`de-de` eight at a time and reads the **served bytes** — no browser, no API, no `.env`.
+
+```bash
+pkill -f "vite dev"; npm run dev &
+node _dev_/e2e/srv-concurrency.mjs
+```
+
+Two shapes, same harness. `body` is the documented pattern: `load` returns the catalog and
+the component body seeds it. `load` is the **positive control**: it seeds, then awaits
+before rendering — the placement README-SSR measured as unsafe. The run fails if the
+control shows no leak, because a zero for `body` from a harness that cannot see
+interleaving would mean nothing. Both shapes write process-global signals, so give the run
+its own freshly started server.
+
 ## Testbed routes
 
-| Route                                  | Covers                                                                                                                   |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `/e2e/lanes?key=read\|ip_write\|write` | gate matrix; `setWriteGrant` mechanism (sends a deliberately **invalid** grant — refusal is the expected result)         |
-| `/e2e/hydration`                       | `await init()` in a universal `load` — the mismatch path                                                                 |
-| `/e2e/visibility`                      | CSS-hidden vs `{#if}` vs `{#await}` discovery                                                                            |
-| `/e2e/params`                          | `<Translate params>`, `<Phrase params>`, unknown placeholders, literal `%`, unused-key warning                           |
-| `/e2e/vanilla`                         | isolation harness: same markup via the Svelte component vs the vanilla class — settles "is it core or is it the binding" |
-| `/e2e/nav` , `/e2e/nav/elsewhere`      | client-side nav + `pushState` during jitter                                                                              |
-| `/e2e/grant?initial=<jwt>&next=<jwt>`  | the Svelte store form, incl. expiry degradation                                                                          |
-| `/e2e/ssr-write?grant=1&token=<jwt>`   | SSR write lane (fresh server per case)                                                                                   |
+| Route                                                 | Covers                                                                                                                   |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `/e2e/lanes?key=read\|ip_write\|write`                | gate matrix; `setWriteGrant` mechanism (sends a deliberately **invalid** grant — refusal is the expected result)         |
+| `/e2e/hydration`                                      | `await init()` in a universal `load` — the mismatch path                                                                 |
+| `/e2e/visibility`                                     | CSS-hidden vs `{#if}` vs `{#await}` discovery                                                                            |
+| `/e2e/params`                                         | `<Translate params>`, `<Phrase params>`, unknown placeholders, literal `%`, unused-key warning                           |
+| `/e2e/vanilla`                                        | isolation harness: same markup via the Svelte component vs the vanilla class — settles "is it core or is it the binding" |
+| `/e2e/nav` , `/e2e/nav/elsewhere`                     | client-side nav + `pushState` during jitter                                                                              |
+| `/e2e/grant?initial=<jwt>&next=<jwt>`                 | the Svelte store form, incl. expiry degradation                                                                          |
+| `/e2e/ssr-write?grant=1&token=<jwt>`                  | SSR write lane (fresh server per case)                                                                                   |
+| `/e2e/srv-concurrency/body\|load?locale=it-it\|de-de` | served bytes under concurrent renders: documented body seed vs. seed-then-await control (fresh server)                   |
 
-**The layout nav lists every route except `/e2e/ssr-write`, deliberately** — that page
-needs a freshly started server per case, and a nav link would invite clicking into it
-mid-session and silently contaminating the run. It is reachable by typed URL only.
+**The layout nav lists every route except `/e2e/ssr-write` and `/e2e/srv-concurrency`,
+deliberately** — both need a freshly started server, and a nav link would invite clicking
+into them mid-session and silently contaminating the run. They are reachable by typed URL
+only.
 
 The nav also carries `data-sveltekit-reload`, so every lane switch is a real page load.
 Without it these are client-side navigations, the app never remounts, and switching to a
