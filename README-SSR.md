@@ -75,7 +75,7 @@ import { PUBLIC_LANGSYS_API_KEY } from '$env/static/public';
 const SUPPORTED = ['en-US', 'es-CR', 'fr-FR', 'it-IT'];
 const BASE_LOCALE = 'en-US';
 
-export async function load({ fetch, request, locals }) {
+export async function load({ fetch, request, locals, setHeaders }) {
     // Resolve Accept-Language down to a tag the project actually has. This helper is
     // pure — it reads the header and returns a string; it touches no SDK state, so
     // it is safe on the server. It returns `false` when there is nothing to go on,
@@ -83,6 +83,10 @@ export async function load({ fetch, request, locals }) {
     // check the result against your list rather than trusting it.
     const detected = locals.userLocale || LangsysApp.detectPreferredLocale(request.headers.get('accept-language'), SUPPORTED);
     const locale = typeof detected === 'string' && SUPPORTED.includes(detected) ? detected : BASE_LOCALE;
+
+    // The response now depends on something outside the URL, so say what. Without `Vary`, a
+    // CDN caches the first visitor's language and serves it to everyone after them.
+    setHeaders({ vary: locals.userLocale ? 'Cookie' : 'Accept-Language' });
 
     const response = await fetch(`https://api.langsys.dev/api/translations?project_id=${LANGSYS_PROJECT_ID}&locale=${locale}`, {
         headers: {
@@ -100,6 +104,13 @@ export async function load({ fetch, request, locals }) {
     };
 }
 ```
+
+> **Choosing the locale.** Take the first usable candidate from the URL (a path segment,
+> subdomain or query parameter your app routes by), then a cookie or session value your app
+> set (`locals.userLocale` above), then `Accept-Language`; otherwise the base locale. Check
+> every candidate against the locales the project serves and skip one it doesn't — never
+> serve it, and never write it back to a cookie. A locale taken from the URL needs no `Vary`,
+> because the URL is already the cache key.
 
 > **Use `/api/translations?project_id=…&locale=…`.** This is the route the SDK itself
 > calls, so a hand-rolled server fetch and the client's later fetches agree. The older
@@ -313,9 +324,10 @@ want.
 
 ```typescript
 // src/routes/+layout.server.ts — the Step 1 load, with the fetch made failure-safe
-export async function load({ fetch, request, locals }) {
+export async function load({ fetch, request, locals, setHeaders }) {
     const detected = locals.userLocale || LangsysApp.detectPreferredLocale(request.headers.get('accept-language'), SUPPORTED);
     const locale = typeof detected === 'string' && SUPPORTED.includes(detected) ? detected : BASE_LOCALE;
+    setHeaders({ vary: locals.userLocale ? 'Cookie' : 'Accept-Language' });
 
     // A non-2xx is not an exception, so check `response.ok` as well as catching.
     let translations: iCategories = {};

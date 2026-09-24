@@ -35,6 +35,14 @@ describe('surface — re-exported by reference', () => {
         expect(binding.LangsysAppAPI).toBe(core.LangsysAppAPI);
         expect(binding.canonicalizeLocale).toBe(core.canonicalizeLocale);
     });
+
+    it('notifyNavigation and the server-message helpers are the core functions themselves', () => {
+        // The navigation entry point (HINT-13) and the message resolver and renderer (MSG-1,
+        // MSG-5) decide behaviour, so the binding hands out the core's own functions.
+        expect(binding.notifyNavigation).toBe(core.notifyNavigation);
+        expect(binding.resolveServerMessages).toBe(core.resolveServerMessages);
+        expect(binding.renderServerMessage).toBe(core.renderServerMessage);
+    });
 });
 
 describe('surface — the one deliberate non-re-export', () => {

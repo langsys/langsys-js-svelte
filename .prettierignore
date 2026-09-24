@@ -22,3 +22,8 @@ CONFORMANCE.md
 pnpm-lock.yaml
 package-lock.json
 yarn.lock
+
+# Vendored byte-exact from langsys-js-typescript and cited by git tree id. Reformatting it
+# would change the tree id and break the citation.
+/contract-fixture
+/vectors

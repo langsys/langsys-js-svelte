@@ -58,6 +58,18 @@ import { createForwardingHandler } from './proxy-handler.js';
 // JSDoc above and README-SSR.md before writing to them.
 export { currentlyLoadedLocale, sTranslations, tSignal as t } from 'langsys-js-typescript';
 
+// Route-change entry point (HINT-13), re-exported by reference. After a call, content that
+// stays mounted across routes — a persistent layout — is looked up again, so its misses are
+// recorded for the new URL. SvelteKit apps call `syncNavigation()` from `langsys-js-svelte/kit`
+// once in the root layout; other routers call this from their after-navigation hook.
+export { notifyNavigation } from 'langsys-js-typescript';
+
+// Server messages (MSG family). Resolving entries out of a response body and deciding what an
+// entry renders as — its template's translation, or its `message` — are the core's, re-exported
+// by reference. `serverMessage` is the Svelte-reactive wrapper over the core's renderer.
+export { renderServerMessage, resolveServerMessages } from 'langsys-js-typescript';
+export { serverMessage } from './messages.js';
+
 // `writeEnabled` is the one store we do NOT re-export by reference — reading the
 // live signal during hydration is a mismatch hazard in SvelteKit. See stores.ts.
 export { writeEnabled } from './stores.js';
@@ -80,6 +92,7 @@ export { default as DontTranslate } from './components/DontTranslate.svelte';
 // Type re-exports — these are all framework-agnostic so consumers can rely on
 // them directly without reaching into langsys-js-typescript.
 export type { WriteGrantSource } from './adapters.js';
+export type { ResolveServerMessagesOptions, ServerMessage } from 'langsys-js-typescript';
 
 export type {
     ExtractParamKeys,

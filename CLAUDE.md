@@ -20,6 +20,8 @@ README-SSR.md                     # ships in the tarball (since 3.6.15); SSR pat
 src/lib/
     index.ts                      # public exports — LangsysApp wrapper, t store, components, type re-exports
     adapters.ts                   # writable<T> → Signal<T> adapter (svelte/store get → .get())
+    messages.ts                   # `serverMessage` — a store derived from `t` over the core's renderServerMessage
+    kit.ts                        # `langsys-js-svelte/kit` entry — syncNavigation() via SvelteKit's afterNavigate
     components/
         Translate.svelte          # Svelte 5 thin wrapper around langsys-js-typescript's vanilla DOM Translate class
         Phrase.svelte             # thin wrapper around the vanilla Phrase rich-text handler
@@ -113,6 +115,13 @@ to erode:
   `node _dev_/conformance-summary.mjs --check` reads the ids out of the cited blob. Re-derive the
   blob with `git ls-tree` on every write — never carry it. `CONFORMANCE.md` is in
   `.prettierignore` on purpose: Prettier pads every row to the widest evidence cell.
+- **Contract evidence is `contract-fixture/`**, vendored byte-exact from langsys-js-typescript and
+  cited by tree id; never edit or reformat it. `_dev_/contract/verify-contract.mjs` drives the
+  `/fixture` testbed against it through the dev server's `/__fx` proxy (the double sends no CORS
+  headers). Mutations run in a copy of the tree on another port, after that copy passes unmutated.
+- **Delegated rows cite the core row's grade**, and `delegation-probe.mjs --check` compares it with
+  the resolved core checkout's CONFORMANCE.md. Verify against a clean build of the core SHA you
+  cite, not the shared checkout, which may carry another lane's uncommitted work.
 - **Tier records the evidence for the property the rule governs**, not whether a double appears
   in a test: `live` only where the API's answer decides the property; `n/a (pure)` for in-process
   behaviour, artifact inspection with a control, and meta-rules; `delegated` rows take `-`.

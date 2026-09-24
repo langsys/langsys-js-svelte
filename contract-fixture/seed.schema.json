@@ -1,0 +1,323 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://langsys.dev/schemas/contract-fixture/seed.schema.json",
+    "title": "Langsys contract double: seed document",
+    "description": "The body of POST /__fixture/seed. Seeding replaces the whole state. Capability is never seeded: write_enabled is computed from key type, source address and write grant, exactly as the backend computes it.",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+        "config": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "batch_limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 200,
+                    "description": "langsys.translatable_items_batch_limit. Enforced with 422, advertised in authorize langsys_settings."
+                },
+                "hint_rate_per_minute": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 120,
+                    "description": "content_discovery.hint_rate_per_minute, per source IP. Exceeding it answers 429."
+                },
+                "hint_dedup_ttl_seconds": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 60,
+                    "description": "content_discovery.hint_dedup_ttl_seconds, per key and normalised URL."
+                },
+                "renderer_egress_ips": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": [],
+                    "description": "content_discovery.renderer_egress_ips. An ip_write key needs at least one for a hint to be accepted, and these addresses may write with an ip_write key."
+                },
+                "legacy_omit_capability": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Behave as a server that predates write_enabled, auto_discovery and discovery_base_locale_only: all three are omitted from every response."
+                },
+                "drop_uncategorized_blocks": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Reproduce the backend's former drop of a content block with no category (200, nothing stored), for a regression row."
+                }
+            }
+        },
+        "projects": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [
+                    "id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "base_locale": {
+                        "type": "string",
+                        "default": "en-us"
+                    },
+                    "target_locales": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": []
+                    },
+                    "website_url": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Hints are accepted only for pages on this host or its subdomains, www stripped."
+                    },
+                    "machine_translate_new_phrases": {
+                        "type": "boolean",
+                        "default": true
+                    },
+                    "subscription_suspended": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Every API-key request answers 402."
+                    },
+                    "credits_exhausted": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Hints are not accepted."
+                    },
+                    "discovery_base_locale_only": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "GATE-9's project setting. Served inside authorize data and as a top-level sibling of data on both catalog routes."
+                    },
+                    "phrases": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": [
+                                "phrase"
+                            ],
+                            "additionalProperties": false,
+                            "properties": {
+                                "category": {
+                                    "type": [
+                                        "string",
+                                        "null"
+                                    ]
+                                },
+                                "phrase": {
+                                    "type": "string"
+                                },
+                                "translations": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ]
+                                    },
+                                    "description": "Locale to translation. A locale absent here reads back as null."
+                                }
+                            }
+                        }
+                    },
+                    "blocks": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": [
+                                "custom_id",
+                                "phrases"
+                            ],
+                            "additionalProperties": false,
+                            "properties": {
+                                "category": {
+                                    "type": [
+                                        "string",
+                                        "null"
+                                    ]
+                                },
+                                "custom_id": {
+                                    "type": "string"
+                                },
+                                "content": {
+                                    "type": [
+                                        "string",
+                                        "null"
+                                    ]
+                                },
+                                "label": {
+                                    "type": [
+                                        "string",
+                                        "null"
+                                    ]
+                                },
+                                "phrases": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "required": [
+                                            "phrase"
+                                        ],
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "phrase": {
+                                                "type": "string"
+                                            },
+                                            "translations": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "keys": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [
+                    "key",
+                    "type"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "description": "The plain key the SDK sends as X-Authorization."
+                    },
+                    "project": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Owning project id. null models a key associated with no project (403)."
+                    },
+                    "type": {
+                        "enum": [
+                            "read",
+                            "write",
+                            "ip_write"
+                        ]
+                    },
+                    "ip_allowlist": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": [],
+                        "description": "Exact addresses or IPv4 CIDR. Tests connect from 127.0.0.1."
+                    },
+                    "write_grant_secret": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "HS256 secret for X-Write-Grant. exp required, 60s leeway, non-empty sub."
+                    },
+                    "report_discovered_content": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "The key's auto_discovery permission."
+                    },
+                    "usage_exhausted": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Every API-key request answers 402."
+                    },
+                    "duplicate_guard": {
+                        "type": [
+                            "object",
+                            "null"
+                        ],
+                        "additionalProperties": false,
+                        "description": "prevent-duplicate-requests for this key. Absent means off, as for an unconfigured key.",
+                        "properties": {
+                            "max_attempts": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "default": 3
+                            },
+                            "window_seconds": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "default": 1
+                            },
+                            "methods": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "default": [
+                                    "*"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "faults": {
+            "type": "array",
+            "description": "Deterministic failures, consumed in order before any other handling. Each models the network or infrastructure, not the application.",
+            "items": {
+                "type": "object",
+                "required": [
+                    "method",
+                    "path"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "method": {
+                        "enum": [
+                            "GET",
+                            "POST"
+                        ]
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Route path after /api, without the query, e.g. /translatable-items."
+                    },
+                    "times": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "default": 1
+                    },
+                    "status": {
+                        "type": "integer",
+                        "description": "Answer with this status."
+                    },
+                    "drop": {
+                        "type": "boolean",
+                        "description": "Destroy the connection without a response."
+                    },
+                    "delay_ms": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Delay before the fault takes effect, or before normal handling when neither status nor drop is set."
+                    }
+                }
+            }
+        }
+    }
+}

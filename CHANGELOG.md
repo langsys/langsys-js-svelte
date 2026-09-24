@@ -2,6 +2,24 @@
 
 ### Added
 
+- **`syncNavigation()` in a new `langsys-js-svelte/kit` entry, and `notifyNavigation` on the main
+  entry.** A layout stays mounted across client-side navigation and nothing re-evaluated its
+  `$t(...)` calls, so a phrase rendered there was attributed to the first URL of the session only.
+  Called once in the root layout, `syncNavigation()` calls the core's `notifyNavigation()` from
+  SvelteKit's `afterNavigate`, and mounted content is looked up again at the new URL. It lives in
+  its own entry so the main one never imports `$app/*`; other routers call `notifyNavigation()`
+  from their own after-navigation hook. `@sveltejs/kit` is now an optional peer dependency, for this entry only. Proven against the shared contract double: a persistent
+  layout's miss is stored as a hint for page B, and nothing is stored for B without the call.
+
+- **Server messages: `serverMessage`, `renderServerMessage` and `resolveServerMessages`.** The
+  core's resolver and renderer are re-exported by reference. `serverMessage` is a store derived
+  from `t`, so `{$serverMessage(entry)}` renders an entry's translated template — or its `message`
+  when there is no translation — and re-renders on a catalog or locale change, as `$t` does. Runs
+  the core's shared `render` vectors, and a page given the entries as an Inertia-style prop.
+
+- **`contract-fixture/`**, the shared API double, vendored byte-exact, with
+  `_dev_/contract/verify-contract.mjs` driving the `/fixture` testbed against it.
+
 - **`_dev_/e2e/srv-concurrency.mjs` measures whether README-SSR's seed leaks between concurrent
   visitors.** It renders `it-it` and `de-de` eight at a time on a fresh dev server and reads the
   served bytes, through the documented component-body seed and through a positive control that seeds
@@ -12,6 +30,11 @@
   needs that compiler flag, and enabling it would change the renderer for every other testbed route.
 
 ### Fixed
+
+- **README-SSR's example `load` chose a locale from `Accept-Language` or a cookie without saying
+  so.** A CDN in front of the site would cache the first visitor's language and serve it to the
+  next. The example now sets `Vary: Accept-Language` or `Vary: Cookie` to match where the locale
+  came from, and states the order: URL, then cookie or session, then `Accept-Language`.
 
 - **`LangsysApp.t` was a different function on every read.** The proxy bound every function it
   forwarded, including the `TFunction` the core's `t` getter returns — so `LangsysApp.t ===

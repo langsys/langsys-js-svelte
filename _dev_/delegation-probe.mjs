@@ -40,6 +40,7 @@ export const PROBES = [
     ['GATE-6', 'recordMissForDiscovery'],
     ['GATE-7', 'registerContentBlock'],
     ['GATE-8', 'key_type'],
+    ['GATE-9', 'discoveryBaseLocaleOnly'],
     ['CAT-1', 'buildTFn|missingToken'],
     ['CAT-2', '\\blookup\\('],
     ['CAT-3', 'isContentBlockKnown'],
@@ -55,8 +56,10 @@ export const PROBES = [
     ['REG-10', 'noteSendFailure|createTranslatableItems'],
     ['REG-11', 'warnedEllipsis'],
     ['REG-12', 'missingToken'],
+    ['REG-13', 'catalogFetchesInFlight'],
     ['HINT-1', 'discovery/hint'],
     ['HINT-3', 'recordMissForDiscovery|location\\.href'],
+    ['HINT-4', 'SESSION_KEY_PREFIX'],
     ['HINT-5', 'HINT_MIN_DELAY_MS|HINT_MAX_DELAY_MS'],
     ['HINT-6', 'normalizeHintUrl'],
     ['HINT-7', '429'],
@@ -70,6 +73,7 @@ export const PROBES = [
     ['ICU-3', '_recoverMissingArgs'],
     ['ICU-4', 'noteDefaultedArgs'],
     ['ICU-5', 'isICU'],
+    ['ICU-6', 'noteFormatterFailure'],
     ['CID-1', 'canonicalContentBlockJson'],
     ['CID-2', 'generateCustomId'],
     ['CID-3', 'generateLegacyCustomId'],
@@ -79,15 +83,24 @@ export const PROBES = [
     ['TOK-3', 'aria-roledescription'],
     ['TOK-4', 'translateAttribute'],
     ['TOK-5', 'normalizeMarkupPlaceholders|adoptPercentPlaceholders'],
+    ['TOK-6', 'usesSingleTextNodeFastPath'],
     ['MARK-2', 'PHRASE_MARKER_ATTR_LEGACY|isPhraseMarked'],
+    ['MARK-3', 'isContentBlockMarked'],
+    ['MARK-4', '_walkForTokens'],
     ['SSR-1', 'shouldQueueForWrite'],
     ['SSR-2', 'ssrWriteEnabled'],
     ['CACHE-1', 'langsys:translations'],
+    ['CACHE-2', 'catalogUnavailable'],
     ['OBS-1', 'noticeUnusableWriteCapability'],
     ['WIRE-1', 'x-Authorization|X-Authorization'],
     ['WIRE-2', '204'],
     ['WIRE-3', 'toLowerCase|getCanonicalLocales'],
     ['WIRE-4', '\\bsettle\\('],
+    // The server-message helpers are re-exported by reference, so their exported names appear
+    // in the binding. The probes name what those functions do inside, which the binding never does.
+    ['MSG-1', 'function dig|MAX_DEPTH'],
+    ['MSG-2', 'SERVER_MESSAGE_CODES = '],
+    ['MSG-6', 'DEFAULT_SERVER_MESSAGE_CATEGORY = '],
 ];
 
 /**
@@ -211,6 +224,25 @@ for (const [id, pattern] of PROBES) {
 
 console.log('\nabsence halves of rows graded `implemented` (the binding’s own rules):');
 for (const [id, pattern] of OWN_ABSENCE) probe(id, pattern);
+
+// Each delegated row cites the core row it rests on, with that row's grade. The grade is read
+// from the CONFORMANCE.md of the core checkout resolved above, so a citation that no longer
+// matches the core — a row the core has since downgraded, say — fails here.
+const cells = (l) => l.split(/(?<!\\)\|/).map((c) => c.trim());
+const coreGrades = new Map(
+    readFileSync(join(core.pkg, 'CONFORMANCE.md'), 'utf8')
+        .split('\n')
+        .map(cells)
+        .filter((c) => /^[A-Z]+-\d+$/.test(c[1] ?? ''))
+        .map((c) => [c[1], c[2]])
+);
+for (const line of readFileSync(join(ROOT, 'CONFORMANCE.md'), 'utf8').split('\n')) {
+    const c = cells(line);
+    if (c[2] !== 'delegated') continue;
+    const cited = c[4]?.match(/^core row ([A-Z]+-\d+) \(([^,)]+(?: \([^)]*\))?)/);
+    if (!cited || cited[1] !== c[1]) problems.push(`${c[1]}: delegated row does not open with "core row ${c[1]} (<grade>…"`);
+    else if (coreGrades.get(c[1]) !== cited[2]) problems.push(`${c[1]}: cites the core row as \`${cited[2]}\`, the core grades it \`${coreGrades.get(c[1])}\``);
+}
 
 const delegated = new Set(delegatedRows());
 for (const id of delegated) if (!seen.has(id)) problems.push(`${id}: graded delegated in CONFORMANCE.md with no probe here`);

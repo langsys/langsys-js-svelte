@@ -133,22 +133,31 @@ Pass it to `init()` rather than calling `LangsysAppAPI.setBaseUrl()`. `setBaseUr
 > origin server's IP, which must be allow-listed for the key, or every registration is
 > silently refused.
 
-### Where discoverable content should live
+### Client-side navigation (SvelteKit)
 
-**Put content you want discovered in `+page`, not `+layout`.**
+Call `syncNavigation()` once in your root layout:
 
-Content discovery records a miss **per URL**. A component in a layout does not remount on a
-client-side navigation, and nothing re-evaluates its `$t(...)` expressions — measured, not
-assumed: a layout phrase counted `+0` re-entries across a real navigation. So a phrase rendered
-in a layout is attributed to the **first** URL of the session and to no other.
+```svelte
+<!-- src/routes/+layout.svelte -->
+<script lang="ts">
+    import { syncNavigation } from 'langsys-js-svelte/kit';
+    syncNavigation();
+</script>
+```
 
-Nothing is broken by this and nothing is lost — the phrase registers, and the first URL is
-reported. But if you are relying on discovery to tell you which pages contain which content, a
-layout-level phrase will only ever name one of them. Page-level content re-enters on every
-navigation and is attributed correctly.
+A layout stays mounted across client-side navigation, and nothing re-evaluates its `$t(...)`
+calls when only the route changes. After each navigation `syncNavigation()` tells the SDK the
+route changed, so content that is still mounted is looked up again and its misses are recorded
+for the new URL. It sends nothing itself.
 
-This is a property of the framework's rendering model, not of the SDK, and it applies equally to
-any persistent component: a header, a nav, a footer, a shell.
+Without it, a phrase rendered in a layout — a header, a nav, a footer, any persistent component —
+is attributed to the **first** URL of the session and to no other: it still registers, but
+discovery cannot tell you which other pages carry it. Page-level content remounts on every
+navigation and is attributed correctly either way.
+
+It lives in `langsys-js-svelte/kit` because it uses SvelteKit's `afterNavigate`; the main entry
+never imports `$app/*`. With another router, call `notifyNavigation()` — exported from the main
+entry — from that router's after-navigation hook.
 
 ## Using translations
 
@@ -392,6 +401,38 @@ If a Svelte app hydrates a page rendered by [`langsys-php`](https://github.com/l
 - **langsys-php's `data-langsys-*` attributes are author-written**, and so is `data-notrans` (its alias for `translate="no"`). Authors add them deliberately in PHP templates.
 
 Our tokenizer honors both families, but only ever emits its own. For the PHP attributes' accepted values and exact semantics, see [langsys-php's documentation](https://github.com/langsys/langsys-php) rather than any restatement here — that surface is theirs and has moved more than once.
+
+### Server messages — validation errors and system messages
+
+A Langsys-aware backend sends each error as an entry — `{ field?, code, message, template, params? }`.
+Find the entries in a response with `resolveServerMessages`, and render each through
+`$serverMessage`:
+
+```svelte
+<script lang="ts">
+    import { resolveServerMessages, serverMessage } from 'langsys-js-svelte';
+
+    let { body } = $props();                          // e.g. a failed form's JSON response
+    const entries = $derived(resolveServerMessages(body));
+</script>
+
+{#each entries as entry}
+    <p class="error" data-code={entry.code}>{$serverMessage(entry)}</p>
+{/each}
+```
+
+`$serverMessage(entry)` shows the translation of the entry's `template`, filled from `params`,
+when the catalog has one, and the entry's `message` otherwise. `message` is never used as a
+lookup key. Templates are looked up under one category, `Errors` unless you set
+`messagesCategory` in `init()`; it must match the category the server registers them under.
+Branch your logic on `entry.code`, never on the text.
+
+The store re-renders when the catalog or locale changes, exactly as `$t` does. Calling
+`renderServerMessage(entry)` directly renders once and does not update.
+
+**Inertia.** A server adapter that redirects after a failed form shares the entries as a page
+prop. Pass the prop's name as `key`: `resolveServerMessages(pageProps, { key: 'langsys_messages' })`.
+If your body carries no entries at all, pass a `resolver` that maps your own error shape to them.
 
 ## Reactive stores
 

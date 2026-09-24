@@ -14,7 +14,18 @@ export default ts.config(
         // Ported from .eslintignore, which ESLint no longer reads. `dist` is added
         // because it did not exist as a build target when the old list was written
         // and linting generated output produces noise, not findings.
-        ignores: ['.DS_Store', 'node_modules/**', 'build/**', '.svelte-kit/**', 'dist/**', 'package/**', 'pnpm-lock.yaml', 'package-lock.json', 'yarn.lock'],
+        ignores: [
+            '.DS_Store',
+            'node_modules/**',
+            'build/**',
+            '.svelte-kit/**',
+            'dist/**',
+            'package/**',
+            'contract-fixture/**',
+            'pnpm-lock.yaml',
+            'package-lock.json',
+            'yarn.lock',
+        ],
     },
 
     js.configs.recommended,
@@ -69,7 +80,7 @@ export default ts.config(
         // violates: it sets innerHTML by hand so Svelte never renders those
         // children, which is the whole mechanism by which that page separates a
         // core-SDK behavior from a binding one.
-        files: ['src/routes/e2e/**/*.svelte'],
+        files: ['src/routes/e2e/**/*.svelte', 'src/routes/fixture/**/*.svelte'],
         rules: {
             'svelte/no-navigation-without-resolve': 'off',
             'svelte/no-dom-manipulating': 'off',

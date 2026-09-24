@@ -1,0 +1,699 @@
+{
+ "": "Server message vectors (spec MSG family), shared across Langsys SDKs. AUTHORED in langsys-js-typescript, the owner named by the spec; other lanes vendor this file by blob and never edit their copy.",
+ "spec_blob": "286dcfe429c8a0cdac60cdd6ab062bdf671ad078 (langsys2 43d090c3, specVersion 8.2.9)",
+ "how_to_row_against_it": {
+  "markers": "templateMarkers(template) must equal expected: marker names once each, in first-appearance order. A marker matches /\\{([a-z][a-z0-9_]*)\\}/.",
+  "fill": "fill(template, params) must equal expected. A marker with no param, a null param, or a structure stays as its literal marker.",
+  "resolve": "Resolving entries from body (with options.key when given) must yield exactly expected, in order. An entry is an object with string code, message and template; field and params are kept when present. An entry's own params are never searched for more entries.",
+  "render": "With catalog published for locale (null means no catalog at all), rendering entry under category must yield expected. The SDK renders t(entry.template, category, entry.params ?? {}) when the catalog holds a translation for the template in that category, and entry.message otherwise. entry.message is never a lookup key.",
+  "canonical_entries": "The langsys4 reference's wire examples (refactor/907_error_codes_and_failure_modes, docs/plans/907_server_message_translation_sdk_plan.md section 3.1). Every entry here must satisfy fill(template, params ?? {}) === message (MSG-4)."
+ },
+ "markers": [
+  {
+   "id": "one-marker",
+   "template": "The password must be at least {min} characters.",
+   "expected": [
+    "min"
+   ]
+  },
+  {
+   "id": "no-marker",
+   "template": "The password confirmation does not match.",
+   "expected": []
+  },
+  {
+   "id": "two-markers-in-order",
+   "template": "Between {min} and {max} characters.",
+   "expected": [
+    "min",
+    "max"
+   ]
+  },
+  {
+   "id": "repeated-marker-once",
+   "template": "{count} of {count} used, {max} allowed.",
+   "expected": [
+    "count",
+    "max"
+   ]
+  },
+  {
+   "id": "snake-case-and-digits",
+   "template": "Upload {file_2} before {due_at}.",
+   "expected": [
+    "file_2",
+    "due_at"
+   ]
+  },
+  {
+   "id": "capitalised-is-not-a-marker",
+   "template": "Hello {Name}.",
+   "expected": []
+  },
+  {
+   "id": "spaced-is-not-a-marker",
+   "template": "At least { min } characters.",
+   "expected": []
+  },
+  {
+   "id": "leading-digit-is-not-a-marker",
+   "template": "Size {1x} is not allowed.",
+   "expected": []
+  },
+  {
+   "id": "icu-argument-is-not-a-marker",
+   "template": "{count, plural, one {# item} other {# items}}",
+   "expected": []
+  },
+  {
+   "id": "double-brace-inner-is-a-marker",
+   "template": "Use {{name}} here.",
+   "expected": [
+    "name"
+   ]
+  },
+  {
+   "id": "empty-template",
+   "template": "",
+   "expected": []
+  }
+ ],
+ "fill": [
+  {
+   "id": "number",
+   "template": "The password must be at least {min} characters.",
+   "params": {
+    "min": 12
+   },
+   "expected": "The password must be at least 12 characters."
+  },
+  {
+   "id": "string",
+   "template": "The value {input} is not a valid email address.",
+   "params": {
+    "input": "ada@"
+   },
+   "expected": "The value ada@ is not a valid email address."
+  },
+  {
+   "id": "missing-param-stays-marker",
+   "template": "Between {min} and {max} characters.",
+   "params": {
+    "min": 3
+   },
+   "expected": "Between 3 and {max} characters."
+  },
+  {
+   "id": "no-params",
+   "template": "Between {min} and {max} characters.",
+   "params": {},
+   "expected": "Between {min} and {max} characters."
+  },
+  {
+   "id": "null-param-stays-marker",
+   "template": "At least {min} characters.",
+   "params": {
+    "min": null
+   },
+   "expected": "At least {min} characters."
+  },
+  {
+   "id": "structure-param-stays-marker",
+   "template": "At least {min} characters.",
+   "params": {
+    "min": [
+     1,
+     2
+    ]
+   },
+   "expected": "At least {min} characters."
+  },
+  {
+   "id": "repeated-marker-filled-everywhere",
+   "template": "{count} of {count} used.",
+   "params": {
+    "count": 2
+   },
+   "expected": "2 of 2 used."
+  },
+  {
+   "id": "non-marker-braces-untouched",
+   "template": "Hello {Name}, at least { min }.",
+   "params": {
+    "Name": "Ada",
+    "min": 3
+   },
+   "expected": "Hello {Name}, at least { min }."
+  },
+  {
+   "id": "extra-param-ignored",
+   "template": "No markers here.",
+   "params": {
+    "min": 3
+   },
+   "expected": "No markers here."
+  },
+  {
+   "id": "decimal-number",
+   "template": "The maximum is {max}.",
+   "params": {
+    "max": 2.5
+   },
+   "expected": "The maximum is 2.5."
+  }
+ ],
+ "resolve": [
+  {
+   "id": "langsys-envelope-system-error",
+   "body": {
+    "status": false,
+    "error": {
+     "message": "Your plan's project limit is 3.",
+     "code": "project_limit_reached",
+     "template": "Your plan's project limit is {limit}.",
+     "params": {
+      "limit": 3
+     },
+     "details": {
+      "limit": 3
+     }
+    }
+   },
+   "expected": [
+    {
+     "code": "project_limit_reached",
+     "message": "Your plan's project limit is 3.",
+     "template": "Your plan's project limit is {limit}.",
+     "params": {
+      "limit": 3
+     }
+    }
+   ]
+  },
+  {
+   "id": "langsys-envelope-validation",
+   "body": {
+    "status": false,
+    "error": {
+     "message": "The request failed validation.",
+     "code": "validation_failed",
+     "template": "The request failed validation.",
+     "errors": [
+      {
+       "field": "password",
+       "code": "too_short",
+       "message": "The password must be at least 12 characters.",
+       "template": "The password must be at least {min} characters.",
+       "params": {
+        "min": 12
+       }
+      },
+      {
+       "field": "password",
+       "code": "mismatch",
+       "message": "The password confirmation does not match.",
+       "template": "The password confirmation does not match."
+      }
+     ]
+    }
+   },
+   "expected": [
+    {
+     "code": "validation_failed",
+     "message": "The request failed validation.",
+     "template": "The request failed validation."
+    },
+    {
+     "field": "password",
+     "code": "too_short",
+     "message": "The password must be at least 12 characters.",
+     "template": "The password must be at least {min} characters.",
+     "params": {
+      "min": 12
+     }
+    },
+    {
+     "field": "password",
+     "code": "mismatch",
+     "message": "The password confirmation does not match.",
+     "template": "The password confirmation does not match."
+    }
+   ]
+  },
+  {
+   "id": "foreign-container-key",
+   "body": {
+    "ok": false,
+    "failures": [
+     {
+      "field": "password",
+      "code": "too_short",
+      "message": "The password must be at least 12 characters.",
+      "template": "The password must be at least {min} characters.",
+      "params": {
+       "min": 12
+      }
+     },
+     {
+      "field": "password",
+      "code": "mismatch",
+      "message": "The password confirmation does not match.",
+      "template": "The password confirmation does not match."
+     }
+    ]
+   },
+   "expected": [
+    {
+     "field": "password",
+     "code": "too_short",
+     "message": "The password must be at least 12 characters.",
+     "template": "The password must be at least {min} characters.",
+     "params": {
+      "min": 12
+     }
+    },
+    {
+     "field": "password",
+     "code": "mismatch",
+     "message": "The password confirmation does not match.",
+     "template": "The password confirmation does not match."
+    }
+   ]
+  },
+  {
+   "id": "json-api-errors",
+   "body": {
+    "errors": [
+     {
+      "status": "422",
+      "meta": {
+       "field": "password",
+       "code": "too_short",
+       "message": "The password must be at least 12 characters.",
+       "template": "The password must be at least {min} characters.",
+       "params": {
+        "min": 12
+       }
+      }
+     }
+    ]
+   },
+   "expected": [
+    {
+     "field": "password",
+     "code": "too_short",
+     "message": "The password must be at least 12 characters.",
+     "template": "The password must be at least {min} characters.",
+     "params": {
+      "min": 12
+     }
+    }
+   ]
+  },
+  {
+   "id": "top-level-array",
+   "body": [
+    {
+     "field": "password",
+     "code": "too_short",
+     "message": "The password must be at least 12 characters.",
+     "template": "The password must be at least {min} characters.",
+     "params": {
+      "min": 12
+     }
+    }
+   ],
+   "expected": [
+    {
+     "field": "password",
+     "code": "too_short",
+     "message": "The password must be at least 12 characters.",
+     "template": "The password must be at least {min} characters.",
+     "params": {
+      "min": 12
+     }
+    }
+   ]
+  },
+  {
+   "id": "configured-key-narrows",
+   "body": {
+    "error": {
+     "code": "validation_failed",
+     "message": "The request failed validation.",
+     "template": "The request failed validation."
+    },
+    "fields": {
+     "password": [
+      {
+       "field": "password",
+       "code": "too_short",
+       "message": "The password must be at least 12 characters.",
+       "template": "The password must be at least {min} characters.",
+       "params": {
+        "min": 12
+       }
+      }
+     ]
+    }
+   },
+   "key": "fields.password",
+   "expected": [
+    {
+     "field": "password",
+     "code": "too_short",
+     "message": "The password must be at least 12 characters.",
+     "template": "The password must be at least {min} characters.",
+     "params": {
+      "min": 12
+     }
+    }
+   ]
+  },
+  {
+   "id": "configured-key-absent",
+   "body": {
+    "errors": [
+     {
+      "field": "password",
+      "code": "too_short",
+      "message": "The password must be at least 12 characters.",
+      "template": "The password must be at least {min} characters.",
+      "params": {
+       "min": 12
+      }
+     }
+    ]
+   },
+   "key": "data.errors",
+   "expected": []
+  },
+  {
+   "id": "missing-template-is-not-an-entry",
+   "body": {
+    "errors": [
+     {
+      "field": "email",
+      "code": "required",
+      "message": "The email is required."
+     }
+    ]
+   },
+   "expected": []
+  },
+  {
+   "id": "non-string-piece-is-not-an-entry",
+   "body": {
+    "errors": [
+     {
+      "code": "required",
+      "message": "The email is required.",
+      "template": 5
+     }
+    ]
+   },
+   "expected": []
+  },
+  {
+   "id": "params-are-not-searched",
+   "body": {
+    "errors": [
+     {
+      "code": "invalid",
+      "message": "Bad.",
+      "template": "Bad.",
+      "params": {
+       "nested": {
+        "code": "x",
+        "message": "y",
+        "template": "z"
+       }
+      }
+     }
+    ]
+   },
+   "expected": [
+    {
+     "code": "invalid",
+     "message": "Bad.",
+     "template": "Bad.",
+     "params": {
+      "nested": {
+       "code": "x",
+       "message": "y",
+       "template": "z"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "empty-field-dropped",
+   "body": {
+    "errors": [
+     {
+      "field": "",
+      "code": "invalid",
+      "message": "Bad.",
+      "template": "Bad."
+     }
+    ]
+   },
+   "expected": [
+    {
+     "code": "invalid",
+     "message": "Bad.",
+     "template": "Bad."
+    }
+   ]
+  },
+  {
+   "id": "no-entries",
+   "body": {
+    "status": true,
+    "data": {
+     "id": 1
+    }
+   },
+   "expected": []
+  }
+ ],
+ "render": [
+  {
+   "id": "no-catalog-falls-back-to-message",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": null,
+   "entry": {
+    "field": "password",
+    "code": "too_short",
+    "message": "The password must be at least 12 characters.",
+    "template": "The password must be at least {min} characters.",
+    "params": {
+     "min": 12
+    }
+   },
+   "expected": "The password must be at least 12 characters."
+  },
+  {
+   "id": "template-not-translated-falls-back-to-message",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": {
+    "Errors": {}
+   },
+   "entry": {
+    "field": "password",
+    "code": "too_short",
+    "message": "The password must be at least 12 characters.",
+    "template": "The password must be at least {min} characters.",
+    "params": {
+     "min": 12
+    }
+   },
+   "expected": "The password must be at least 12 characters."
+  },
+  {
+   "id": "translation-present",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": {
+    "Errors": {
+     "The password must be at least {min} characters.": "La contraseña debe tener al menos {min} caracteres."
+    }
+   },
+   "entry": {
+    "field": "password",
+    "code": "too_short",
+    "message": "The password must be at least 12 characters.",
+    "template": "The password must be at least {min} characters.",
+    "params": {
+     "min": 12
+    }
+   },
+   "expected": "La contraseña debe tener al menos 12 caracteres."
+  },
+  {
+   "id": "translation-present-no-params",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": {
+    "Errors": {
+     "The password confirmation does not match.": "La confirmación de la contraseña no coincide."
+    }
+   },
+   "entry": {
+    "field": "password",
+    "code": "mismatch",
+    "message": "The password confirmation does not match.",
+    "template": "The password confirmation does not match."
+   },
+   "expected": "La confirmación de la contraseña no coincide."
+  },
+  {
+   "id": "icu-plural-translation-count-one",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": {
+    "Errors": {
+     "Select at least {count} items.": "{count, plural, one {Selecciona al menos # artículo.} other {Selecciona al menos # artículos.}}"
+    }
+   },
+   "entry": {
+    "field": "items",
+    "code": "too_few",
+    "message": "Select at least 1 items.",
+    "template": "Select at least {count} items.",
+    "params": {
+     "count": 1
+    }
+   },
+   "expected": "Selecciona al menos 1 artículo."
+  },
+  {
+   "id": "icu-plural-translation-count-many",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": {
+    "Errors": {
+     "Select at least {count} items.": "{count, plural, one {Selecciona al menos # artículo.} other {Selecciona al menos # artículos.}}"
+    }
+   },
+   "entry": {
+    "field": "items",
+    "code": "too_few",
+    "message": "Select at least 3 items.",
+    "template": "Select at least {count} items.",
+    "params": {
+     "count": 3
+    }
+   },
+   "expected": "Selecciona al menos 3 artículos."
+  },
+  {
+   "id": "message-is-never-the-key",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": {
+    "Errors": {
+     "The password must be at least 12 characters.": "WRONG: rendered from message as a key"
+    }
+   },
+   "entry": {
+    "field": "password",
+    "code": "too_short",
+    "message": "The password must be at least 12 characters.",
+    "template": "The password must be at least {min} characters.",
+    "params": {
+     "min": 12
+    }
+   },
+   "expected": "The password must be at least 12 characters."
+  },
+  {
+   "id": "other-category-misses",
+   "locale": "es",
+   "category": "Validation",
+   "catalog": {
+    "Errors": {
+     "The password must be at least {min} characters.": "La contraseña debe tener al menos {min} caracteres."
+    }
+   },
+   "entry": {
+    "field": "password",
+    "code": "too_short",
+    "message": "The password must be at least 12 characters.",
+    "template": "The password must be at least {min} characters.",
+    "params": {
+     "min": 12
+    }
+   },
+   "expected": "The password must be at least 12 characters."
+  },
+  {
+   "id": "code-does-not-choose-text",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": {
+    "Errors": {
+     "The password confirmation does not match.": "La confirmación de la contraseña no coincide."
+    }
+   },
+   "entry": {
+    "field": "password",
+    "code": "invalid",
+    "message": "The password confirmation does not match.",
+    "template": "The password confirmation does not match."
+   },
+   "expected": "La confirmación de la contraseña no coincide."
+  },
+  {
+   "id": "server-localised-message-kept-on-miss",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": {
+    "Errors": {}
+   },
+   "entry": {
+    "field": "password",
+    "code": "too_short",
+    "message": "La contraseña debe tener al menos 12 caracteres.",
+    "template": "The password must be at least {min} characters.",
+    "params": {
+     "min": 12
+    }
+   },
+   "expected": "La contraseña debe tener al menos 12 caracteres."
+  }
+ ],
+ "canonical_entries": [
+  {
+   "code": "project_limit_reached",
+   "message": "Your plan's project limit is 3.",
+   "template": "Your plan's project limit is {limit}.",
+   "params": {
+    "limit": 3
+   }
+  },
+  {
+   "code": "validation_failed",
+   "message": "The request failed validation.",
+   "template": "The request failed validation."
+  },
+  {
+   "field": "password",
+   "code": "too_short",
+   "message": "The password must be at least 12 characters.",
+   "template": "The password must be at least {min} characters.",
+   "params": {
+    "min": 12
+   }
+  },
+  {
+   "field": "password",
+   "code": "mismatch",
+   "message": "The password confirmation does not match.",
+   "template": "The password confirmation does not match."
+  }
+ ]
+}
