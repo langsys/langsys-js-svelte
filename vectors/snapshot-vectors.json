@@ -1,0 +1,412 @@
+{
+ "": "Catalog snapshot vectors (spec SNAP-1), shared across Langsys SDKs. AUTHORED in langsys-js-typescript, the owner named by the spec; other lanes vendor this file by blob and never edit their copy.",
+ "spec_blob": "b9fd4b5b1c15f7ba29656d550dca1f06013327c0 (langsys2 f5568b88, specVersion 8.2.15)",
+ "derived_by": "Expected bytes and digests are computed twice and must agree: by Python's json.dumps(payload, ensure_ascii=False, separators=(',', ':'), sort_keys=True) and hashlib.sha256, which sort by code point and escape exactly as CID-1 does, and by this SDK's canonicalSnapshotJson and sha256Hex.",
+ "how_to_row_against_it": {
+  "rows": "Serialise every document member except format, version and checksum canonically: the result must equal canonical byte for byte, and \"sha256:\" plus its lowercase hex SHA-256 must equal checksum. Then load document: it must load.",
+  "refusals": "Loading document must be refused, with an error naming the reason in refuse: checksum, format, version or missing-member.",
+  "loads": "Loading document must succeed, and its catalog for locale must equal expect_catalog."
+ },
+ "rows": [
+  {
+   "id": "empty-category-map",
+   "why": "A category the locale holds with nothing in it is {} in the canonical string, never []. PHP's json_encode writes an empty map as [] unless told otherwise.",
+   "document": {
+    "format": "langsys-catalog-snapshot",
+    "version": 1,
+    "project_id": "11111111-2222-3333-4444-555555555555",
+    "generated_at": "2026-09-24T12:00:00Z",
+    "base_locale": "en",
+    "locales": [
+     "en"
+    ],
+    "categories": [
+     "UI"
+    ],
+    "catalog": {
+     "en": {
+      "UI": {}
+     }
+    },
+    "checksum": "sha256:1eee4d25011f06f64e4cb9a8ff6d4afad75f923a771bdf818e4838ad183f1743"
+   },
+   "canonical": "{\"base_locale\":\"en\",\"catalog\":{\"en\":{\"UI\":{}}},\"categories\":[\"UI\"],\"generated_at\":\"2026-09-24T12:00:00Z\",\"locales\":[\"en\"],\"project_id\":\"11111111-2222-3333-4444-555555555555\"}",
+   "checksum": "sha256:1eee4d25011f06f64e4cb9a8ff6d4afad75f923a771bdf818e4838ad183f1743"
+  },
+  {
+   "id": "integer-like-key",
+   "why": "A JavaScript object enumerates the integer-like key \"404\" before \"!\", but code point order puts \"!\" (U+0021) first. A JS core must sort the keys itself.",
+   "document": {
+    "format": "langsys-catalog-snapshot",
+    "version": 1,
+    "project_id": "11111111-2222-3333-4444-555555555555",
+    "generated_at": "2026-09-24T12:00:00Z",
+    "base_locale": "en",
+    "locales": [
+     "en"
+    ],
+    "categories": [
+     "UI"
+    ],
+    "catalog": {
+     "en": {
+      "UI": {
+       "404": "Page not found",
+       "!": "Bang",
+       "Home": "Home"
+      }
+     }
+    },
+    "checksum": "sha256:03efe240aaab06df74533400d1a08d0c8f057a1b20a1977a9c8cbbee12f5aff5"
+   },
+   "canonical": "{\"base_locale\":\"en\",\"catalog\":{\"en\":{\"UI\":{\"!\":\"Bang\",\"404\":\"Page not found\",\"Home\":\"Home\"}}},\"categories\":[\"UI\"],\"generated_at\":\"2026-09-24T12:00:00Z\",\"locales\":[\"en\"],\"project_id\":\"11111111-2222-3333-4444-555555555555\"}",
+   "checksum": "sha256:03efe240aaab06df74533400d1a08d0c8f057a1b20a1977a9c8cbbee12f5aff5"
+  },
+  {
+   "id": "utf16-sort-trap",
+   "why": "U+FF01 sorts before U+1F600 by code point, but after it by UTF-16 code unit (0xD83D < 0xFF01), which is what JavaScript's default sort() compares.",
+   "document": {
+    "format": "langsys-catalog-snapshot",
+    "version": 1,
+    "project_id": "11111111-2222-3333-4444-555555555555",
+    "generated_at": "2026-09-24T12:00:00Z",
+    "base_locale": "en",
+    "locales": [
+     "en"
+    ],
+    "categories": [
+     "UI"
+    ],
+    "catalog": {
+     "en": {
+      "UI": {
+       "\ud83d\ude00 Smile": "Smile",
+       "\uff01 Fullwidth": "Fullwidth",
+       "z": "z"
+      }
+     }
+    },
+    "checksum": "sha256:16ee9d46da6a8617520492072f437da7a37d09994a4d1b2ac3c21768bdd3de12"
+   },
+   "canonical": "{\"base_locale\":\"en\",\"catalog\":{\"en\":{\"UI\":{\"z\":\"z\",\"\uff01 Fullwidth\":\"Fullwidth\",\"\ud83d\ude00 Smile\":\"Smile\"}}},\"categories\":[\"UI\"],\"generated_at\":\"2026-09-24T12:00:00Z\",\"locales\":[\"en\"],\"project_id\":\"11111111-2222-3333-4444-555555555555\"}",
+   "checksum": "sha256:16ee9d46da6a8617520492072f437da7a37d09994a4d1b2ac3c21768bdd3de12"
+  },
+  {
+   "id": "u2028-and-non-ascii-raw",
+   "why": "U+2028, U+2029, non-ASCII and / are raw UTF-8 in the canonical string, as CID-1 serialises them; only \", \\ and U+0000 to U+001F are escaped.",
+   "document": {
+    "format": "langsys-catalog-snapshot",
+    "version": 1,
+    "project_id": "11111111-2222-3333-4444-555555555555",
+    "generated_at": "2026-09-24T12:00:00Z",
+    "base_locale": "en",
+    "locales": [
+     "en"
+    ],
+    "categories": [
+     "UI"
+    ],
+    "catalog": {
+     "en": {
+      "UI": {
+       "Line\u2028break": "Line\u2028break",
+       "Caf\u00e9/Men\u00fa": "Caf\u00e9/Men\u00fa \u2029"
+      }
+     }
+    },
+    "checksum": "sha256:82f4c2ef83942e770acfe67030860f426ba7bfb003fcea0c2f3ac01da42e81f7"
+   },
+   "canonical": "{\"base_locale\":\"en\",\"catalog\":{\"en\":{\"UI\":{\"Caf\u00e9/Men\u00fa\":\"Caf\u00e9/Men\u00fa \u2029\",\"Line\u2028break\":\"Line\u2028break\"}}},\"categories\":[\"UI\"],\"generated_at\":\"2026-09-24T12:00:00Z\",\"locales\":[\"en\"],\"project_id\":\"11111111-2222-3333-4444-555555555555\"}",
+   "checksum": "sha256:82f4c2ef83942e770acfe67030860f426ba7bfb003fcea0c2f3ac01da42e81f7"
+  },
+  {
+   "id": "c0-control-escaped",
+   "why": "C0 controls are escaped: \\t, \\n, \\r, \\b and \\f by name, the rest as lowercase \\u00xx. DEL (U+007F) is not a C0 control and stays raw.",
+   "document": {
+    "format": "langsys-catalog-snapshot",
+    "version": 1,
+    "project_id": "11111111-2222-3333-4444-555555555555",
+    "generated_at": "2026-09-24T12:00:00Z",
+    "base_locale": "en",
+    "locales": [
+     "en"
+    ],
+    "categories": [
+     "UI"
+    ],
+    "catalog": {
+     "en": {
+      "UI": {
+       "Tab": "a\tb",
+       "Newline": "a\nb\rc",
+       "Controls": "a\u0001b\u001fc\bd\fe",
+       "Del": "a\u007fb",
+       "Quote": "say \"hi\" \\ back"
+      }
+     }
+    },
+    "checksum": "sha256:227ae146e0b09b1883347b52023c575b79a944f13831e7404d9980ef962b6997"
+   },
+   "canonical": "{\"base_locale\":\"en\",\"catalog\":{\"en\":{\"UI\":{\"Controls\":\"a\\u0001b\\u001fc\\bd\\fe\",\"Del\":\"a\u007fb\",\"Newline\":\"a\\nb\\rc\",\"Quote\":\"say \\\"hi\\\" \\\\ back\",\"Tab\":\"a\\tb\"}}},\"categories\":[\"UI\"],\"generated_at\":\"2026-09-24T12:00:00Z\",\"locales\":[\"en\"],\"project_id\":\"11111111-2222-3333-4444-555555555555\"}",
+   "checksum": "sha256:227ae146e0b09b1883347b52023c575b79a944f13831e7404d9980ef962b6997"
+  },
+  {
+   "id": "block-with-null",
+   "why": "A content block is a custom_id mapping to its own phrase map, and an untranslated phrase is null, in a block or at the top level.",
+   "document": {
+    "format": "langsys-catalog-snapshot",
+    "version": 1,
+    "project_id": "11111111-2222-3333-4444-555555555555",
+    "generated_at": "2026-09-24T12:00:00Z",
+    "base_locale": "en",
+    "locales": [
+     "es"
+    ],
+    "categories": [
+     "UI"
+    ],
+    "catalog": {
+     "es": {
+      "UI": {
+       "Hello": "Hola",
+       "Pending": null,
+       "0123456789abcdef0123456789abcdef": {
+        "Welcome": "Bienvenido",
+        "Untranslated": null
+       }
+      }
+     }
+    },
+    "checksum": "sha256:9732b6e8132f15a0f74b31a35e632089e79ca02708a234852fae2f4c885613a7"
+   },
+   "canonical": "{\"base_locale\":\"en\",\"catalog\":{\"es\":{\"UI\":{\"0123456789abcdef0123456789abcdef\":{\"Untranslated\":null,\"Welcome\":\"Bienvenido\"},\"Hello\":\"Hola\",\"Pending\":null}}},\"categories\":[\"UI\"],\"generated_at\":\"2026-09-24T12:00:00Z\",\"locales\":[\"es\"],\"project_id\":\"11111111-2222-3333-4444-555555555555\"}",
+   "checksum": "sha256:9732b6e8132f15a0f74b31a35e632089e79ca02708a234852fae2f4c885613a7"
+  },
+  {
+   "id": "category-in-one-locale",
+   "why": "A category the locale does not hold is absent from that locale; categories lists every exported category.",
+   "document": {
+    "format": "langsys-catalog-snapshot",
+    "version": 1,
+    "project_id": "11111111-2222-3333-4444-555555555555",
+    "generated_at": "2026-09-24T12:00:00Z",
+    "base_locale": "en",
+    "locales": [
+     "en",
+     "es"
+    ],
+    "categories": [
+     "Errors",
+     "UI"
+    ],
+    "catalog": {
+     "en": {
+      "Errors": {
+       "Required.": "Required."
+      },
+      "UI": {
+       "Save": "Save"
+      }
+     },
+     "es": {
+      "UI": {
+       "Save": "Guardar"
+      }
+     }
+    },
+    "checksum": "sha256:2b5282e954ad67cdcae39b1db2b0f7ff5f26b1cf65c58a8dfd859bd2701669a5"
+   },
+   "canonical": "{\"base_locale\":\"en\",\"catalog\":{\"en\":{\"Errors\":{\"Required.\":\"Required.\"},\"UI\":{\"Save\":\"Save\"}},\"es\":{\"UI\":{\"Save\":\"Guardar\"}}},\"categories\":[\"Errors\",\"UI\"],\"generated_at\":\"2026-09-24T12:00:00Z\",\"locales\":[\"en\",\"es\"],\"project_id\":\"11111111-2222-3333-4444-555555555555\"}",
+   "checksum": "sha256:2b5282e954ad67cdcae39b1db2b0f7ff5f26b1cf65c58a8dfd859bd2701669a5"
+  },
+  {
+   "id": "several-locales-sorted",
+   "why": "locales and categories are sorted ascending, and locales are lowercase xx-yy.",
+   "document": {
+    "format": "langsys-catalog-snapshot",
+    "version": 1,
+    "project_id": "11111111-2222-3333-4444-555555555555",
+    "generated_at": "2026-09-24T12:00:00Z",
+    "base_locale": "en",
+    "locales": [
+     "de",
+     "en-us",
+     "zh-hant-tw"
+    ],
+    "categories": [
+     "UI"
+    ],
+    "catalog": {
+     "zh-hant-tw": {
+      "UI": {
+       "Save": "\u5132\u5b58"
+      }
+     },
+     "en-us": {
+      "UI": {
+       "Save": "Save"
+      }
+     },
+     "de": {
+      "UI": {
+       "Save": "Speichern"
+      }
+     }
+    },
+    "checksum": "sha256:c2e8f807a188f8a8563d8013bd8c7ddc3bcb5a773711def206b2cf1fb3626432"
+   },
+   "canonical": "{\"base_locale\":\"en\",\"catalog\":{\"de\":{\"UI\":{\"Save\":\"Speichern\"}},\"en-us\":{\"UI\":{\"Save\":\"Save\"}},\"zh-hant-tw\":{\"UI\":{\"Save\":\"\u5132\u5b58\"}}},\"categories\":[\"UI\"],\"generated_at\":\"2026-09-24T12:00:00Z\",\"locales\":[\"de\",\"en-us\",\"zh-hant-tw\"],\"project_id\":\"11111111-2222-3333-4444-555555555555\"}",
+   "checksum": "sha256:c2e8f807a188f8a8563d8013bd8c7ddc3bcb5a773711def206b2cf1fb3626432"
+  }
+ ],
+ "refusals": [
+  {
+   "id": "edited-file",
+   "why": "A value changed after export: the recomputed checksum no longer matches, so the loader refuses it. A snapshot is a cache and is never edited.",
+   "document": {
+    "format": "langsys-catalog-snapshot",
+    "version": 1,
+    "project_id": "11111111-2222-3333-4444-555555555555",
+    "generated_at": "2026-09-24T12:00:00Z",
+    "base_locale": "en",
+    "locales": [
+     "en"
+    ],
+    "categories": [
+     "UI"
+    ],
+    "catalog": {
+     "en": {
+      "UI": {
+       "404": "Page not found",
+       "!": "Bang",
+       "Home": "Homepage"
+      }
+     }
+    },
+    "checksum": "sha256:03efe240aaab06df74533400d1a08d0c8f057a1b20a1977a9c8cbbee12f5aff5"
+   },
+   "refuse": "checksum"
+  },
+  {
+   "id": "wrong-format",
+   "why": "A different format member.",
+   "document": {
+    "format": "langsys-snapshot",
+    "version": 1,
+    "project_id": "11111111-2222-3333-4444-555555555555",
+    "generated_at": "2026-09-24T12:00:00Z",
+    "base_locale": "en",
+    "locales": [
+     "en"
+    ],
+    "categories": [
+     "UI"
+    ],
+    "catalog": {
+     "en": {
+      "UI": {
+       "404": "Page not found",
+       "!": "Bang",
+       "Home": "Home"
+      }
+     }
+    },
+    "checksum": "sha256:03efe240aaab06df74533400d1a08d0c8f057a1b20a1977a9c8cbbee12f5aff5"
+   },
+   "refuse": "format"
+  },
+  {
+   "id": "unsupported-version",
+   "why": "A version this format revision does not define.",
+   "document": {
+    "format": "langsys-catalog-snapshot",
+    "version": 2,
+    "project_id": "11111111-2222-3333-4444-555555555555",
+    "generated_at": "2026-09-24T12:00:00Z",
+    "base_locale": "en",
+    "locales": [
+     "en"
+    ],
+    "categories": [
+     "UI"
+    ],
+    "catalog": {
+     "en": {
+      "UI": {
+       "404": "Page not found",
+       "!": "Bang",
+       "Home": "Home"
+      }
+     }
+    },
+    "checksum": "sha256:03efe240aaab06df74533400d1a08d0c8f057a1b20a1977a9c8cbbee12f5aff5"
+   },
+   "refuse": "version"
+  },
+  {
+   "id": "missing-member",
+   "why": "base_locale is required.",
+   "document": {
+    "format": "langsys-catalog-snapshot",
+    "version": 1,
+    "project_id": "11111111-2222-3333-4444-555555555555",
+    "generated_at": "2026-09-24T12:00:00Z",
+    "locales": [
+     "en"
+    ],
+    "categories": [
+     "UI"
+    ],
+    "catalog": {
+     "en": {
+      "UI": {
+       "404": "Page not found",
+       "!": "Bang",
+       "Home": "Home"
+      }
+     }
+    },
+    "checksum": "sha256:03efe240aaab06df74533400d1a08d0c8f057a1b20a1977a9c8cbbee12f5aff5"
+   },
+   "refuse": "missing-member"
+  }
+ ],
+ "loads": [
+  {
+   "id": "any-json-encoding-loads",
+   "why": "The file may be any JSON encoding of the document; members in another order still load, because the checksum is recomputed from the canonical serialisation.",
+   "document": {
+    "checksum": "sha256:03efe240aaab06df74533400d1a08d0c8f057a1b20a1977a9c8cbbee12f5aff5",
+    "catalog": {
+     "en": {
+      "UI": {
+       "404": "Page not found",
+       "!": "Bang",
+       "Home": "Home"
+      }
+     }
+    },
+    "categories": [
+     "UI"
+    ],
+    "locales": [
+     "en"
+    ],
+    "base_locale": "en",
+    "generated_at": "2026-09-24T12:00:00Z",
+    "project_id": "11111111-2222-3333-4444-555555555555",
+    "version": 1,
+    "format": "langsys-catalog-snapshot"
+   },
+   "locale": "en",
+   "expect_catalog": {
+    "UI": {
+     "404": "Page not found",
+     "!": "Bang",
+     "Home": "Home"
+    }
+   }
+  }
+ ]
+}

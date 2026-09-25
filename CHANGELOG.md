@@ -17,6 +17,12 @@
   when there is no translation — and re-renders on a catalog or locale change, as `$t` does. Runs
   the core's shared `render` vectors, and a page given the entries as an Inertia-style prop.
 
+- **The core's legacy-key mode and catalog snapshots work through this binding unchanged.**
+  `init({ legacyKeys })` reaches the core as the same array, and `LangsysApp.loadSnapshot()` is
+  forwarded to the core, so a snapshot loaded through the binding renders through `$t` on the
+  next line and an edited one is refused with the core's `SnapshotError`. Both are pinned by
+  tests that fail if the binding copies or intercepts either.
+
 - **`contract-fixture/`**, the shared API double, vendored byte-exact, with
   `_dev_/contract/verify-contract.mjs` driving the `/fixture` testbed against it.
 

@@ -59,6 +59,19 @@ const fail = (n, d) => results.push({ ok: false, n, d });
 
 const browser = await chromium.launch();
 
+// Warm-up. A freshly started dev server compiles each route on first request and may discover
+// a dependency late, re-optimise, and reload every open page — mid-test, with the reload
+// reading as a capability or rendering failure. One throwaway visit per client-initialised
+// route absorbs that before anything is measured. `/e2e/hydration` is left out on purpose:
+// its universal `load` initialises the server-side singleton, and TEST 1 must be first to do so.
+for (const path of ['/e2e/lanes?key=read&run=warmup', '/e2e/grant?run=warmup', '/e2e/params', '/e2e/nav?run=warmup', '/e2e/visibility', '/e2e/vanilla']) {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}${path}`, { waitUntil: 'load' });
+    await page.waitForTimeout(1500);
+    await ctx.close();
+}
+
 /**
  * Every API response the page received, so assertions can check what the server
  * ACCEPTED rather than only what the SDK sent.
@@ -73,6 +86,10 @@ const apiCalls = [];
 async function newPage() {
     const ctx = await browser.newContext();
     const p = await ctx.newPage();
+    // A route's first visit on a fresh server compiles every module it pulls in, the core
+    // included, before the page can settle. That alone has taken over 30 s; it is not the
+    // behaviour under test, so navigation gets room for it.
+    p.setDefaultNavigationTimeout(90_000);
     const msgs = [];
     p.on('console', (m) => msgs.push({ type: m.type(), text: m.text() }));
     p.on('pageerror', (e) => msgs.push({ type: 'pageerror', text: String(e) }));

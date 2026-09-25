@@ -36,7 +36,7 @@ npm run dev                                      # terminal 1 — must be 127.0.
 node --env-file=.env _dev_/e2e/verify.mjs        # terminal 2
 ```
 
-About two minutes (127 s at the last count). The hint-attribution assertions deliberately wait
+About two minutes (about 160 s at the last count, on a freshly started server). The hint-attribution assertions deliberately wait
 out the SDK's 5–30s jitter window twice over — see below. Start the dev server fresh before a
 run you intend to cite: the hydration route initializes the singleton on the server, and a
 long-lived process keeps whatever the first `init()` left there.

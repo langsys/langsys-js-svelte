@@ -101,6 +101,16 @@ export const PROBES = [
     ['MSG-1', 'function dig|MAX_DEPTH'],
     ['MSG-2', 'SERVER_MESSAGE_CODES = '],
     ['MSG-6', 'DEFAULT_SERVER_MESSAGE_CATEGORY = '],
+    ['MIG-1', 'legacyKeys'],
+    ['MIG-2', 'convertLegacyCall'],
+    ['MIG-3', 'valueAt'],
+    ['MIG-4', 'convertLegacyPluralForms|PLURAL_CATEGORIES'],
+    ['MIG-5', 'looksLikeAPath'],
+    ['MIG-6', 'warnedLegacy'],
+    ['MIG-7', 'FOREIGN_EXTENSIONS|SUPPORTED_LEGACY_FORMATS'],
+    ['MIG-8', 'convertLegacyValue'],
+    ['SNAP-2', 'parseSnapshot'],
+    ['SNAP-3', 'markSeeded'],
 ];
 
 /**
