@@ -21,9 +21,20 @@ describe('exported stores inside an Italian request scope, with the process seed
         const scope = await createRequestScope({ locale: 'it-it', catalog: catalog('Prezzi') });
         const body = scope.run(() => render(ScopeStores).body);
         const measured = { t: text(body, 't'), locale: text(body, 'locale'), catalog: text(body, 'catalog') };
-        // `$t` follows the scope; the locale and catalog stores read the process — core gap, routed
-        // to the core. When the core lands it these two expectations flip, on purpose.
+        // `$t` follows the scope; `$currentlyLoadedLocale` and `$sTranslations` do not. A `$store`
+        // read is a subscription, and the core answers `get()` from the scope but hands a subscriber
+        // the process's value. When the core's subscribe answers from the scope too, these two
+        // expectations flip, on purpose.
         expect(measured).toEqual({ t: 'Prezzi', locale: 'de-de', catalog: 'Preise' });
+
+        // The core's side, measured: inside the scope `get()` answers from it, `subscribe` does not.
+        const read = scope.run(() => {
+            let subscribed: unknown;
+            currentlyLoadedLocale.subscribe((v) => (subscribed = v))();
+            const pricing = (sTranslations.get() as unknown as Record<string, Record<string, string>>).SRVC?.Pricing;
+            return { getLocale: currentlyLoadedLocale.get(), getCatalog: pricing, subscribedLocale: subscribed };
+        });
+        expect(read).toEqual({ getLocale: 'it-it', getCatalog: 'Prezzi', subscribedLocale: 'de-de' });
         await scope.close();
     });
 
