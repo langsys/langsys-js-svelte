@@ -25,6 +25,14 @@
   next line and an edited one is refused with the core's `SnapshotError`. Both are pinned by
   tests that fail if the binding copies or intercepts either.
 
+- **The SvelteKit wiring for the core's request scope (SRV-7), and the test it has to pass.**
+  `src/hooks.server.ts` opens a scope when a request begins and renders the whole response inside
+  it; the scope itself sits behind one adapter (`src/srv-scope/seam.ts`) until the core ships its
+  API. `_dev_/e2e/srv-scope.mjs` runs the rule's test on served bytes — a German render followed by
+  an Italian one in the same process, and concurrent Italian and German renders that await before
+  they read. Without a scope the concurrent case serves the wrong locale about half the time; it is
+  the case the core's scope exists to fix. Testbed only: nothing here ships.
+
 - **`contract-fixture/`**, the shared API double, vendored byte-exact, with
   `_dev_/contract/verify-contract.mjs` driving the `/fixture` testbed against it.
 

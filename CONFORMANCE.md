@@ -2,15 +2,15 @@
 
 | | |
 |---|---|
-| **Spec revision read** | langsys2 a95af2c2…, docs/sdk-spec.mdx blob 5d7e6890b733a50fb6f5f5c30e0056c6ef7bcf45 |
+| **Spec revision read** | langsys2 aac52142…, docs/sdk-spec.mdx blob 5f01ef7d761c35157e553ed0ea83b9a4539511c3 |
 | **Profiles** | browser, binding, all — derived: binding over langsys-js-typescript |
-| **specVersion** | 8.2.18, unpublished |
-| **Re-derived at this write** | `git -C ../langsys2 ls-tree a95af2c2596d5a882473d9ef09d232eb5c1d7a12 docs/sdk-spec.mdx` → `5d7e6890…`. The 113 rule ids are read out of that blob by `node _dev_/conformance-summary.mjs`, not counted from this file. |
+| **specVersion** | 8.2.19, unpublished |
+| **Re-derived at this write** | `git -C ../langsys2 ls-tree aac521428ad568e63e19b132ce6d338545095d66 docs/sdk-spec.mdx` → `5f01ef7d…`. The 114 rule ids are read out of that blob by `node _dev_/conformance-summary.mjs`, not counted from this file. |
 | **Binding revision** | `feature/838_write_key_gating_reland`. The commit carrying this file is the one reported to the reviewer; a SHA written here could only name its parent. |
-| **Core under test** | `langsys-js-typescript` `239166a66b40fec63cf66f5028428c62d08acac9`, built clean from a detached worktree of that SHA and linked in place of the shared checkout, which carries uncommitted work. `node _dev_/delegation-probe.mjs` prints the checkout it resolves. Every `core row` citation below is read from that SHA's CONFORMANCE.md. |
+| **Core under test** | `langsys-js-typescript` `fbbb6a932e858362846a43e031bc71e005038cb8`, built clean from a detached worktree of that SHA and linked in place of the shared checkout, which carries uncommitted work. `node _dev_/delegation-probe.mjs` prints the checkout it resolves. Every `core row` citation below is read from that SHA's CONFORMANCE.md. |
 | **Contract fixture** | `contract-fixture/`, vendored byte-exact from langsys-js-typescript, tree `542f57f5ffcb9038db1b7411152b7e31b96cb269` (`git rev-parse HEAD:contract-fixture`). Node 18+, no dependencies. |
 | **Shared vectors** | Vendored byte-exact under `vectors/`: `server-message-vectors.json`, blob `7333e3919dac43af81c6c20bfdba974efd79725b`; `snapshot-vectors.json`, blob `594bd77a0289abfdf608508ac93cc9f4c4f88459`. |
-| **Suites** | unit 163 tests in 12 files (`npm test -- --run`, no network) · contract 22 assertions (`_dev_/contract/verify-contract.mjs`) · E2E 61 assertions, live (`_dev_/e2e/verify.mjs`) · SRV concurrency 6 assertions (`_dev_/e2e/srv-concurrency.mjs`) |
+| **Suites** | unit 163 tests in 12 files (`npm test -- --run`, no network) · contract 22 assertions (`_dev_/contract/verify-contract.mjs`) · E2E 61 assertions, live (`_dev_/e2e/verify.mjs`) · SRV concurrency 6 assertions (`_dev_/e2e/srv-concurrency.mjs`) · SRV-7 scope 5 assertions (`_dev_/e2e/srv-scope.mjs`, red until the core's scope lands) |
 
 ## What surfaced while writing this
 
@@ -27,19 +27,22 @@
 
 ## Gaps, ranked by cost
 
-1. **SRV-1** — `<Translate>` and `<Phrase>` content reaches crawlers, link previews and no-JS readers
+1. **SRV-7** — no request scope in the core, so SRV-1..5 cannot be met by wiring alone. The
+   SvelteKit wiring and its test are built (`src/hooks.server.ts`, `_dev_/e2e/srv-scope.mjs`) and
+   wait on the core's API.
+2. **SRV-1** — `<Translate>` and `<Phrase>` content reaches crawlers, link previews and no-JS readers
    in the base language under a localised URL. SEO cost lands on the customer, silently.
-2. **SRV-2** — no request-scoped catalog. Correct per visitor only because Svelte's default
+3. **SRV-2** — no request-scoped catalog. Correct per visitor only because Svelte's default
    renderer is synchronous; `experimental.async` with an await before a read in the same script
    removes that. Intermittent, under traffic.
-3. **SRV-4** — no tested hydration hand-off, and the documented seed does not go through the
+4. **SRV-4** — no tested hydration hand-off, and the documented seed does not go through the
    core's `seedCatalog`.
-4. **SRV-3** — collection is not ordered after the response flush. Latency, `'server'` strategy only.
-5. **SRV-5** — follows SRV-1: there is no server-side capture to count.
+5. **SRV-3** — collection is not ordered after the response flush. Latency, `'server'` strategy only.
+6. **SRV-5** — follows SRV-1: there is no server-side capture to count.
 
-SRV-1..5 are measured and not built: whether server rendering of components lives in JS Server
-adapters or in each binding is an open operator decision. Four delegated rows rest on core rows
-that are `partial` — REG-10, TOK-6, MARK-2, MARK-3 — and close when the core's do.
+SRV-1..5 and SRV-7 close together: the core owns the request scope, and this binding wires
+SvelteKit's request lifecycle to it. One delegated row rests on a core row that is `partial` —
+REG-10 — and closes when the core's does.
 
 ## Status
 
@@ -99,20 +102,21 @@ that are `partial` — REG-10, TOK-6, MARK-2, MARK-3 — and close when the core
 | TOK-3 | delegated | - | core row TOK-3 (implemented, n/a (pure)) · probe `/aria-roledescription/` binding 0, core 1 |
 | TOK-4 | delegated | - | core row TOK-4 (implemented, n/a (pure)) · probe `/translateAttribute/` binding 0, core 6 |
 | TOK-5 | delegated | - | core row TOK-5 (implemented, n/a (pure)) · probe `/normalizeMarkupPlaceholders\|adoptPercentPlaceholders/` binding 0, core 21 · this binding documents `%name%` as the markup form because Svelte compiles a bare `{name}`; E2E TEST 12 renders it through `<Translate>` and `<Phrase>` |
-| TOK-6 | delegated | - | core row TOK-6 (partial) · probe `/usesSingleTextNodeFastPath/` binding 0, core 7 |
+| TOK-6 | delegated | - | core row TOK-6 (implemented, n/a (pure)) · probe `/usesSingleTextNodeFastPath/` binding 0, core 7 |
 | MARK-1 | implemented | n/a (pure) | Per surface. `<Phrase>`: this binding stamps the host with the core's own `PHRASE_MARKER_ATTR` — E2E TEST 13 with a bogus-marker control, and present in served bytes (served-bytes.test.ts); removing the spread reds 1. `<Translate>`: the core stamps this binding's host — E2E TEST 15 and the GATE-10 contract case both re-derive the id by running the core tokenizer over the host; a perturbed token list does not match. Server bytes carry no content-block stamp (SRV-1) |
-| MARK-2 | delegated | - | core row MARK-2 (partial) · probe `/PHRASE_MARKER_ATTR_LEGACY\|isPhraseMarked/` binding 0, core 10 · this binding writes one spelling and reads none |
-| MARK-3 | delegated | - | core row MARK-3 (partial) · probe `/isContentBlockMarked/` binding 0, core 5 |
+| MARK-2 | delegated | - | core row MARK-2 (implemented, n/a (pure)) · probe `/PHRASE_MARKER_ATTR_LEGACY\|isPhraseMarked/` binding 0, core 10 · this binding writes one spelling and reads none |
+| MARK-3 | delegated | - | core row MARK-3 (implemented, n/a (pure)) · probe `/isContentBlockMarked/` binding 0, core 4 |
 | MARK-4 | delegated | - | core row MARK-4 (implemented, n/a (pure)) · probe `/_walkForTokens/` binding 0, core 4 |
 | SSR-1 | delegated | - | core row SSR-1 (implemented, n/a (pure)) · probe `/shouldQueueForWrite/` binding 0, core 2 · both READMEs state that `'client'` collects nothing server-side |
 | SSR-2 | delegated | - | core row SSR-2 (implemented, n/a (pure)) · probe `/ssrWriteEnabled/` binding 0, core 3 · corroborated through the binding by the two-case `/e2e/ssr-write` procedure (a valid grant degrades `'server'` and registers 0; no grant registers 2), run per case on a fresh server and not among this revision\'s runs |
 | SSR-3 | implemented | n/a (pure) | src/docs.test.ts: README.md and README-SSR.md, both shipped, each carry an `[!IMPORTANT]` callout that leads with the allow-list precondition. Controls: the parser finds README-SSR's known `[!WARNING]` and rejects README.md's plain discovery-gap blockquote, which mentions the allow-list in passing. Demoting the callout to a blockquote reds 1. The refused side belongs to the core and the backend |
-| SRV-1 | partial | n/a (pure) | src/ssr-measure/served-bytes.test.ts, on served bytes. Under README-SSR's component-body seed, `$t()` serves the request locale, and the base language for a genuine miss in the same render; control: an empty catalog serves base. Concurrency through that seed, `_dev_/e2e/srv-concurrency.mjs` on a freshly started dev server, 100 rounds × 8 renders alternating `it-it`/`de-de`: 0 of 800 wrong-locale; the same harness with the seed before an `await` in `load` (positive control) serves 378 of 800 wrong. Svelte's default server render is one synchronous pass, so the seed's placement decides it. `<Translate>` and `<Phrase>` serve the base language with the translation present, because both construct their handler in `$effect`, which SSR never runs — pinned as GAP rows that go red when that changes |
-| SRV-2 | not implemented | - | No request scope exists: the catalog is the core's module-global `sTranslations`, and README-SSR's seed writes it per request, which the MUST forbids by construction. The default renderer keeps it correct per visitor (SRV-1: 0 of 800), and the documented placement is what does it (control: 378 of 800). The `experimental.async` shape — an await, then a read in the same script — is unmeasured here: it needs a compiler flag that would change the renderer for every testbed route |
+| SRV-1 | partial | n/a (pure) | src/ssr-measure/served-bytes.test.ts, on served bytes. Under README-SSR's component-body seed, `$t()` serves the request locale, and the base language for a genuine miss in the same render; control: an empty catalog serves base. Concurrency through that seed, `_dev_/e2e/srv-concurrency.mjs` on a freshly started dev server, 100 rounds × 8 renders alternating `it-it`/`de-de`: 0 of 800 wrong-locale; the same harness with the seed before an `await` in `load` (positive control) serves 380 of 800 wrong. Svelte's default server render is one synchronous pass, so the seed's placement decides it. `<Translate>` and `<Phrase>` serve the base language with the translation present, because both construct their handler in `$effect`, which SSR never runs — pinned as GAP rows that go red when that changes |
+| SRV-2 | not implemented | - | No request scope exists: the catalog is the core's module-global `sTranslations`, and README-SSR's seed writes it per request, which the MUST forbids by construction. The default renderer keeps it correct per visitor (SRV-1: 0 of 800), and the documented placement is what does it (control: 380 of 800). A seed placed in the request hook with an await in `load` before the read serves 399 of 800 wrong (`_dev_/e2e/srv-scope.mjs`, `SRV_SEAM=global`), which is the shape the core's request scope (SRV-7) replaces. The `experimental.async` shape — an await, then a read in the same script — is unmeasured here: it needs a compiler flag that would change the renderer for every testbed route |
 | SRV-3 | not implemented | - | Nothing orders collection after the response flush. Under the default `'client'` the server collects nothing; under `'server'` the core's debounced flush runs in Node with no tie to SvelteKit's response lifecycle. No test asserts the order of events |
 | SRV-4 | not implemented | - | The rule splits. Core half: `seedCatalog` is synchronous (core row SRV-4 (implemented, n/a (pure))) and reachable through the proxy with no override (surface.test.ts). Binding half — calling it before hydration so the first client render matches the served HTML, with the mismatch control — has no test, and README-SSR's seed writes the two signals directly rather than calling `seedCatalog` |
 | SRV-5 | not implemented | - | No server-side child capture exists: `<Translate>` and `<Phrase>` do nothing during SSR (served-bytes.test.ts GAP rows), so there is no per-subtree count to assert and no uncapturable child to fail on |
 | SRV-6 | n/a (architecture: the binding resolves no locale — the app's `load` chooses it; live if the binding ever ships a resolver) | - | The rule binds an SDK or binding that chooses the request's locale. This binding never does; README-SSR's example `load` does, and it follows the rule: URL, then the app's cookie or session value, then `Accept-Language`, each checked against the project's locales, with `Vary: Cookie` or `Vary: Accept-Language` set to match. The example is documentation, not a test, which is why this row is `n/a` rather than `implemented` |
+| SRV-7 | not implemented | - | The seam is the core's, and at this core SHA it has none: no request-scope API in its source, and no SRV-7 row in its CONFORMANCE.md. The wiring is built and waits on it: `src/hooks.server.ts` opens a scope in SvelteKit's `handle` when the request begins, runs `resolve()` — `load`, its awaits and the component tree — inside it, and closes it when the response settles; `src/srv-scope/seam.ts` holds the scope behind one adapter (`SRV_SEAM=core` is the stub the core's API replaces; to add: the scope's hydration seed into the page, and its post-response flush). The Test, `_dev_/e2e/srv-scope.mjs` on served bytes: (1) one process, render `de-de` then `it-it` through a new scope — Italian, no German in the bytes; (2) 100 × 8 concurrent `it-it`/`de-de` renders that await in `load` before the read — every response its own locale. Today, with no scope (`SRV_SEAM=global`, the seed in the request hook): case 1 passes and case 2 fails, 399 of 800 wrong. SRV-7's mutation, one shared scope (`SRV_SEAM=shared`), fails case 1 and case 2. Both failures are the harness able to fail; the row moves when case 2 passes on `SRV_SEAM=core` |
 | MSG-1 | delegated | - | core row MSG-1 (implemented, n/a (pure)) · probe `/function dig\|function toItems/` binding 0, core 2 · `resolveServerMessages` is the core's, re-exported by reference (surface.test.ts `toBe`); it reads entries only at the configured `key` or through an app `resolver`, and throws with neither. This binding never resolves on its own: the Inertia page (src/msg-measure/InertiaErrors.svelte) takes its key as configuration, and README.md shows `{ key }` in every example, with no default body search |
 | MSG-2 | delegated | - | core row MSG-2 (implemented, n/a (pure)) · probe `/function toServerMessage/` binding 0, core 1 · `code` and `field` reach the page as the framework sent them: nothing in this binding reads, maps or renders `code` (render row `code-does-not-choose-text` runs through `$serverMessage`), and the binding exports no code vocabulary |
 | MSG-3 | n/a (profile: server) | - | Profiles: server. This is a browser binding, and it cannot fail a rule about what a server emits. core row MSG-3 (n/a (profile: server)) |
@@ -201,7 +205,11 @@ npm run dev                                       # 127.0.0.1:5173, freshly star
 node --env-file=.env _dev_/e2e/verify.mjs         # 61/61, about 110–160 s
 
 # SRV concurrency — its own freshly started server; no API, no .env
-node _dev_/e2e/srv-concurrency.mjs                # body seed 0/800 wrong-locale; control 378/800
+node _dev_/e2e/srv-concurrency.mjs                # body seed 0/800 wrong-locale; control 380/800
+
+# SRV-7 — the dev server started with the seam to test; red until the core ships its scope
+SRV_SEAM=core npm run dev                         # or global (no scope) / shared (the mutation)
+node _dev_/e2e/srv-scope.mjs
 ```
 
 **Conformance tooling**
