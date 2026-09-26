@@ -25,6 +25,11 @@
   next line and an edited one is refused with the core's `SnapshotError`. Both are pinned by
   tests that fail if the binding copies or intercepts either.
 
+- **Server renders release every store subscription they open**, measured: 50 renders of every
+  exported store and component leave nothing open on the core's process-wide signals (`tSignal`
+  100 opened / 100 released, `currentlyLoadedLocale` and `sTranslations` 50 / 50). A subscription
+  that is never released reads as 50 open, so the measurement can fail.
+
 - **The SvelteKit wiring for the core's request scope (SRV-7), and the test it has to pass.**
   `src/hooks.server.ts` opens a scope when a request begins and renders the whole response inside
   it; the scope itself sits behind one adapter (`src/srv-scope/seam.ts`) until the core ships its
