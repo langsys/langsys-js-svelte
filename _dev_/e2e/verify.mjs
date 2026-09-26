@@ -67,6 +67,7 @@ const browser = await chromium.launch();
 for (const path of ['/e2e/lanes?key=read&run=warmup', '/e2e/grant?run=warmup', '/e2e/params', '/e2e/nav?run=warmup', '/e2e/visibility', '/e2e/vanilla']) {
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
+    page.setDefaultNavigationTimeout(90_000);
     await page.goto(`${BASE}${path}`, { waitUntil: 'load' });
     await page.waitForTimeout(1500);
     await ctx.close();
@@ -268,7 +269,11 @@ for (const [key, expected] of [
     await p.goto(`${BASE}/e2e/grant?initial=${encodeURIComponent(GRANT_VALID)}&next=${encodeURIComponent(GRANT_EXPIRED)}&run=grant1`, {
         waitUntil: 'networkidle',
     });
-    await p.waitForTimeout(1200);
+    // Wait for the condition, not a fixed delay: on a loaded machine a fixed 1.2 s / 2.5 s read
+    // the value before the response landed. A value that never arrives still fails below.
+    const settleTo = (value) =>
+        p.waitForFunction((v) => document.querySelector('[data-testid="we"]')?.textContent.trim() === v, value, { timeout: 10_000 }).catch(() => {});
+    await settleTo('true');
     const atInit = (await p.locator('[data-testid="we"]').textContent()).trim();
     if (atInit === 'true') pass('store-form grant flips READ key to write-enabled', atInit);
     else fail('store-form grant flips READ key to write-enabled', atInit);
@@ -278,7 +283,7 @@ for (const [key, expected] of [
 
     // Write an EXPIRED token into the store, refresh — value must be re-read.
     await p.locator('button:has-text("Set next token")').click();
-    await p.waitForTimeout(2500);
+    await settleTo('false');
     const afterSwap = (await p.locator('[data-testid="we"]').textContent()).trim();
     // Both ends, not just the last one. Checking `afterSwap` alone passed a mutation run in
     // which `init` dropped the grant entirely — `false -> false` reads as "degraded" when the
@@ -315,6 +320,7 @@ for (const [key, expected] of [
 {
     const ctx = await browser.newContext({ extraHTTPHeaders: { 'X-Forwarded-For': '203.0.113.99' } });
     const p = await ctx.newPage();
+    p.setDefaultNavigationTimeout(90_000);
     const hints = [];
     p.on('request', (r) => {
         if (r.url().includes('discovery/hint')) {

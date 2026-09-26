@@ -2,7 +2,7 @@ import { LangsysApp, sTranslations, type iCategories, type ServerMessage } from 
 import { render } from 'svelte/server';
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it } from 'vitest';
-import { serverMessage } from '$lib/index.js';
+import { resolveServerMessages, serverMessage } from '$lib/index.js';
 import vectors from '../../vectors/server-message-vectors.json';
 import InertiaErrors from './InertiaErrors.svelte';
 
@@ -46,7 +46,7 @@ describe('MSG-5 — the wrapper is reactive, which is all it adds', () => {
         const seen: string[] = [];
         seed(null, 'es-es');
         const stop = serverMessage.subscribe((render) => seen.push(render(entry)));
-        seed({ Errors: { [entry.template]: 'La confirmación de la contraseña no coincide.' } } as unknown as iCategories, 'es-es');
+        seed({ Errors: { [entry.template as string]: 'La confirmación de la contraseña no coincide.' } } as unknown as iCategories, 'es-es');
         stop();
         expect(seen[0]).toBe(entry.message);
         expect(seen.at(-1)).toBe('La confirmación de la contraseña no coincide.');
@@ -57,7 +57,9 @@ describe('MSG-12 — the client half of an Inertia hand-off', () => {
     // As a server SDK shares them after a failed form's redirect: entries under an app-chosen prop.
     const pageProps = {
         auth: { user: null },
-        langsys_messages: [
+        // The framework's own prop, left untouched; the entries travel beside it.
+        errors: { password: 'The password must be at least 12 characters.' },
+        langsys_errors: [
             {
                 field: 'password',
                 code: 'too_short',
@@ -77,7 +79,7 @@ describe('MSG-12 — the client half of an Inertia hand-off', () => {
 
     it('with no translation, the page renders each entry’s message', () => {
         seed(null, 'es-es');
-        const { body } = render(InertiaErrors, { props: { pageProps, messagesKey: 'langsys_messages' } });
+        const { body } = render(InertiaErrors, { props: { pageProps, messagesKey: 'langsys_errors' } });
         expect(items(body)).toEqual(['The password must be at least 12 characters.', 'The password confirmation does not match.']);
     });
 
@@ -91,12 +93,16 @@ describe('MSG-12 — the client half of an Inertia hand-off', () => {
             } as unknown as iCategories,
             'es-es'
         );
-        const { body } = render(InertiaErrors, { props: { pageProps, messagesKey: 'langsys_messages' } });
+        const { body } = render(InertiaErrors, { props: { pageProps, messagesKey: 'langsys_errors' } });
         expect(items(body)).toEqual(['La contraseña debe tener al menos 12 caracteres.', 'La confirmación de la contraseña no coincide.']);
     });
 
-    it('control: a prop the page was not told about yields nothing to render', () => {
+    it("control: the framework's own `errors` prop is not read as entries", () => {
         const { body } = render(InertiaErrors, { props: { pageProps, messagesKey: 'errors' } });
         expect(items(body)).toEqual([]);
+    });
+
+    it('with no key and no resolver, resolution refuses rather than searching the body', () => {
+        expect(() => resolveServerMessages(pageProps, {} as never)).toThrow(TypeError);
     });
 });

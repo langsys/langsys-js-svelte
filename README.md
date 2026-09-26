@@ -404,35 +404,41 @@ Our tokenizer honors both families, but only ever emits its own. For the PHP att
 
 ### Server messages — validation errors and system messages
 
-A Langsys-aware backend sends each error as an entry — `{ field?, code, message, template, params? }`.
-Find the entries in a response with `resolveServerMessages`, and render each through
-`$serverMessage`:
+A Langsys server SDK leaves your framework's error response as it is and attaches translation
+entries beside it — each carrying the untranslated sentence as `template`, its `params`, the
+filled `message`, and the framework's own `field` and `code`. Tell `resolveServerMessages` where
+the entries sit, and render each through `$serverMessage`:
 
 ```svelte
 <script lang="ts">
     import { resolveServerMessages, serverMessage } from 'langsys-js-svelte';
 
-    let { body } = $props();                          // e.g. a failed form's JSON response
-    const entries = $derived(resolveServerMessages(body));
+    let { body } = $props(); // e.g. a failed form's JSON response
+    // `key` is the path your server attaches the entries under (Laravel: "langsys_errors").
+    const entries = $derived(resolveServerMessages(body, { key: 'langsys_errors' }));
 </script>
 
 {#each entries as entry}
-    <p class="error" data-code={entry.code}>{$serverMessage(entry)}</p>
+    <p class="error" data-field={entry.field}>{$serverMessage(entry)}</p>
 {/each}
 ```
+
+`resolveServerMessages` reads only where you point it — a `key`, or a `resolver` function that
+maps your own error shape to entries — and throws if given neither. It never searches the body.
 
 `$serverMessage(entry)` shows the translation of the entry's `template`, filled from `params`,
 when the catalog has one, and the entry's `message` otherwise. `message` is never used as a
 lookup key. Templates are looked up under one category, `Errors` unless you set
 `messagesCategory` in `init()`; it must match the category the server registers them under.
-Branch your logic on `entry.code`, never on the text.
+`code` is your framework's own identifier for the failure, passed through unchanged: branch your
+logic on it, never on the text.
 
 The store re-renders when the catalog or locale changes, exactly as `$t` does. Calling
 `renderServerMessage(entry)` directly renders once and does not update.
 
 **Inertia.** A server adapter that redirects after a failed form shares the entries as a page
-prop. Pass the prop's name as `key`: `resolveServerMessages(pageProps, { key: 'langsys_messages' })`.
-If your body carries no entries at all, pass a `resolver` that maps your own error shape to them.
+prop beside the framework's own `errors`, which it leaves untouched. Pass that prop's name as
+`key`: `resolveServerMessages(pageProps, { key: 'langsys_errors' })`.
 
 ## Reactive stores
 

@@ -3,7 +3,8 @@
      * Fixture for `messages.test.ts` — the client half of MSG-12. A server SDK whose framework
      * redirects after a failed form (Inertia) shares the entries as a page prop; the page finds
      * them with the core's `resolveServerMessages` and renders each through `$serverMessage`.
-     * The prop's name is the app's (MSG-1): this page is told it through `messagesKey`.
+     * The prop's name is configuration (MSG-1): this page is told it through `messagesKey`. The
+     * framework's own `errors` prop travels beside it untouched.
      */
     import { resolveServerMessages, serverMessage } from '$lib/index.js';
 

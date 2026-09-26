@@ -15,7 +15,9 @@
   core's resolver and renderer are re-exported by reference. `serverMessage` is a store derived
   from `t`, so `{$serverMessage(entry)}` renders an entry's translated template — or its `message`
   when there is no translation — and re-renders on a catalog or locale change, as `$t` does. Runs
-  the core's shared `render` vectors, and a page given the entries as an Inertia-style prop.
+  the core's shared `render` vectors, and a page given the entries as an Inertia-style prop. `resolveServerMessages` reads entries only where
+  it is told — a `key` or a `resolver` — beside the framework's own error body, which it never
+  replaces; `code` and `field` are the framework's own, passed through unchanged.
 
 - **The core's legacy-key mode and catalog snapshots work through this binding unchanged.**
   `init({ legacyKeys })` reaches the core as the same array, and `LangsysApp.loadSnapshot()` is

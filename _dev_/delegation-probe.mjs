@@ -98,8 +98,8 @@ export const PROBES = [
     ['WIRE-4', '\\bsettle\\('],
     // The server-message helpers are re-exported by reference, so their exported names appear
     // in the binding. The probes name what those functions do inside, which the binding never does.
-    ['MSG-1', 'function dig|MAX_DEPTH'],
-    ['MSG-2', 'SERVER_MESSAGE_CODES = '],
+    ['MSG-1', 'function dig|function toItems'],
+    ['MSG-2', 'function toServerMessage'],
     ['MSG-6', 'DEFAULT_SERVER_MESSAGE_CATEGORY = '],
     ['MIG-1', 'legacyKeys'],
     ['MIG-2', 'convertLegacyCall'],
