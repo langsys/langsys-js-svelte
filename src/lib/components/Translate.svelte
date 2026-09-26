@@ -8,7 +8,7 @@
      * token registration — lives in the base SDK; this component is purely
      * the mount/destroy glue.
      */
-    import { Translate as VanillaTranslate, type ParamPrimitive } from 'langsys-js-typescript';
+    import { CONTENT_BLOCK_MARKER_ATTR, Translate as VanillaTranslate, type ParamPrimitive } from 'langsys-js-typescript';
     import type { Snippet } from 'svelte';
     import { onDestroy } from 'svelte';
 
@@ -23,6 +23,15 @@
     }
 
     let { class: clazz = '', tag = 'translate', label = '', category = '', custom_id = '', params = undefined, children }: Props = $props();
+
+    /**
+     * MARK-1 on the server. The block's id is normally derived by the core's tokenizer, which needs
+     * a DOM and so runs only in the browser. When the app supplies `custom_id` the id is already
+     * known, so the host carries it from the first render — in the served HTML too — under the
+     * core's own attribute name. With no `custom_id` nothing is stamped here: the core stamps the
+     * derived id when it mounts.
+     */
+    const stamp = $derived(custom_id ? { [CONTENT_BLOCK_MARKER_ATTR]: custom_id } : {});
 
     let host = $state<HTMLElement>();
     let instance: VanillaTranslate | undefined;
@@ -44,6 +53,6 @@
     });
 </script>
 
-<svelte:element this={tag} class={clazz} bind:this={host}>
+<svelte:element this={tag} {...stamp} class={clazz} bind:this={host}>
     {@render children?.()}
 </svelte:element>

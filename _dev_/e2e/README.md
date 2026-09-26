@@ -132,21 +132,25 @@ its own freshly started server.
 
 ## SRV-7 — the request scope
 
-`_dev_/e2e/srv-scope.mjs` is the test the core's request scope has to pass through SvelteKit's
-own request lifecycle. `src/hooks.server.ts` opens a scope for every `/e2e/srv-scope` request and
-renders it inside; which scope is chosen by `SRV_SEAM` when the dev server starts:
+`_dev_/e2e/srv-scope.mjs` runs the core's request scope through SvelteKit's own request
+lifecycle. `src/hooks.server.ts` opens a scope for every `/e2e/srv-scope` request, renders it
+inside, writes the scope's hydration seed into the page and closes the scope after the response;
+`src/hooks.client.ts` seeds the client before hydration. Which scope is chosen by `SRV_SEAM` when
+the dev server starts:
 
 ```bash
-SRV_SEAM=core   npm run dev     # the core's scope — a stub that throws until the core ships it
+SRV_SEAM=core   npm run dev     # the core's scope
 SRV_SEAM=global npm run dev     # no scope: the process-global seed, in the request hook
-SRV_SEAM=shared npm run dev     # the rule's mutation: one scope for every request
+SRV_SEAM=shared npm run dev     # the rule's mutation: one core scope for every request
 node _dev_/e2e/srv-scope.mjs
 ```
 
-Two cases, on served bytes: a German render and then an Italian one in the same process, and
-100 × 8 concurrent Italian and German renders that await in `load` before they read. The first
-passes without a scope; the second is what a scope fixes, and without one it fails. Freshly
-started server per run.
+On served bytes: a German render and then an Italian one in the same process, and 100 × 8
+concurrent Italian and German renders that await in `load` before they read. In a real browser:
+the hydrated page keeps the served text with the seed, and re-renders without it (`?noseed=1`).
+`core` passes all nine; `global` and `shared` fail the concurrent case. Freshly started server
+per run. Starting the server with `SRV_API` (the contract double) and `SRV_KEY` also initialises
+the SDK on the server, which the post-response flush needs.
 
 ## Testbed routes
 

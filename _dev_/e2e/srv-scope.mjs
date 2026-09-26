@@ -40,6 +40,17 @@ const first = await render('de-de', 0);
 check(first.status === 200 && first.seam, 'premise: the route answers through a seam', `${first.status} seam=${first.seam}`);
 check(first.served === SERVED['de-de'], 'premise: a German render serves German', String(first.served));
 
+// The scope's hydration seed is in the page, for its own locale (SRV-4's hand-off).
+const seedOf = (html) => {
+    const m = html.match(/window\.__LANGSYS_SEED__=(\{.*?\})<\/script>/);
+    return m ? JSON.parse(m[1]) : null;
+};
+check(
+    seedOf(first.html)?.locale === 'de-de',
+    'the page carries its scope\u2019s hydration seed, for its own locale',
+    JSON.stringify(seedOf(first.html)?.locale)
+);
+
 // Case 1 — de then it, one process, a new scope for the second.
 const second = await render('it-it', 1);
 check(second.served === SERVED['it-it'], 'SRV-7 case 1: after a German render, the next scope serves Italian', String(second.served));
@@ -60,6 +71,30 @@ for (let r = 0; r < ROUNDS; r++) {
     }
 }
 check(wrong === 0, 'SRV-7 case 2 / SRV-2: concurrent renders awaiting before the read each serve their own locale', `${wrong}/${total} wrong`);
+
+// SRV-4's binding half: `hooks.client.ts` hands the scope's seed to `seedCatalog` before
+// hydration, so the first client render agrees with the served bytes. Control: the same page with
+// the seed left out (`?noseed=1`) — the client then renders from an empty catalog and the text
+// changes after hydration, which is the failure the hand-off prevents.
+{
+    const { chromium } = await import('playwright');
+    const browser = await chromium.launch();
+    const hydrated = async (query) => {
+        const page = await (await browser.newContext()).newPage();
+        page.setDefaultNavigationTimeout(90_000);
+        const warnings = [];
+        page.on('console', (m) => (m.type() === 'warning' || m.type() === 'error') && warnings.push(m.text()));
+        await page.goto(`${BASE}/e2e/srv-scope?locale=it-it&${query}`, { waitUntil: 'networkidle' });
+        await page.waitForTimeout(1000);
+        return { text: (await page.locator('[data-testid="srvc"]').textContent()).trim(), warnings };
+    };
+    const seeded = await hydrated('n=hydrate');
+    const unseeded = await hydrated('n=hydrate&noseed=1');
+    await browser.close();
+    check(seeded.text === SERVED['it-it'], 'SRV-4: with the scope\u2019s seed, the hydrated page keeps the served Italian', seeded.text);
+    check(!seeded.warnings.some((w) => /hydrat|mismatch/i.test(w)), 'SRV-4: no hydration warning with the seed', JSON.stringify(seeded.warnings.slice(0, 2)));
+    check(unseeded.text !== SERVED['it-it'], 'SRV-4 control: without the seed the client re-renders away from the served text', unseeded.text);
+}
 
 console.log(`seam: ${first.seam}\n`);
 for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.n}  —  ${r.d}`);

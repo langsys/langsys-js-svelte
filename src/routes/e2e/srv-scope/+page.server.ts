@@ -7,5 +7,5 @@ import type { PageServerLoad } from './$types';
  */
 export const load: PageServerLoad = async ({ url }) => {
     await jitter();
-    return { locale: parseLocale(url.searchParams.get('locale')) };
+    return { locale: parseLocale(url.searchParams.get('locale')), miss: url.searchParams.get('miss') };
 };

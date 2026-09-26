@@ -1,55 +1,86 @@
 /**
  * The request-scope seam (SRV-7), behind one adapter so the SvelteKit wiring in
- * `src/hooks.server.ts` does not change when the core's API arrives.
+ * `src/hooks.server.ts` does not change with the scope underneath it.
  *
- * SRV-7 puts the seam in the TypeScript core: a scope per request with its own locale, catalog
- * view, miss collection and post-response flush, and its own hydration seed. This binding only
- * wires SvelteKit's request lifecycle to it. Until the core ships the API, the one implementation
- * here that exists is `global` — README-SSR's process-global seed placed in a request hook,
- * which is exactly the shape a scope has to replace. `_dev_/e2e/srv-scope.mjs` runs against
- * whichever adapter is selected; against `global` its concurrency case is expected to fail.
+ * The scope is the TypeScript core's: a per-request locale, catalog view, miss collection and
+ * post-response flush, and a hydration seed. This binding only wires SvelteKit's request
+ * lifecycle to it. Selected by `SRV_SEAM` in the dev server's environment:
  *
- * Selected by `SRV_SEAM` in the dev server's environment:
- *   core    — the core's request scope. Not landed: throws, naming what is missing.
- *   global  — no scope: seed the process-global signals, then render (the default until `core`).
- *   shared  — SRV-7's own mutation: one scope for every request.
+ *   core    — the core's request scope (`createRequestScope`, with an AsyncLocalStorage the
+ *             binding supplies through `setRequestScopeStorage`).
+ *   global  — no scope: seed the process-global signals, then render. What a scope replaces.
+ *   shared  — SRV-7's own mutation: one core scope reused for every request.
+ *
+ * `_dev_/e2e/srv-scope.mjs` runs SRV-7's Test against whichever is selected.
  */
-import { currentlyLoadedLocale, sTranslations, type iCategories } from 'langsys-js-typescript';
+import * as core from 'langsys-js-typescript';
+import type { iCategories } from 'langsys-js-typescript';
+
+/** What the hook needs from a scope: render inside it, hand its seed to the page, close it after. */
+export interface OpenScope {
+    run<T>(render: () => Promise<T>): Promise<T>;
+    seed(): { locale: string; catalog: iCategories };
+    close(): Promise<unknown>;
+}
 
 export interface RequestScopeSeam {
     readonly name: string;
-    /** Run one request's render inside a scope for `locale`, holding `catalog`. */
-    run<T>(locale: string, catalog: iCategories, render: () => Promise<T>): Promise<T>;
+    open(options: { locale: string; catalog: iCategories; url: string }): Promise<OpenScope>;
 }
 
 const globalSeed: RequestScopeSeam = {
     name: 'global',
-    run(locale, catalog, render) {
-        sTranslations.set(catalog);
-        currentlyLoadedLocale.set(locale);
-        return render();
+    async open({ locale, catalog }) {
+        core.sTranslations.set(catalog);
+        core.currentlyLoadedLocale.set(locale);
+        return { run: (render) => render(), seed: () => ({ locale, catalog }), close: async () => undefined };
     },
 };
 
-let sharedOpened = false;
-const sharedScope: RequestScopeSeam = {
-    name: 'shared',
-    // The mutation: the first request's scope is reused for every later one.
-    run(locale, catalog, render) {
-        if (!sharedOpened) {
-            sharedOpened = true;
-            return globalSeed.run(locale, catalog, render);
-        }
-        return render();
-    },
-};
+/**
+ * The core's API as SRV-7 decided it. Read off the module rather than imported by name, so this
+ * testbed type-checks against a core that has not shipped it yet and names what is missing at
+ * run time instead.
+ */
+interface CoreRequestScope {
+    locale: string;
+    run<T>(fn: () => T): T;
+    seed(): { locale: string; catalog: iCategories };
+    close(): Promise<unknown>;
+}
+interface CoreScopeApi {
+    setRequestScopeStorage(storage: unknown): void;
+    createRequestScope(options: { locale: string; catalog?: iCategories; url?: string }): Promise<CoreRequestScope>;
+}
 
+let storageSet = false;
 const coreScope: RequestScopeSeam = {
     name: 'core',
-    run() {
-        // Wire here when the core announces the seam: open its scope for (locale, catalog), render
-        // inside it, attach its hydration seed, and let it flush after the response.
-        throw new Error('SRV_SEAM=core: the core has not shipped its request-scope API yet (SRV-7).');
+    async open({ locale, catalog, url }) {
+        const api = core as unknown as Partial<CoreScopeApi>;
+        if (typeof api.createRequestScope !== 'function' || typeof api.setRequestScopeStorage !== 'function') {
+            throw new Error('SRV_SEAM=core: this core build has no createRequestScope / setRequestScopeStorage (SRV-7 not landed).');
+        }
+        if (!storageSet) {
+            // The core never imports node:async_hooks; the binding supplies the storage, so `load`'s
+            // awaits stay inside the scope. Reached through `process` because this project carries no
+            // Node type definitions.
+            const proc = (globalThis as unknown as { process: { getBuiltinModule(id: string): { AsyncLocalStorage: new () => unknown } } }).process;
+            api.setRequestScopeStorage(new (proc.getBuiltinModule('node:async_hooks').AsyncLocalStorage)());
+            storageSet = true;
+        }
+        const scope = await api.createRequestScope({ locale, catalog, url });
+        return { run: (render) => scope.run(render), seed: () => scope.seed(), close: () => scope.close() };
+    },
+};
+
+let shared: OpenScope | undefined;
+const sharedScope: RequestScopeSeam = {
+    name: 'shared',
+    // The mutation: the first request's core scope serves every later one.
+    async open(options) {
+        shared ??= await coreScope.open(options);
+        return shared;
     },
 };
 

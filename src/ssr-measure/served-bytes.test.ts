@@ -1,8 +1,8 @@
 import { PHRASE_MARKER_ATTR, generateCustomId, sTranslations, type iCategories } from 'langsys-js-typescript';
-// Not on the core's main entry — only on `/pure`. Imported from the main entry it is
-// `undefined`, and `not.toContain(undefined)` passes against any body at all: the first
-// version of the stamp assertion below did exactly that, and only `svelte-check` noticed.
+// Read from `/pure` and checked against the main entry below, so the stamp this binding writes
+// and the attribute the core reads are provably one name.
 import { CONTENT_BLOCK_MARKER_ATTR } from 'langsys-js-typescript/pure';
+import { CONTENT_BLOCK_MARKER_ATTR as MAIN_ENTRY_ATTR } from 'langsys-js-typescript';
 import { render } from 'svelte/server';
 import { afterEach, describe, expect, it } from 'vitest';
 import ServedBytes from './ServedBytes.svelte';
@@ -77,10 +77,19 @@ describe('SRV-1 — served bytes under the component-body seed', () => {
         expect(CONTENT_BLOCK_MARKER_ATTR).toMatch(/^data-[a-z-]+$/);
     });
 
-    it('GAP: <Translate> serves the base language, and its host carries no identity stamp', () => {
+    it('GAP: <Translate> serves the base language, and a derived id is not stamped on the server', () => {
         const body = serve(italianCatalog());
         expect(textAfter(body, 'id="translate-hit"')).toBe('Pricing');
-        expect(body).not.toContain(CONTENT_BLOCK_MARKER_ATTR);
+        // The derived-id host is the opening tag just before `translate-hit`: no stamp on it.
+        const host = body.slice(0, body.indexOf('<p id="translate-hit">')).match(/<div[^>]*>\s*$/)?.[0];
+        expect(host).toBeDefined();
+        expect(host).not.toContain(CONTENT_BLOCK_MARKER_ATTR);
+    });
+
+    it("MARK-1: an app-supplied custom_id is stamped on the served host, under the core's attribute", () => {
+        const body = serve(italianCatalog());
+        expect(MAIN_ENTRY_ATTR).toBe(CONTENT_BLOCK_MARKER_ATTR);
+        expect(body).toContain(`<section ${CONTENT_BLOCK_MARKER_ATTR}="app-supplied-id"`);
     });
 
     it('GAP: <Phrase> serves the base language, though its host is marked', () => {

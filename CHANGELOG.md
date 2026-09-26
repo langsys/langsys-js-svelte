@@ -30,13 +30,25 @@
   100 opened / 100 released, `currentlyLoadedLocale` and `sTranslations` 50 / 50). A subscription
   that is never released reads as 50 open, so the measurement can fail.
 
-- **The SvelteKit wiring for the core's request scope (SRV-7), and the test it has to pass.**
-  `src/hooks.server.ts` opens a scope when a request begins and renders the whole response inside
-  it; the scope itself sits behind one adapter (`src/srv-scope/seam.ts`) until the core ships its
-  API. `_dev_/e2e/srv-scope.mjs` runs the rule's test on served bytes — a German render followed by
-  an Italian one in the same process, and concurrent Italian and German renders that await before
-  they read. Without a scope the concurrent case serves the wrong locale about half the time; it is
-  the case the core's scope exists to fix. Testbed only: nothing here ships.
+- **The SvelteKit wiring for the core's request scope (SRV-7), proven against it.** In the
+  testbed, `src/hooks.server.ts` opens a scope with `createRequestScope` in `handle` — passing an
+  AsyncLocalStorage once through `setRequestScopeStorage`, so `load`'s awaits stay inside it —
+  renders `resolve()` in `scope.run`, writes `scope.seed()` into the page and closes the scope
+  after the response; `src/hooks.client.ts` hands the seed to `LangsysApp.seedCatalog` before
+  hydration. `_dev_/e2e/srv-scope.mjs`: a German render then an Italian one in one process serves
+  Italian, and 800 concurrent Italian and German renders that await before they read serve 0 in the
+  wrong locale (400 with no scope, 400 with one scope shared by every request). The hydrated page
+  keeps the served text; without the seed it re-renders. Not yet exported from
+  `langsys-js-svelte/kit`.
+
+- **`<Translate custom_id>` carries its id in the served HTML.** When the app supplies the id, the
+  host is stamped with it from the first render, server included, under the core's own attribute.
+  A derived id still arrives when the core mounts in the browser.
+
+- **Inside a request scope, `$t` follows the scope and `$currentlyLoadedLocale` and
+  `$sTranslations` do not yet** — measured with the process seeded German and the render in an
+  Italian scope: `Prezzi` / `de-de` / `Preise`. The locale and catalog reads belong to the core.
+  Store subscriptions opened by server renders are all released, in a scope or not.
 
 - **`contract-fixture/`**, the shared API double, vendored byte-exact, with
   `_dev_/contract/verify-contract.mjs` driving the `/fixture` testbed against it.

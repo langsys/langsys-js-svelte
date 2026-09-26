@@ -23,4 +23,5 @@
 <p id="t-hit">{$t('Pricing', 'SRV')}</p>
 <p id="t-miss">{$t('Control miss', 'SRV')}</p>
 <Translate category="SRV" tag="div"><p id="translate-hit">Pricing</p></Translate>
+<Translate category="SRV" tag="section" custom_id="app-supplied-id"><p id="translate-explicit">Pricing</p></Translate>
 <Phrase category="SRV" tag="p">Pricing</Phrase>
