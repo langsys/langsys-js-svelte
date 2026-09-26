@@ -30,25 +30,23 @@
   100 opened / 100 released, `currentlyLoadedLocale` and `sTranslations` 50 / 50). A subscription
   that is never released reads as 50 open, so the measurement can fail.
 
-- **The SvelteKit wiring for the core's request scope (SRV-7), proven against it.** In the
-  testbed, `src/hooks.server.ts` opens a scope with `createRequestScope` in `handle` — passing an
-  AsyncLocalStorage once through `setRequestScopeStorage`, so `load`'s awaits stay inside it —
-  renders `resolve()` in `scope.run`, writes `scope.seed()` into the page and closes the scope
-  after the response; `src/hooks.client.ts` hands the seed to `LangsysApp.seedCatalog` before
-  hydration. `_dev_/e2e/srv-scope.mjs`: a German render then an Italian one in one process serves
-  Italian, and 800 concurrent Italian and German renders that await before they read serve 0 in the
-  wrong locale (400 with no scope, 400 with one scope shared by every request). The hydrated page
-  keeps the served text; without the seed it re-renders. Not yet exported from
-  `langsys-js-svelte/kit`.
+- **`createLangsysHandle` and `hydrateFromServer`: a request scope per SvelteKit request.** A new
+  entry, `langsys-js-svelte/kit/server`, exports `createLangsysHandle({ locale, catalog?, match?,
+seed?, storage? })` for `hooks.server.ts`: it opens the core's request scope for each request,
+  renders the whole response inside it — `load`, its awaits, every component — writes the scope's
+  catalog into the page and closes the scope after the response, sending the request's missed
+  phrases then when the key may write. `langsys-js-svelte/kit` gains `hydrateFromServer()` for
+  `hooks.client.ts`, which puts that catalog in place before hydration. Inside a scope `$t`,
+  `$currentlyLoadedLocale` and `$sTranslations` all read the request's own locale and catalog.
+  Measured: 800 concurrent Italian and German renders that await before they read serve none in
+  the wrong locale (400 without a scope); a hydrated page keeps the served text; with a 3 s flush,
+  the page still arrives in about 50 ms and the phrase registers afterwards, and a read-only key
+  sends nothing. `<Translate>` and `<Phrase>` still serve source text on the server. README-SSR
+  documents the pattern.
 
 - **`<Translate custom_id>` carries its id in the served HTML.** When the app supplies the id, the
   host is stamped with it from the first render, server included, under the core's own attribute.
   A derived id still arrives when the core mounts in the browser.
-
-- **Inside a request scope, `$t` follows the scope and `$currentlyLoadedLocale` and
-  `$sTranslations` do not yet** — measured with the process seeded German and the render in an
-  Italian scope: `Prezzi` / `de-de` / `Preise`. The locale and catalog reads belong to the core.
-  Store subscriptions opened by server renders are all released, in a scope or not.
 
 - **`contract-fixture/`**, the shared API double, vendored byte-exact, with
   `_dev_/contract/verify-contract.mjs` driving the `/fixture` testbed against it.

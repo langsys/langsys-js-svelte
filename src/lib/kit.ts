@@ -3,7 +3,8 @@
  * imports `$app/*` and keeps working in Svelte apps that do not use SvelteKit.
  */
 import { afterNavigate } from '$app/navigation';
-import { notifyNavigation } from 'langsys-js-typescript';
+import { LangsysApp, notifyNavigation, type iCategories } from 'langsys-js-typescript';
+import { SEED_GLOBAL } from './kit/seed.js';
 
 /**
  * Tell the SDK about every client-side route change (HINT-13).
@@ -21,4 +22,22 @@ export function syncNavigation(): void {
     afterNavigate(({ type }) => {
         if (type !== 'enter') notifyNavigation();
     });
+}
+
+/**
+ * Put the server's catalog in place before hydration (SRV-4). Call it from `init` in
+ * `src/hooks.client.ts` when the server uses `createLangsysHandle` from
+ * `langsys-js-svelte/kit/server`:
+ *
+ *     export const init = () => hydrateFromServer();
+ *
+ * It reads the seed the server wrote for this request and hands it to the core's synchronous
+ * `seedCatalog`, so the first client render reads the catalog the server rendered with and agrees
+ * with the served HTML. Returns whether a seed was found.
+ */
+export function hydrateFromServer(): boolean {
+    const seed = (globalThis as unknown as Record<string, { locale: string; catalog: iCategories } | undefined>)[SEED_GLOBAL];
+    if (!seed) return false;
+    LangsysApp.seedCatalog(structuredClone(seed.catalog), seed.locale);
+    return true;
 }

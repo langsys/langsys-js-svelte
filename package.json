@@ -32,6 +32,10 @@
         "./kit": {
             "types": "./dist/kit.d.ts",
             "svelte": "./dist/kit.js"
+        },
+        "./kit/server": {
+            "types": "./dist/kit/server.d.ts",
+            "svelte": "./dist/kit/server.js"
         }
     },
     "files": [

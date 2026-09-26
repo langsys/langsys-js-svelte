@@ -133,9 +133,9 @@ its own freshly started server.
 ## SRV-7 — the request scope
 
 `_dev_/e2e/srv-scope.mjs` runs the core's request scope through SvelteKit's own request
-lifecycle. `src/hooks.server.ts` opens a scope for every `/e2e/srv-scope` request, renders it
-inside, writes the scope's hydration seed into the page and closes the scope after the response;
-`src/hooks.client.ts` seeds the client before hydration. Which scope is chosen by `SRV_SEAM` when
+lifecycle. `src/hooks.server.ts` runs every `/e2e/srv-scope` request through the package's own
+`createLangsysHandle`, and `src/hooks.client.ts` calls `hydrateFromServer()`, exactly as an app
+does. Which scope is chosen by `SRV_SEAM` when
 the dev server starts:
 
 ```bash
@@ -151,6 +151,22 @@ the hydrated page keeps the served text with the seed, and re-renders without it
 `core` passes all nine; `global` and `shared` fail the concurrent case. Freshly started server
 per run. Starting the server with `SRV_API` (the contract double) and `SRV_KEY` also initialises
 the SDK on the server, which the post-response flush needs.
+
+## SRV-3 — the post-response flush
+
+`_dev_/e2e/srv-flush.mjs` checks that a server render's missed phrases are sent after the
+response, and only by a key that may write. The contract double answers
+`POST /translatable-items` 3 s late, so the order of events shows up as two numbers: the page
+arrives well inside 3 s, and the phrase is absent from the double's state on arrival and present
+after the flush.
+
+```bash
+node _dev_/e2e/srv-flush.mjs --serve                                   # the double, :8787
+SRV_API=http://127.0.0.1:8787/api SRV_KEY=k-write npm run dev          # fresh server
+node _dev_/e2e/srv-flush.mjs --expect write
+SRV_API=http://127.0.0.1:8787/api SRV_KEY=k-read npm run dev           # fresh server again
+node _dev_/e2e/srv-flush.mjs --expect read
+```
 
 ## Testbed routes
 

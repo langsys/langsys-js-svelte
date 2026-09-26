@@ -21,7 +21,8 @@ src/lib/
     index.ts                      # public exports — LangsysApp wrapper, t store, components, type re-exports
     adapters.ts                   # writable<T> → Signal<T> adapter (svelte/store get → .get())
     messages.ts                   # `serverMessage` — a store derived from `t` over the core's renderServerMessage
-    kit.ts                        # `langsys-js-svelte/kit` entry — syncNavigation() via SvelteKit's afterNavigate
+    kit.ts                        # `langsys-js-svelte/kit` entry — syncNavigation() (afterNavigate), hydrateFromServer()
+    kit/server.ts                 # `langsys-js-svelte/kit/server` — createLangsysHandle(): the core's request scope per request
     components/
         Translate.svelte          # Svelte 5 thin wrapper around langsys-js-typescript's vanilla DOM Translate class
         Phrase.svelte             # thin wrapper around the vanilla Phrase rich-text handler

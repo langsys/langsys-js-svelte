@@ -2,9 +2,9 @@
  * The request-scope seam (SRV-7), behind one adapter so the SvelteKit wiring in
  * `src/hooks.server.ts` does not change with the scope underneath it.
  *
- * The scope is the TypeScript core's: a per-request locale, catalog view, miss collection and
- * post-response flush, and a hydration seed. This binding only wires SvelteKit's request
- * lifecycle to it. Selected by `SRV_SEAM` in the dev server's environment:
+ * The shipped wiring is `createLangsysHandle` (`src/lib/kit/server.ts`); `SRV_SEAM=core` uses it
+ * directly. The seams here stand in for broken ones, so `_dev_/e2e/srv-scope.mjs` can show it
+ * fails without a scope. Selected by `SRV_SEAM` in the dev server's environment:
  *
  *   core    — the core's request scope (`createRequestScope`, with an AsyncLocalStorage the
  *             binding supplies through `setRequestScopeStorage`).

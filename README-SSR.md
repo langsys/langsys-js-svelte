@@ -172,6 +172,51 @@ That is expected — see [What this does](#what-this-does--and-what-it-does-not)
 > JavaScript string argument to `$t()`, which the compiler does not touch. See the
 > main `README.md`.
 
+## Rendering inside a request scope
+
+A server process renders for many visitors at once, and the SDK's catalog normally lives in
+module state shared by all of them. A **request scope** gives each request its own locale,
+catalog and missed-phrase collection. `createLangsysHandle` opens one per request:
+
+```typescript
+// src/hooks.server.ts
+import { createLangsysHandle } from 'langsys-js-svelte/kit/server';
+
+export const handle = createLangsysHandle({
+    // The request's locale: the URL first, then a cookie or session value, then Accept-Language,
+    // each checked against your project's locales (see "Choosing the locale" above).
+    locale: (event) => event.locals.locale,
+});
+```
+
+```typescript
+// src/hooks.client.ts
+import { hydrateFromServer } from 'langsys-js-svelte/kit';
+
+export const init = () => hydrateFromServer();
+```
+
+For each request the handle opens a scope, renders the whole response inside it — `load`, its
+`await`s and every component — writes the scope's catalog into the page, and closes the scope
+after the response. `hydrateFromServer()` puts that catalog in place before hydration, so the
+first client render matches the served HTML. Inside the scope `$t`, `$currentlyLoadedLocale` and
+`$sTranslations` all read this request's locale and catalog, and an `await` before a read is safe.
+Measured with 800 concurrent Italian and German renders that await before they read: none served
+the wrong locale.
+
+- **Server init.** Call `LangsysApp.init()` once on the server — with the key, and
+  `ssrTokenStrategy: 'server'` if phrases missed during a server render should be registered.
+  When the key may write, a scope's misses are sent after the response, never while the visitor
+  waits; a read-only key sends nothing.
+- **Options.** `catalog` hands the scope a catalog you already have (otherwise it is fetched, at
+  most once per locale per request); `match` limits which requests get a scope; `seed: false`
+  skips the inline script — under a CSP that forbids inline scripts — and you pass
+  `scope.seed()` to the client yourself; `storage` supplies your own `AsyncLocalStorage`.
+- **Components.** `<Translate>` and `<Phrase>` still serve their source text on the server and
+  translate after hydration; only `$t()` output is translated in the served HTML.
+
+With a request scope you do not need the component-body seed below.
+
 ## Server-rendering translated copy
 
 The pattern above cannot server-render body text, because `init()` runs in `onMount`.
