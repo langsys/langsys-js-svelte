@@ -30,6 +30,12 @@
   100 opened / 100 released, `currentlyLoadedLocale` and `sTranslations` 50 / 50). A subscription
   that is never released reads as 50 open, so the measurement can fail.
 
+- **A server render says why `<Translate>` and `<Phrase>` serve source.** On the server both
+  components hold their children only as a render function, and the core's block renderer takes a
+  node tree, so every block is served as its source and translated after mount. They now report
+  that once per process through the core, with the reason `string-path-deferred`. Nothing is
+  reported in the browser.
+
 - **`_dev_/e2e/svelte-dom.mjs`: what Svelte does to the text it holds, in real Chromium.** Reactive
   content inside translated blocks — a `<Phrase>` wrapping an expression, and an `<option>` in a
   block with other text — keeps updating after translation, each beside an in-place control; this

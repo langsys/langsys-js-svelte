@@ -8,7 +8,7 @@
      * token registration — lives in the base SDK; this component is purely
      * the mount/destroy glue.
      */
-    import { CONTENT_BLOCK_MARKER_ATTR, Translate as VanillaTranslate, type ParamPrimitive } from 'langsys-js-typescript';
+    import { CONTENT_BLOCK_MARKER_ATTR, Translate as VanillaTranslate, warnUnrenderedBlock, type ParamPrimitive } from 'langsys-js-typescript';
     import type { Snippet } from 'svelte';
     import { onDestroy } from 'svelte';
 
@@ -32,6 +32,14 @@
      * derived id when it mounts.
      */
     const stamp = $derived(custom_id ? { [CONTENT_BLOCK_MARKER_ATTR]: custom_id } : {});
+
+    /**
+     * SRV-1's sanctioned fallback, reported. On the server this component holds its children only
+     * as a render function, and the core's block renderer takes a node tree, not the HTML a render
+     * function produces; so the block is served as source and translated after mount. The core
+     * reports that once per process per reason.
+     */
+    if (typeof window === 'undefined') warnUnrenderedBlock('string-path-deferred');
 
     let host = $state<HTMLElement>();
     let instance: VanillaTranslate | undefined;

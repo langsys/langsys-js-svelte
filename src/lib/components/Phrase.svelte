@@ -24,7 +24,7 @@
      * richtext.ts in the base SDK). The host carries the core's `PHRASE_MARKER_ATTR` so a
      * wrapping <Translate> skips it and lets this handler own it.
      */
-    import { PHRASE_MARKER_ATTR, Phrase as VanillaPhrase, type ParamPrimitive } from 'langsys-js-typescript';
+    import { PHRASE_MARKER_ATTR, Phrase as VanillaPhrase, warnUnrenderedBlock, type ParamPrimitive } from 'langsys-js-typescript';
     import type { Snippet } from 'svelte';
     import { onDestroy } from 'svelte';
 
@@ -47,6 +47,14 @@
      * the split `<Phrase>` exists to prevent, and it would fail silently.
      */
     const markerAttr = { [PHRASE_MARKER_ATTR]: '' };
+
+    /**
+     * SRV-1's sanctioned fallback, reported. On the server this component holds its children only
+     * as a render function, and the core's block renderer takes a node tree, not the HTML a render
+     * function produces; so the block is served as source and translated after mount. The core
+     * reports that once per process per reason.
+     */
+    if (typeof window === 'undefined') warnUnrenderedBlock('string-path-deferred');
 
     let host = $state<HTMLElement>();
     let instance: VanillaPhrase | undefined;
