@@ -168,6 +168,20 @@ SRV_API=http://127.0.0.1:8787/api SRV_KEY=k-read npm run dev           # fresh s
 node _dev_/e2e/srv-flush.mjs --expect read
 ```
 
+## Svelte DOM facts
+
+`_dev_/e2e/svelte-dom.mjs` checks what Svelte does to DOM text it holds. `/e2e/reactivity`
+(client-only) translates a `<Phrase>` with an expression and an `<option>` in a two-token block,
+then changes state: the new value must reach the page, as it does for the in-place controls
+beside them. `/e2e/hydration-facts` is served with its text rewritten, as a server-translated
+block would arrive: static text must hydrate as served, an expression as the client's value, and
+a state change must reach a node written in place and not one that was replaced.
+
+```bash
+npm run dev                          # fresh
+node _dev_/e2e/svelte-dom.mjs
+```
+
 ## Testbed routes
 
 | Route                                                 | Covers                                                                                                                   |

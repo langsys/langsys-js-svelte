@@ -30,6 +30,13 @@
   100 opened / 100 released, `currentlyLoadedLocale` and `sTranslations` 50 / 50). A subscription
   that is never released reads as 50 open, so the measurement can fail.
 
+- **`_dev_/e2e/svelte-dom.mjs`: what Svelte does to the text it holds, in real Chromium.** Reactive
+  content inside translated blocks — a `<Phrase>` wrapping an expression, and an `<option>` in a
+  block with other text — keeps updating after translation, each beside an in-place control; this
+  fails against a core that replaced those nodes. And the hydration facts the server-rendered block
+  path relies on: static text is claimed as served, an expression's text is rewritten to the
+  client's value, and a state change reaches a node written in place but not one that was replaced.
+
 - **`createLangsysHandle` and `hydrateFromServer`: a request scope per SvelteKit request.** A new
   entry, `langsys-js-svelte/kit/server`, exports `createLangsysHandle({ locale, catalog?, match?,
 seed?, storage? })` for `hooks.server.ts`: it opens the core's request scope for each request,

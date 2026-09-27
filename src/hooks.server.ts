@@ -49,6 +49,16 @@ const testbedSeam = seamName === 'core' ? undefined : selectSeam(seamName);
 
 export const handle: Handle = async (input) => {
     const { event, resolve } = input;
+    // `/e2e/hydration-facts`: rewrite the host's text in the served HTML, as a server-translated
+    // block would arrive, leaving Svelte's markup and hydration markers untouched. `?plain=1` serves
+    // it unchanged (the control).
+    if (event.url.pathname === '/e2e/hydration-facts' && event.url.searchParams.get('plain') !== '1') {
+        const served: Record<string, string> = { 'Hello friend': 'Ciao amico', Welcome: 'Benvenuto', 'Nested text': 'Testo annidato', 'Click me': 'Cliccami' };
+        return resolve(event, {
+            transformPageChunk: ({ html }) =>
+                Object.entries(served).reduce((out, [source, translated]) => out.split(`>${source}<`).join(`>${translated}<`), html),
+        });
+    }
     if (!isScopeRoute(event.url)) return resolve(event);
     // Reported back so a run can prove its premise: an SDK that never initialised sends nothing,
     // which would pass a read-only check for the wrong reason.
