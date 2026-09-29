@@ -36,6 +36,10 @@
         "./kit/server": {
             "types": "./dist/kit/server.d.ts",
             "svelte": "./dist/kit/server.js"
+        },
+        "./preprocess": {
+            "types": "./dist/preprocess/index.d.ts",
+            "default": "./dist/preprocess/index.js"
         }
     },
     "files": [
@@ -80,6 +84,7 @@
     "types": "./dist/index.d.ts",
     "type": "module",
     "dependencies": {
-        "langsys-js-typescript": "^0.6.4"
+        "langsys-js-typescript": "^0.6.4",
+        "magic-string": "^0.30.0"
     }
 }

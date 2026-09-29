@@ -1,0 +1,135 @@
+/**
+ * VAR — variables in registered text, through SvelteKit end to end.
+ *
+ * `/fixture/var` is compiled with the transform (VAR-6), `/fixture/var-plain` without it (VAR-7).
+ * Both render under the package's `createLangsysHandle`, with the catalog the core fetches from
+ * the contract double, and hydrate in Chromium against the same double.
+ *
+ *     node _dev_/e2e/var.mjs --serve                                      # terminal 1: the double on :8787
+ *     SRV_API=http://127.0.0.1:8787/api SRV_KEY=k-write npm run dev       # terminal 2, fresh
+ *     node _dev_/e2e/var.mjs
+ *
+ * The double's state is what registered. Zeros are only meaningful beside the positive control:
+ * the transformed block DOES register, in the same run, through the same double.
+ */
+import { spawn } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright';
+import { generateCustomId } from 'langsys-js-typescript';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
+const BASE = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173';
+const FX = 'http://127.0.0.1:8787/__fixture';
+
+if (process.argv.includes('--serve')) {
+    spawn(process.execPath, [join(ROOT, 'contract-fixture/server.mjs'), '--port', '8787'], { stdio: 'inherit' });
+} else {
+    const GREET = 'Hello {name}, welcome back';
+    const CART = 'You have {items_count} items';
+    const PLAIN_ANA = 'Hello Ana, welcome back'; // what the plain route's DOM reads
+    const cartBlock = generateCustomId('VAR', [CART, 'Add one']);
+    const SEED = {
+        projects: [
+            {
+                id: 'p1',
+                base_locale: 'en-us',
+                target_locales: ['it-it'],
+                phrases: [
+                    { category: 'VAR', phrase: GREET, translations: { 'it-it': 'Ciao {name}, bentornato' } },
+                    { category: 'VAR', phrase: PLAIN_ANA, translations: { 'it-it': 'Ciao Ana, bentornato' } },
+                ],
+                blocks: [
+                    {
+                        category: 'VAR',
+                        custom_id: cartBlock,
+                        content: '<p>You have {items_count} items</p><button>Add one</button>',
+                        phrases: [
+                            { phrase: CART, translations: { 'it-it': '{items_count, plural, one {Hai # articolo} other {Hai # articoli}}' } },
+                            { phrase: 'Add one', translations: { 'it-it': 'Aggiungi' } },
+                        ],
+                    },
+                ],
+            },
+        ],
+        keys: [{ key: 'k-write', project: 'p1', type: 'write' }],
+    };
+
+    const results = [];
+    const check = (c, n, d) => results.push({ ok: !!c, n, d });
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const seed = (doc) => fetch(`${FX}/seed`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(doc) });
+    const state = async () => (await (await fetch(`${FX}/state`)).json()).projects.p1;
+    /** Every registered text: phrases, and each block's phrases. */
+    const registered = async () => {
+        const p = await state();
+        return [...p.phrases.map((x) => x.phrase), ...p.blocks.flatMap((b) => b.phrases.map((x) => x.phrase))];
+    };
+    const text = (html, id) => (html.match(new RegExp(`id="${id}"[^>]*>([^]*?)</`)) ?? [])[1]?.replace(/<!--[^]*?-->/g, '').replace(/<[^>]+>/g, '');
+
+    await seed(SEED);
+
+    // --- Served bytes (SRV-1, MARK-1 on the tree path) ---------------------------------------
+    const res = await fetch(`${BASE}/fixture/var?locale=it-it&user=Ana&n=1&key=k-write`);
+    const html = await res.text();
+    check(res.headers.get('x-srv-init') === 'ok:k-write', 'premise: the server initialised against the double', res.headers.get('x-srv-init'));
+    check(text(html, 'greet') === 'Ciao Ana, bentornato', 'served: the block is translated, with the value in place', text(html, 'greet'));
+    const greetId = generateCustomId('VAR', [GREET]);
+    check(new RegExp(`data-ls-contentblock="[0-9a-f]{32}"[^>]*data-ls-resolved="it-it"|data-ls-resolved="it-it"[^>]*data-ls-contentblock`).test(html), 'served: the host is stamped with its id and the resolved marker', greetId);
+    check(text(html, 'cart') === 'Hai 1 articolo', 'served: the ICU plural the catalog holds, for 1', text(html, 'cart'));
+    const five = await (await fetch(`${BASE}/fixture/var?locale=it-it&user=Ana&n=5&key=k-write`)).text();
+    check(text(five, 'cart') === 'Hai 5 articoli', 'served: … and for 5', text(five, 'cart'));
+    check(!/Hello Ana/.test(html) && !/You have/.test(html), 'served: no source text left in the transformed blocks');
+
+    // --- Two users register one phrase (VAR-1, VAR-6) -----------------------------------------
+    const RUN = `r${Date.now() % 1_000_000}`;
+    await seed({ ...SEED, projects: [{ ...SEED.projects[0], phrases: [], blocks: [] }] });
+    const browser = await chromium.launch();
+    const notices = [];
+    const visit = async (path) => {
+        const page = await browser.newPage();
+        page.on('console', (m) => notices.push(m.text()));
+        await page.goto(`${BASE}${path}`);
+        await page.waitForFunction(() => document.querySelector('[data-testid=fx-status]')?.textContent === 'ready', null, { timeout: 60_000 });
+        return page;
+    };
+    const ana = await visit(`/fixture/var?user=Ana&key=k-write&run=${RUN}`);
+    const luis = await visit(`/fixture/var?user=Luis&key=k-write&run=${RUN}`);
+    check((await ana.textContent('#greet')) === 'Hello Ana, welcome back', 'browser: the value renders in the base locale', await ana.textContent('#greet'));
+
+    // Handlers survive: the button is rendered from the tree, and still does its job.
+    await ana.click('#add');
+    await sleep(200);
+    check((await ana.textContent('#cart')) === 'You have 4 items', 'browser: a handler on a tree-rendered element runs, and the text follows', await ana.textContent('#cart'));
+
+    let got = [];
+    for (let i = 0; i < 20 && !got.includes(GREET); i++) {
+        await sleep(3000);
+        got = await registered();
+    }
+    check(got.filter((p) => p === GREET).length === 1, 'VAR-6: two users register the one placeholder phrase', JSON.stringify(got));
+    check(got.includes(CART), 'VAR-2: the count registers under its derived name', JSON.stringify(got));
+    check(!got.some((p) => /Ana|Luis/.test(p)), 'VAR-1: no per-user phrase is registered', JSON.stringify(got));
+    check(!got.some((p) => /^Item \d/.test(p)), 'VAR-7: the {#each} block (a fallback) registers nothing', JSON.stringify(got));
+
+    // --- Without the transform (VAR-7) --------------------------------------------------------
+    const before = await registered();
+    const plain = await visit(`/fixture/var-plain?user=Ana&key=k-write&debug=1&run=${RUN}`);
+    await visit(`/fixture/var-plain?user=Luis&key=k-write&debug=1&run=${RUN}`);
+    await sleep(35_000); // past the client's 5–30 s flush jitter
+    const after = await registered();
+    check(after.length === before.length, 'VAR-7: without the transform, nothing more registers', JSON.stringify(after.filter((p) => !before.includes(p))));
+    check(notices.filter((n) => /svelte-transform-missing/.test(n)).length >= 1, 'VAR-7: the notice names the transform', notices.filter((n) => /transform/.test(n)).join(' | '));
+    await plain.close();
+
+    await seed(SEED);
+    const it = await visit(`/fixture/var-plain?user=Ana&key=k-write&locale=it-it`);
+    await it.waitForFunction(() => document.querySelector('#greet')?.textContent === 'Ciao Ana, bentornato', null, { timeout: 15_000 }).catch(() => {});
+    check((await it.textContent('#greet')) === 'Ciao Ana, bentornato', 'VAR-7: a catalogued translation still renders without the transform', await it.textContent('#greet'));
+
+    await browser.close();
+    for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.n}${r.ok || r.d === undefined ? '' : `\n      ${r.d}`}`);
+    const failed = results.filter((r) => !r.ok).length;
+    console.log(`\n${results.length - failed}/${results.length} passed`);
+    process.exit(failed ? 1 : 0);
+}

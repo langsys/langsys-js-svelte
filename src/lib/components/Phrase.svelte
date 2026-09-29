@@ -1,32 +1,38 @@
 <script lang="ts">
     /**
-     * Phrase — Svelte 5 wrapper around the vanilla `Phrase` rich-text handler.
+     * Phrase — one markup-bearing sentence, kept whole.
      *
-     * Use inside (or outside) <Translate> to keep a markup-bearing run as ONE
-     * translatable phrase — e.g. so a count variable stays next to the noun it
-     * pluralizes:
+     * Use inside (or outside) <Translate> so a run with inline markup is ONE translatable phrase —
+     * e.g. so a count stays next to the noun it pluralizes:
      *
-     *   <Phrase category="ProductCard" params={{ n: reviewCount }}>
-     *     Based on %n% <strong>reviews</strong>
-     *   </Phrase>
+     *   <Phrase category="ProductCard">Based on {reviewCount} <strong>reviews</strong></Phrase>
      *
-     * Placeholders in markup use `%n%`, not `{n}` — Svelte would compile a bare
-     * `{n}` as its own expression tag and substitute it before Langsys saw the
-     * text. The value is then baked into the encoded phrase string this
-     * component looks up — `Based on 0 {m0o}reviews{m0c}` — so every distinct
-     * value becomes its own catalog entry. Note this is NOT <Translate>'s
-     * mechanism: <Phrase> keys on the encoded string via a plain phrase
-     * lookup, with no content block and no custom_id. The base SDK normalizes
-     * `%n%` back to canonical `{n}` at capture, so translators still see `{n}`.
+     * With `langsysPreprocess()` in svelte.config.js this registers
+     * `Based on {review_count} {m0o}reviews{m0c}` once, with the count as a typed param, and
+     * renders through the core's `renderBlock` on the server as in the browser. The inline markup
+     * never reaches the translator: it becomes neutral `m<N>o`/`m<N>c` tokens and the real
+     * elements are rebuilt at render.
      *
-     * The inline markup never reaches the translator — it's replaced with
-     * neutral tokens and the real elements are reconstituted at render (see
-     * richtext.ts in the base SDK). The host carries the core's `PHRASE_MARKER_ATTR` so a
-     * wrapping <Translate> skips it and lets this handler own it.
+     * Without the transform, or when the build cannot read the phrase, the vanilla `Phrase` handler
+     * translates the rendered DOM after mount and registers nothing (VAR-7). A name written
+     * explicitly — `%n%` with `params={{ n }}` — works on both paths. The host carries the core's
+     * `PHRASE_MARKER_ATTR`, so a wrapping <Translate> leaves it to this component.
      */
-    import { PHRASE_MARKER_ATTR, Phrase as VanillaPhrase, warnUnrenderedBlock, type ParamPrimitive } from 'langsys-js-typescript';
+    import {
+        PHRASE_MARKER_ATTR,
+        Phrase as VanillaPhrase,
+        registerBlock,
+        renderBlock,
+        tSignal,
+        warnUnregistered,
+        warnUnrenderedBlock,
+        type BlockNode,
+        type ParamPrimitive,
+    } from 'langsys-js-typescript';
     import type { Snippet } from 'svelte';
     import { onDestroy } from 'svelte';
+    import RenderedNodes from './RenderedNodes.svelte';
+    import { NO_TRANSFORM, paramsOf, type TransformOutput } from './transform.js';
 
     interface Props {
         class?: string;
@@ -34,9 +40,11 @@
         category?: string;
         params?: Record<string, ParamPrimitive>;
         children: Snippet;
+        /** Written by `langsysPreprocess()`; never by hand. */
+        __ls?: TransformOutput;
     }
 
-    let { class: clazz = '', tag = 'span', category = '', params = {}, children }: Props = $props();
+    let { class: clazz = '', tag = 'span', category = '', params = {}, children, __ls = undefined }: Props = $props();
 
     /**
      * The skip marker, spread so the attribute NAME comes from the core rather
@@ -54,14 +62,41 @@
      * function produces; so the block is served as source and translated after mount. The core
      * reports that once per process per reason.
      */
-    if (typeof window === 'undefined') warnUnrenderedBlock('string-path-deferred');
+    // svelte-ignore state_referenced_locally
+    if (!(__ls && 'tree' in __ls)) {
+        // svelte-ignore state_referenced_locally
+        warnUnregistered(__ls && 'fallback' in __ls ? `svelte-fallback: ${__ls.fallback}` : NO_TRANSFORM);
+        if (typeof window === 'undefined') warnUnrenderedBlock('string-path-deferred');
+    }
+
+    /**
+     * With the transform, the phrase is a tree whose root is this host, marked, so the core renders
+     * it as one rich phrase (`m0o`…`m0c` for its inline markup) on the server as in the browser.
+     */
+    const tree = $derived<BlockNode[] | undefined>(
+        __ls && 'tree' in __ls ? [{ tag, attrs: { ...markerAttr, ...(clazz ? { class: clazz } : {}) }, children: __ls.tree }] : undefined
+    );
+    // The host is element 0 of the tree, so the build's entries start at 1.
+    const dyn = $derived(__ls && 'tree' in __ls ? [null, ...__ls.dyn] : []);
+    const options = $derived({ category, params: paramsOf(__ls && 'tree' in __ls ? __ls.params : undefined, params) });
+    const root = $derived.by(() => {
+        $tSignal; // re-render on every catalog or locale change
+        const node = tree ? renderBlock(tree, options).nodes[0] : undefined;
+        return node && 'tag' in node ? node : undefined;
+    });
 
     let host = $state<HTMLElement>();
     let instance: VanillaPhrase | undefined;
 
     $effect(() => {
-        if (!host || instance) return;
-        instance = new VanillaPhrase(host, { category, params });
+        if (!host || tree || instance) return;
+        instance = new VanillaPhrase(host, { category, params, register: false });
+    });
+
+    $effect(() => {
+        if (!host || !tree) return;
+        $tSignal;
+        registerBlock(tree, { ...options, host });
     });
 
     // Re-render when params change (e.g. a changed count) after mount.
@@ -76,6 +111,10 @@
     });
 </script>
 
-<svelte:element this={tag} {...markerAttr} class={clazz} bind:this={host}>
-    {@render children?.()}
-</svelte:element>
+{#if root}
+    <svelte:element this={root.tag} {...root.attrs} bind:this={host}><RenderedNodes nodes={root.children} {dyn} /></svelte:element>
+{:else}
+    <svelte:element this={tag} {...markerAttr} class={clazz} bind:this={host}>
+        {@render children?.()}
+    </svelte:element>
+{/if}
