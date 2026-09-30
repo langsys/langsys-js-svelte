@@ -37,7 +37,13 @@ describe('VAR-6 — the preprocessor', () => {
         const { code } = run('<Translate category="UI"><p>Hello {name}, you have {items.length} items</p></Translate>');
         expect(blocks(code, { name: 'Ana', items: [1, 2, 3] })).toEqual([
             {
-                tree: [{ tag: 'p', attrs: {}, children: [{ text: 'Hello ' }, ...v('name', 'Ana'), { text: ', you have ' }, ...v('items_count', '3'), { text: ' items' }] }],
+                tree: [
+                    {
+                        tag: 'p',
+                        attrs: {},
+                        children: [{ text: 'Hello ' }, ...v('name', 'Ana'), { text: ', you have ' }, ...v('items_count', '3'), { text: ' items' }],
+                    },
+                ],
                 dyn: [null],
                 params: { name: 'Ana', items_count: 3 },
             },
@@ -53,7 +59,7 @@ describe('VAR-6 — the preprocessor', () => {
     it('keeps {#if} branches as conditional parts of the tree and of the params', () => {
         const markup = '<Translate><p>Hi {#if vip}dear {name}{:else if guest}guest{:else}there{/if}</p></Translate>';
         const { code } = run(markup);
-        const at = (vip: boolean, guest: boolean) => (blocks(code, { vip, guest, name: 'Ana' })[0] as { tree: Array<{ children: unknown }>; params: unknown });
+        const at = (vip: boolean, guest: boolean) => blocks(code, { vip, guest, name: 'Ana' })[0] as { tree: Array<{ children: unknown }>; params: unknown };
         expect(at(true, false).tree[0].children).toEqual([{ text: 'Hi ' }, { text: 'dear ' }, ...v('name', 'Ana')]);
         expect(at(true, false).params).toEqual({ name: 'Ana' });
         expect(at(false, true).tree[0].children).toEqual([{ text: 'Hi ' }, { text: 'guest' }]);
@@ -71,10 +77,16 @@ describe('VAR-6 — the preprocessor', () => {
     });
 
     it('inlines a nested <Phrase> and <DontTranslate> as their marked elements', () => {
-        const { code } = run('<Translate category="UI"><Phrase>Based on {n} <b>reviews</b></Phrase> <DontTranslate tag="code">{sku}</DontTranslate></Translate>');
+        const { code } = run(
+            '<Translate category="UI"><Phrase>Based on {n} <b>reviews</b></Phrase> <DontTranslate tag="code">{sku}</DontTranslate></Translate>'
+        );
         const [block] = blocks(code, { n: 4, sku: 'X-1' }) as Array<{ tree: unknown[]; params: unknown }>;
         expect(block.tree).toEqual([
-            { tag: 'span', attrs: { 'data-ls-phrase': '' }, children: [{ text: 'Based on ' }, ...v('n', '4'), { text: ' ' }, { tag: 'b', attrs: {}, children: [{ text: 'reviews' }] }] },
+            {
+                tag: 'span',
+                attrs: { 'data-ls-phrase': '' },
+                children: [{ text: 'Based on ' }, ...v('n', '4'), { text: ' ' }, { tag: 'b', attrs: {}, children: [{ text: 'reviews' }] }],
+            },
             { text: ' ' },
             { tag: 'code', attrs: { translate: 'no', 'data-ls-dont-translate': '' }, children: [{ text: 'X-1' }] },
         ]);

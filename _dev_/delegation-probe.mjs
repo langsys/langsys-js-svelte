@@ -29,6 +29,12 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BINDING_SRC = join(ROOT, 'src/lib');
+/**
+ * The build-time transform (VAR-6). It runs in Node inside the app's bundler, never in the page or
+ * the server render, so it has no wire, no catalog and no lookup to take part in: the probes ask
+ * about the runtime binding and leave it out. It is graded on its own rows (VAR-2, VAR-3, VAR-6).
+ */
+const BUILD_TIME = join(BINDING_SRC, 'preprocess');
 
 /** [rule id, pattern]. The pattern names the core's mechanism for that rule. */
 export const PROBES = [
@@ -144,8 +150,9 @@ function walk(dir, exts) {
     const out = [];
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const p = join(dir, entry.name);
-        if (entry.isDirectory()) out.push(...walk(p, exts));
-        else if (exts.some((e) => entry.name.endsWith(e)) && !/\.(test|spec)\.[jt]s$/.test(entry.name)) out.push(p);
+        if (entry.isDirectory()) {
+            if (p !== BUILD_TIME || dir === BUILD_TIME) out.push(...walk(p, exts));
+        } else if (exts.some((e) => entry.name.endsWith(e)) && !/\.(test|spec)\.[jt]s$/.test(entry.name)) out.push(p);
     }
     return out;
 }
@@ -194,6 +201,9 @@ function selfTest() {
             true,
         ],
         ['binding walker excludes tests (surface.test.ts names core members)', walk(BINDING_SRC, ['.ts']).some((f) => f.endsWith('.test.ts')), false],
+        ['binding walker leaves out the build-time transform', walk(BINDING_SRC, ['.ts']).some((f) => f.startsWith(BUILD_TIME)), false],
+        // The exclusion is doing work: the transform does match a probe the runtime binding does not.
+        ['… which does match a probe pattern (WIRE-3)', count(read(walk(BUILD_TIME, ['.ts'])), 'toLowerCase') > 0, true],
         ['core walker reads real files', walk(coreCheckout().src, ['.ts']).length > 10, true],
     ];
     let bad = 0;
@@ -211,7 +221,7 @@ const core = coreCheckout();
 const bindingText = read(walk(BINDING_SRC, ['.ts', '.svelte']));
 const coreText = read(walk(core.src, ['.ts']));
 
-console.log(`binding  ${relative(ROOT, BINDING_SRC)} (tests excluded, comments stripped)`);
+console.log(`binding  ${relative(ROOT, BINDING_SRC)} (tests and the build-time ${relative(BINDING_SRC, BUILD_TIME)}/ excluded, comments stripped)`);
 console.log(`core     ${core.pkg}`);
 console.log(`         ${core.branch} @ ${core.sha}, ${core.dirty} uncommitted file(s) under src/`);
 console.log('');

@@ -12,4 +12,9 @@
     const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr']);
 </script>
 
-{#each nodes as n, i (i)}{#if 'text' in n}{n.text}{:else if 'tag' in n}{#if VOID.has(n.tag)}<svelte:element this={n.tag} {...n.attrs} {...dyn[n.source] ?? {}} />{:else}<svelte:element this={n.tag} {...n.attrs} {...dyn[n.source] ?? {}}><RenderedNodes nodes={n.children} {dyn} /></svelte:element>{/if}{/if}{/each}
+{#each nodes as n, i (i)}{#if 'text' in n}{n.text}{:else if 'tag' in n}{#if VOID.has(n.tag)}<svelte:element
+                this={n.tag}
+                {...n.attrs}
+                {...dyn[n.source] ?? {}}
+            />{:else}<svelte:element this={n.tag} {...n.attrs} {...dyn[n.source] ?? {}}><RenderedNodes nodes={n.children} {dyn} /></svelte:element
+            >{/if}{/if}{/each}

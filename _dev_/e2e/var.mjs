@@ -75,7 +75,11 @@ if (process.argv.includes('--serve')) {
     check(res.headers.get('x-srv-init') === 'ok:k-write', 'premise: the server initialised against the double', res.headers.get('x-srv-init'));
     check(text(html, 'greet') === 'Ciao Ana, bentornato', 'served: the block is translated, with the value in place', text(html, 'greet'));
     const greetId = generateCustomId('VAR', [GREET]);
-    check(new RegExp(`data-ls-contentblock="[0-9a-f]{32}"[^>]*data-ls-resolved="it-it"|data-ls-resolved="it-it"[^>]*data-ls-contentblock`).test(html), 'served: the host is stamped with its id and the resolved marker', greetId);
+    check(
+        new RegExp(`data-ls-contentblock="[0-9a-f]{32}"[^>]*data-ls-resolved="it-it"|data-ls-resolved="it-it"[^>]*data-ls-contentblock`).test(html),
+        'served: the host is stamped with its id and the resolved marker',
+        greetId
+    );
     check(text(html, 'cart') === 'Hai 1 articolo', 'served: the ICU plural the catalog holds, for 1', text(html, 'cart'));
     const five = await (await fetch(`${BASE}/fixture/var?locale=it-it&user=Ana&n=5&key=k-write`)).text();
     check(text(five, 'cart') === 'Hai 5 articoli', 'served: … and for 5', text(five, 'cart'));
@@ -94,13 +98,22 @@ if (process.argv.includes('--serve')) {
         return page;
     };
     const ana = await visit(`/fixture/var?user=Ana&key=k-write&run=${RUN}`);
-    const luis = await visit(`/fixture/var?user=Luis&key=k-write&run=${RUN}`);
+    await visit(`/fixture/var?user=Luis&key=k-write&run=${RUN}`);
     check((await ana.textContent('#greet')) === 'Hello Ana, welcome back', 'browser: the value renders in the base locale', await ana.textContent('#greet'));
 
     // Handlers survive: the button is rendered from the tree, and still does its job.
     await ana.click('#add');
     await sleep(200);
-    check((await ana.textContent('#cart')) === 'You have 4 items', 'browser: a handler on a tree-rendered element runs, and the text follows', await ana.textContent('#cart'));
+    check(
+        (await ana.textContent('#cart')) === 'You have 4 items',
+        'browser: a handler on a tree-rendered element runs, and the text follows',
+        await ana.textContent('#cart')
+    );
+
+    // The {#each} block is a fallback. Mounted after init, so a zero below is VAR-7's and not a save
+    // skipped because the session was not yet authorised.
+    await ana.click('#show-list');
+    await ana.waitForSelector('#list');
 
     let got = [];
     for (let i = 0; i < 20 && !got.includes(GREET); i++) {
@@ -110,7 +123,7 @@ if (process.argv.includes('--serve')) {
     check(got.filter((p) => p === GREET).length === 1, 'VAR-6: two users register the one placeholder phrase', JSON.stringify(got));
     check(got.includes(CART), 'VAR-2: the count registers under its derived name', JSON.stringify(got));
     check(!got.some((p) => /Ana|Luis/.test(p)), 'VAR-1: no per-user phrase is registered', JSON.stringify(got));
-    check(!got.some((p) => /^Item \d/.test(p)), 'VAR-7: the {#each} block (a fallback) registers nothing', JSON.stringify(got));
+    check(!got.some((p) => /^Item\b/.test(p)), 'VAR-7: the {#each} block (a fallback) registers nothing', JSON.stringify(got));
 
     // --- Without the transform (VAR-7) --------------------------------------------------------
     const before = await registered();
@@ -119,13 +132,21 @@ if (process.argv.includes('--serve')) {
     await sleep(35_000); // past the client's 5–30 s flush jitter
     const after = await registered();
     check(after.length === before.length, 'VAR-7: without the transform, nothing more registers', JSON.stringify(after.filter((p) => !before.includes(p))));
-    check(notices.filter((n) => /svelte-transform-missing/.test(n)).length >= 1, 'VAR-7: the notice names the transform', notices.filter((n) => /transform/.test(n)).join(' | '));
+    check(
+        notices.filter((n) => /svelte-transform-missing/.test(n)).length >= 1,
+        'VAR-7: the notice names the transform',
+        notices.filter((n) => /transform/.test(n)).join(' | ')
+    );
     await plain.close();
 
     await seed(SEED);
     const it = await visit(`/fixture/var-plain?user=Ana&key=k-write&locale=it-it`);
     await it.waitForFunction(() => document.querySelector('#greet')?.textContent === 'Ciao Ana, bentornato', null, { timeout: 15_000 }).catch(() => {});
-    check((await it.textContent('#greet')) === 'Ciao Ana, bentornato', 'VAR-7: a catalogued translation still renders without the transform', await it.textContent('#greet'));
+    check(
+        (await it.textContent('#greet')) === 'Ciao Ana, bentornato',
+        'VAR-7: a catalogued translation still renders without the transform',
+        await it.textContent('#greet')
+    );
 
     await browser.close();
     for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.n}${r.ok || r.d === undefined ? '' : `\n      ${r.d}`}`);

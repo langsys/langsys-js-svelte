@@ -9,9 +9,22 @@
     const params = page.url.searchParams;
     const user = $state({ name: params.get('user') ?? 'Ana' });
     const items = $state(Array.from({ length: Number(params.get('n') ?? 3) }, (_, i) => i));
+    // Mounted on demand, after init: a block mounted before init() resolves never saves (the
+    // session is not yet write-enabled), which would read as VAR-7 for the wrong reason.
+    let showList = $state(false);
 </script>
 
 <Translate category="VAR" tag="div"><p id="greet">Hello {user.name}, welcome back</p></Translate>
-<Translate category="VAR" tag="div"><p id="cart">You have {items.length} items</p><button id="add" onclick={() => items.push(items.length)}>Add one</button></Translate>
+<Translate category="VAR" tag="div"
+    ><p id="cart">You have {items.length} items</p>
+    <button id="add" onclick={() => items.push(items.length)}>Add one</button></Translate
+>
 <Phrase category="VAR" tag="p">Signed in as <b id="who">{user.name}</b></Phrase>
-<Translate category="VAR" tag="div"><ul id="list">{#each items as i (i)}<li>Item {i}</li>{/each}</ul></Translate>
+<button id="show-list" onclick={() => (showList = true)}>show list</button>
+{#if showList}
+    <Translate category="VAR" tag="div"
+        ><ul id="list">
+            {#each items as i (i)}<li>Item {i}</li>{/each}
+        </ul></Translate
+    >
+{/if}

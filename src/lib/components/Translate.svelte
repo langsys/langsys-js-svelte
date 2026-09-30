@@ -52,8 +52,10 @@
         ...(custom_id ? { id: custom_id } : {}),
     });
     const rendered = $derived.by(() => {
-        $tSignal; // re-render on every catalog or locale change
-        return tree ? renderBlock(tree, options) : null;
+        if (!tree) return null;
+        // eslint-disable-next-line @typescript-eslint/no-unused-expressions -- reading the store is the dependency: re-render on every catalog or locale change
+        $tSignal;
+        return renderBlock(tree, options);
     });
 
     /**
@@ -63,9 +65,9 @@
     const stamp = $derived(custom_id ? { [CONTENT_BLOCK_MARKER_ATTR]: custom_id } : {});
 
     // The notices, once per process per reason, silent with debug off.
+    // A component's transform output never changes after it is created.
     // svelte-ignore state_referenced_locally
     if (!tree) {
-        // svelte-ignore state_referenced_locally
         warnUnregistered(__ls && 'fallback' in __ls ? `svelte-fallback: ${__ls.fallback}` : NO_TRANSFORM);
         if (typeof window === 'undefined') warnUnrenderedBlock('string-path-deferred');
     }
@@ -87,6 +89,7 @@
     // The tree path registers what it renders — again on each catalog change, as the core asks.
     $effect(() => {
         if (!host || !tree) return;
+        // eslint-disable-next-line @typescript-eslint/no-unused-expressions -- re-register on every catalog change
         $tSignal;
         registerBlock(tree, { ...options, host });
     });

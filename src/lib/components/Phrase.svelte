@@ -62,9 +62,9 @@
      * function produces; so the block is served as source and translated after mount. The core
      * reports that once per process per reason.
      */
+    // A component's transform output never changes after it is created.
     // svelte-ignore state_referenced_locally
     if (!(__ls && 'tree' in __ls)) {
-        // svelte-ignore state_referenced_locally
         warnUnregistered(__ls && 'fallback' in __ls ? `svelte-fallback: ${__ls.fallback}` : NO_TRANSFORM);
         if (typeof window === 'undefined') warnUnrenderedBlock('string-path-deferred');
     }
@@ -80,8 +80,10 @@
     const dyn = $derived(__ls && 'tree' in __ls ? [null, ...__ls.dyn] : []);
     const options = $derived({ category, params: paramsOf(__ls && 'tree' in __ls ? __ls.params : undefined, params) });
     const root = $derived.by(() => {
-        $tSignal; // re-render on every catalog or locale change
-        const node = tree ? renderBlock(tree, options).nodes[0] : undefined;
+        if (!tree) return undefined;
+        // eslint-disable-next-line @typescript-eslint/no-unused-expressions -- reading the store is the dependency: re-render on every catalog or locale change
+        $tSignal;
+        const node = renderBlock(tree, options).nodes[0];
         return node && 'tag' in node ? node : undefined;
     });
 
@@ -95,6 +97,7 @@
 
     $effect(() => {
         if (!host || !tree) return;
+        // eslint-disable-next-line @typescript-eslint/no-unused-expressions -- re-register on every catalog change
         $tSignal;
         registerBlock(tree, { ...options, host });
     });

@@ -8,9 +8,7 @@ import type { BlockNode, ParamPrimitive } from 'langsys-js-typescript';
  * values — so a rendered element gets them back by its `source` index; `params` are the values,
  * typed as the app holds them. `fallback` names what the build could not read.
  */
-export type TransformOutput =
-    | { tree: BlockNode[]; dyn: Array<Record<string, unknown> | null>; params: Record<string, unknown> }
-    | { fallback: string };
+export type TransformOutput = { tree: BlockNode[]; dyn: Array<Record<string, unknown> | null>; params: Record<string, unknown> } | { fallback: string };
 
 /** The reason `warnUnregistered` reports when a block reaches the runtime without the transform. */
 export const NO_TRANSFORM = 'svelte-transform-missing: add langsysPreprocess() from langsys-js-svelte/preprocess to svelte.config.js';
@@ -20,7 +18,12 @@ export function paramsOf(...sources: Array<Record<string, unknown> | undefined>)
     const out: Record<string, ParamPrimitive> = {};
     for (const source of sources) {
         for (const [key, value] of Object.entries(source ?? {})) {
-            out[key] = value == null ? '' : typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value instanceof Date ? value : String(value);
+            out[key] =
+                value == null
+                    ? ''
+                    : typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value instanceof Date
+                      ? value
+                      : String(value);
         }
     }
     return out;
