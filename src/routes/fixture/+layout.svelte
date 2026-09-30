@@ -23,7 +23,7 @@
     const params = page.url.searchParams;
     const key = params.get('key') ?? 'k-public';
     const testCase = params.get('case') ?? '0';
-    const userLocale = writable('en-us');
+    const userLocale = writable(params.get('locale') ?? 'en-us');
 
     let status = $state<'idle' | 'ready' | 'error'>('idle');
 
@@ -35,6 +35,7 @@
             UserLocaleStore: userLocale,
             baseLocale: 'en-us',
             apiUrl: `${window.location.origin}/__fx/api`,
+            debug: params.has('debug'),
         });
         status = res.status ? 'ready' : 'error';
     });

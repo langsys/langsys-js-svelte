@@ -15,6 +15,8 @@ import { selectSeam } from './srv-scope/seam.js';
  * route passes straight through.
  */
 const isScopeRoute = (url: URL) => url.pathname.startsWith('/e2e/srv-scope');
+/** The VAR routes render under the core's scope too, with the catalog the core fetches from `SRV_API`. */
+const isVarRoute = (url: URL) => url.pathname === '/fixture/var' || url.pathname === '/fixture/var-plain';
 
 /**
  * For the post-response flush (SRV-3) the SDK needs a key and a write lane, so a run that tests
@@ -44,6 +46,11 @@ const packageHandle = createLangsysHandle(options);
 // `?noseed=1`: the same handle without the seed — the control for the hydration hand-off (SRV-4).
 const packageHandleNoSeed = createLangsysHandle({ ...options, seed: false });
 
+const varHandle = createLangsysHandle({
+    match: (event) => isVarRoute(event.url),
+    locale: (event) => event.url.searchParams.get('locale') ?? 'en-us',
+});
+
 const seamName = env.SRV_SEAM ?? 'core';
 const testbedSeam = seamName === 'core' ? undefined : selectSeam(seamName);
 
@@ -58,6 +65,12 @@ export const handle: Handle = async (input) => {
             transformPageChunk: ({ html }) =>
                 Object.entries(served).reduce((out, [source, translated]) => out.split(`>${source}<`).join(`>${translated}<`), html),
         });
+    }
+    if (isVarRoute(event.url)) {
+        const init = await initOnce();
+        const response = await varHandle(input);
+        response.headers.set('x-srv-init', init ? (init.status ? `ok:${env.SRV_KEY}` : 'failed') : 'none');
+        return response;
     }
     if (!isScopeRoute(event.url)) return resolve(event);
     // Reported back so a run can prove its premise: an SDK that never initialised sends nothing,
