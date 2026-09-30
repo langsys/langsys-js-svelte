@@ -22,7 +22,7 @@
  */
 import { parse } from 'svelte/compiler';
 import MagicString from 'magic-string';
-import { PHRASE_MARKER_ATTR, TRANSLATABLE_ATTRIBUTES } from 'langsys-js-typescript/pure';
+import { CONTENT_BLOCK_MARKER_ATTR, PHRASE_MARKER_ATTR, TRANSLATABLE_ATTRIBUTES } from 'langsys-js-typescript/pure';
 import { assignNames, type Expr, type Occurrence } from './naming.js';
 
 export interface LangsysPreprocessOptions {
@@ -301,13 +301,18 @@ class Transform {
         return { k: 'el', tag, attrs, dyn, children };
     }
 
-    /** A `<Phrase>` or `<DontTranslate>` inside the block becomes its marked element. */
+    /**
+     * A `<Phrase>`, `<Translate>` or `<DontTranslate>` inside the block becomes its marked element:
+     * the core renders a nested phrase host as its rich phrase and a nested block host as a block
+     * of its own (MARK-4), each under its own id.
+     */
     private nested(n: Node, ctx: Ctx): IR {
         const kind = this.locals.get(n.name as string);
-        if (kind !== 'Phrase' && kind !== 'DontTranslate') throw new Fallback(kind ? `nested <${n.name}>` : `component <${n.name}>`);
+        if (!kind) throw new Fallback(`component <${n.name}>`);
         const attrs: Array<{ name: string; value: true | AttrPart[] }> = [];
         const dyn: Array<{ name: string; parts: Array<string | Expr> }> = [];
-        let tag = 'span';
+        let tag = kind === 'Translate' ? 'translate' : 'span';
+        let customId = '';
         for (const a of n.attributes as Node[]) {
             if (a.type !== 'Attribute') throw new Fallback(`${describe(a)} on <${n.name}>`);
             const value = a.value as true | Node | Node[];
@@ -319,7 +324,8 @@ class Transform {
                 if (isStatic) attrs.push({ name: 'class', value: [text] });
                 else dyn.push({ name: 'class', parts: parts.map((p) => (p.type === 'Text' ? (p.data as string) : (p.expression as Expr))) });
             } else if (a.name === 'category' && isStatic && (text === '' || text === ctx.category)) continue;
-            else if (a.name === 'params' && kind === 'Phrase' && !Array.isArray(value) && value !== true) {
+            else if (a.name === 'custom_id' && kind === 'Translate' && isStatic) customId = text;
+            else if (a.name === 'params' && kind !== 'DontTranslate' && !Array.isArray(value) && value !== true) {
                 this.explicitKeys(a, ctx.explicit);
                 ctx.spreads.push(value.expression as Expr);
             } else throw new Fallback(`${a.name} on <${n.name}>`);
@@ -328,8 +334,11 @@ class Transform {
             attrs.push({ name: 'translate', value: ['no'] }, { name: 'data-ls-dont-translate', value: [''] });
             return { k: 'el', tag, attrs, dyn, children: this.children((n.fragment as Fragment).nodes, { ...ctx, raw: true }) };
         }
-        attrs.unshift({ name: PHRASE_MARKER_ATTR, value: [''] });
-        return { k: 'el', tag, attrs, dyn, children: this.children((n.fragment as Fragment).nodes, ctx) };
+        // A nested block is declared (an empty marker) or, with an app-supplied id, identified by it.
+        attrs.unshift(kind === 'Translate' ? { name: CONTENT_BLOCK_MARKER_ATTR, value: [customId] } : { name: PHRASE_MARKER_ATTR, value: [''] });
+        const children = this.children((n.fragment as Fragment).nodes, ctx);
+        trimEdges(children);
+        return { k: 'el', tag, attrs, dyn, children };
     }
 
     // ------------------------------------------------------------------

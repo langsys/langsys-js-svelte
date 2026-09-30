@@ -9,7 +9,8 @@ import VarServed from './VarServed.svelte';
  */
 
 const GREET = 'Hello {name}, welcome back';
-const CART = 'You have {count} items';
+// `props.count` ends in `count`: the previous segment plus `_count` (VAR-2).
+const CART = 'You have {props_count} items';
 
 function catalog(): iCategories {
     const block = (tokens: string[], translated: Record<string, string>) => ({ [generateCustomId('VAR', tokens)]: translated });
@@ -18,8 +19,8 @@ function catalog(): iCategories {
             __category__: 'VAR',
             [GREET]: 'Ciao {name}, bentornato',
             ...block([GREET], { [GREET]: 'Ciao {name}, bentornato' }),
-            [CART]: '{count, plural, one {Hai # articolo} other {Hai # articoli}}',
-            ...block([CART], { [CART]: '{count, plural, one {Hai # articolo} other {Hai # articoli}}' }),
+            [CART]: '{props_count, plural, one {Hai # articolo} other {Hai # articoli}}',
+            ...block([CART], { [CART]: '{props_count, plural, one {Hai # articolo} other {Hai # articoli}}' }),
             'Welcome, VIP': 'Benvenuto, VIP',
             Welcome: 'Benvenuto',
         },
@@ -49,8 +50,9 @@ describe('VAR-6 / SRV-1 — a transformed block is served translated', () => {
     });
 
     it('MARK-1: the served host carries the id of the placeholder phrase, and the resolved marker', () => {
-        const body = serve();
+        const body = serve().replace(/<!--[^]*?-->/g, '');
         const host = body.slice(0, body.indexOf('<p id="greet">')).match(/<div[^>]*>\s*$/)?.[0] ?? '';
+        expect(host).toContain(`data-ls-contentblock="${generateCustomId('VAR', [GREET])}"`);
         expect(host).toContain(`data-ls-resolved="it-it"`);
     });
 

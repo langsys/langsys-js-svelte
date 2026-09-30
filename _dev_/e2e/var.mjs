@@ -83,11 +83,27 @@ if (process.argv.includes('--serve')) {
     check(text(html, 'cart') === 'Hai 1 articolo', 'served: the ICU plural the catalog holds, for 1', text(html, 'cart'));
     const five = await (await fetch(`${BASE}/fixture/var?locale=it-it&user=Ana&n=5&key=k-write`)).text();
     check(text(five, 'cart') === 'Hai 5 articoli', 'served: … and for 5', text(five, 'cart'));
-    check(!/Hello Ana/.test(html) && !/You have/.test(html), 'served: no source text left in the transformed blocks');
+    // The page, not the hydration seed: the seed carries the catalog's source keys by design.
+    const page = html.replace(/<script[^]*?<\/script>/g, '');
+    check(!/Hello Ana/.test(page) && !/You have/.test(page), 'served: no source text left in the transformed blocks');
 
     // --- Two users register one phrase (VAR-1, VAR-6) -----------------------------------------
     const RUN = `r${Date.now() % 1_000_000}`;
     await seed({ ...SEED, projects: [{ ...SEED.projects[0], phrases: [], blocks: [] }] });
+    // SRV-3 on the tree path: a server render alone, no browser, registers the placeholder phrase
+    // after the response, through the request scope.
+    await fetch(`${BASE}/fixture/var?user=Zoe&key=k-write&run=${RUN}`).then((r) => r.text());
+    let serverOnly = [];
+    for (let i = 0; i < 10 && !serverOnly.includes(GREET); i++) {
+        await sleep(1000);
+        serverOnly = await registered();
+    }
+    check(
+        serverOnly.includes(GREET) && !serverOnly.some((p) => /Zoe/.test(p)),
+        'SRV-3: a server render registers the placeholder phrase after the response',
+        JSON.stringify(serverOnly)
+    );
+
     const browser = await chromium.launch();
     const notices = [];
     const visit = async (path) => {
@@ -109,11 +125,6 @@ if (process.argv.includes('--serve')) {
         'browser: a handler on a tree-rendered element runs, and the text follows',
         await ana.textContent('#cart')
     );
-
-    // The {#each} block is a fallback. Mounted after init, so a zero below is VAR-7's and not a save
-    // skipped because the session was not yet authorised.
-    await ana.click('#show-list');
-    await ana.waitForSelector('#list');
 
     let got = [];
     for (let i = 0; i < 20 && !got.includes(GREET); i++) {

@@ -115,6 +115,8 @@ export const PROBES = [
     ['MIG-6', 'warnedLegacy'],
     ['MIG-7', 'FOREIGN_EXTENSIONS|SUPPORTED_LEGACY_FORMATS'],
     ['MIG-8', 'convertLegacyValue'],
+    // FRM-6: the header the core builds for the user's locale; `LangsysApp.localeHeaders()` is forwarded unlisted.
+    ['FRM-6', 'Accept-Language'],
     ['SNAP-2', 'parseSnapshot'],
     ['SNAP-3', 'markSeeded'],
 ];

@@ -8,14 +8,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import ServedBytes from './ServedBytes.svelte';
 
 /**
- * SRV-1, MEASURED — what a server render of this binding actually sends.
- *
- * This is a measurement, not a specification of behaviour to keep. Two of its
- * assertions pin GAPS: `<Translate>` and `<Phrase>` serve the base language however
- * complete the catalog is, because both construct their vanilla handler in `$effect`,
- * and effects never run during SSR. When server-side rendering of those two lands,
- * the gap assertions go red on purpose — that is the signal to re-grade SRV-1, not a
- * regression to silence.
+ * SRV-1, MEASURED — what a server render of this binding sends WITHOUT the build-time
+ * transform. `$t()` serves the request locale. `<Translate>` and `<Phrase>` take SRV-1's
+ * sanctioned fallback: without the transform the binding cannot show their content to the
+ * core's renderer, so they serve source, stamp only an app-supplied `custom_id`, and translate
+ * after hydration. `var/var-served.test.ts` is the same measurement with the transform.
  *
  * Served bytes are asserted, never a post-hydration DOM: a crawler reads the bytes.
  */
@@ -77,7 +74,7 @@ describe('SRV-1 — served bytes under the component-body seed', () => {
         expect(CONTENT_BLOCK_MARKER_ATTR).toMatch(/^data-[a-z-]+$/);
     });
 
-    it('GAP: <Translate> serves the base language, and a derived id is not stamped on the server', () => {
+    it('fallback: <Translate> serves source, and a derived id is not stamped on the server', () => {
         const body = serve(italianCatalog());
         expect(textAfter(body, 'id="translate-hit"')).toBe('Pricing');
         // The derived-id host is the opening tag just before `translate-hit`: no stamp on it.
@@ -92,7 +89,7 @@ describe('SRV-1 — served bytes under the component-body seed', () => {
         expect(body).toContain(`<section ${CONTENT_BLOCK_MARKER_ATTR}="app-supplied-id"`);
     });
 
-    it('GAP: <Phrase> serves the base language, though its host is marked', () => {
+    it('fallback: <Phrase> serves source, though its host is marked', () => {
         const body = serve(italianCatalog());
         expect(textAfter(body, PHRASE_MARKER_ATTR)).toBe('Pricing');
     });

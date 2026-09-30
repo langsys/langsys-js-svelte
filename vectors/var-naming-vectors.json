@@ -1,0 +1,549 @@
+{
+ "": "Placeholder naming vectors (spec VAR-2). AUTHORED in langsys-js-typescript, the fixtures' owner; every SDK that derives placeholder names executes them. Vendor byte-exact.",
+ "spec_blob": "5f43b636423ed9e7e81d9d34b37e82bfe36a2811 (langsys2 04a1f462, specVersion 8.5.2)",
+ "grammar": "[a-z][a-z0-9_]*",
+ "reserved": [
+  "m<N>o",
+  "m<N>c"
+ ],
+ "how_to_row_against_it": "One case is one phrase: `expressions` in phrase order, `names` index-aligned. Map each `shape` onto your own AST and derive; collisions resolve within a case. `source` is JavaScript, for reading only. Shapes: {identifier} | {member: [segments]} | {call: {callee, args: [shape]}} | {other: binary|conditional|template|computed}. `explicit` is a name the developer wrote.",
+ "cases": [
+  {
+   "id": "identifier",
+   "why": "an identifier is itself",
+   "expressions": [
+    {
+     "source": "name",
+     "shape": {
+      "identifier": "name"
+     }
+    }
+   ],
+   "names": [
+    "name"
+   ]
+  },
+  {
+   "id": "identifier-camel",
+   "why": "an identifier in snake_case",
+   "expressions": [
+    {
+     "source": "firstName",
+     "shape": {
+      "identifier": "firstName"
+     }
+    }
+   ],
+   "names": [
+    "first_name"
+   ]
+  },
+  {
+   "id": "identifier-acronym",
+   "why": "an acronym ends its own segment",
+   "expressions": [
+    {
+     "source": "userID",
+     "shape": {
+      "identifier": "userID"
+     }
+    }
+   ],
+   "names": [
+    "user_id"
+   ]
+  },
+  {
+   "id": "member-last",
+   "why": "a member chain is its last segment",
+   "expressions": [
+    {
+     "source": "user.name",
+     "shape": {
+      "member": [
+       "user",
+       "name"
+      ]
+     }
+    }
+   ],
+   "names": [
+    "name"
+   ]
+  },
+  {
+   "id": "member-camel",
+   "why": "its last segment in snake_case",
+   "expressions": [
+    {
+     "source": "order.shippingAddress",
+     "shape": {
+      "member": [
+       "order",
+       "shippingAddress"
+      ]
+     }
+    }
+   ],
+   "names": [
+    "shipping_address"
+   ]
+  },
+  {
+   "id": "member-length",
+   "why": "length: the previous segment plus _count",
+   "expressions": [
+    {
+     "source": "items.length",
+     "shape": {
+      "member": [
+       "items",
+       "length"
+      ]
+     }
+    }
+   ],
+   "names": [
+    "items_count"
+   ]
+  },
+  {
+   "id": "member-size",
+   "why": "size: the previous segment plus _count",
+   "expressions": [
+    {
+     "source": "cart.size",
+     "shape": {
+      "member": [
+       "cart",
+       "size"
+      ]
+     }
+    }
+   ],
+   "names": [
+    "cart_count"
+   ]
+  },
+  {
+   "id": "member-count",
+   "why": "count: the previous segment plus _count",
+   "expressions": [
+    {
+     "source": "users.count",
+     "shape": {
+      "member": [
+       "users",
+       "count"
+      ]
+     }
+    }
+   ],
+   "names": [
+    "users_count"
+   ]
+  },
+  {
+   "id": "member-value",
+   "why": "value: the previous segment",
+   "expressions": [
+    {
+     "source": "price.value",
+     "shape": {
+      "member": [
+       "price",
+       "value"
+      ]
+     }
+    }
+   ],
+   "names": [
+    "price"
+   ]
+  },
+  {
+   "id": "member-current",
+   "why": "current: the previous segment, in snake_case",
+   "expressions": [
+    {
+     "source": "inputRef.current",
+     "shape": {
+      "member": [
+       "inputRef",
+       "current"
+      ]
+     }
+    }
+   ],
+   "names": [
+    "input_ref"
+   ]
+  },
+  {
+   "id": "call-one-arg",
+   "why": "a call with one argument is the argument's name",
+   "expressions": [
+    {
+     "source": "formatDate(order.date)",
+     "shape": {
+      "call": {
+       "callee": "formatDate",
+       "args": [
+        {
+         "member": [
+          "order",
+          "date"
+         ]
+        }
+       ]
+      }
+     }
+    }
+   ],
+   "names": [
+    "date"
+   ]
+  },
+  {
+   "id": "call-one-arg-identifier",
+   "why": "the argument may be an identifier",
+   "expressions": [
+    {
+     "source": "upper(firstName)",
+     "shape": {
+      "call": {
+       "callee": "upper",
+       "args": [
+        {
+         "identifier": "firstName"
+        }
+       ]
+      }
+     }
+    }
+   ],
+   "names": [
+    "first_name"
+   ]
+  },
+  {
+   "id": "call-one-arg-unnameable",
+   "why": "an unnameable argument makes the call unnameable",
+   "expressions": [
+    {
+     "source": "fmt(a + b)",
+     "shape": {
+      "call": {
+       "callee": "fmt",
+       "args": [
+        {
+         "other": "binary"
+        }
+       ]
+      }
+     }
+    }
+   ],
+   "names": [
+    "value"
+   ]
+  },
+  {
+   "id": "call-multi",
+   "why": "a call with several arguments is unnameable",
+   "expressions": [
+    {
+     "source": "format(a, b)",
+     "shape": {
+      "call": {
+       "callee": "format",
+       "args": [
+        {
+         "identifier": "a"
+        },
+        {
+         "identifier": "b"
+        }
+       ]
+      }
+     }
+    }
+   ],
+   "names": [
+    "value"
+   ]
+  },
+  {
+   "id": "binary",
+   "why": "a binary expression is unnameable",
+   "expressions": [
+    {
+     "source": "a + b",
+     "shape": {
+      "other": "binary"
+     }
+    }
+   ],
+   "names": [
+    "value"
+   ]
+  },
+  {
+   "id": "conditional",
+   "why": "a conditional expression is unnameable",
+   "expressions": [
+    {
+     "source": "ok ? x : y",
+     "shape": {
+      "other": "conditional"
+     }
+    }
+   ],
+   "names": [
+    "value"
+   ]
+  },
+  {
+   "id": "template",
+   "why": "a template literal is unnameable",
+   "expressions": [
+    {
+     "source": "`${a}${b}`",
+     "shape": {
+      "other": "template"
+     }
+    }
+   ],
+   "names": [
+    "value"
+   ]
+  },
+  {
+   "id": "computed",
+   "why": "a computed member is unnameable",
+   "expressions": [
+    {
+     "source": "items[i]",
+     "shape": {
+      "other": "computed"
+     }
+    }
+   ],
+   "names": [
+    "value"
+   ]
+  },
+  {
+   "id": "unnameable-twice",
+   "why": "unnameable values are value, value_2",
+   "expressions": [
+    {
+     "source": "a + b",
+     "shape": {
+      "other": "binary"
+     }
+    },
+    {
+     "source": "ok ? x : y",
+     "shape": {
+      "other": "conditional"
+     }
+    }
+   ],
+   "names": [
+    "value",
+    "value_2"
+   ]
+  },
+  {
+   "id": "collision-prev",
+   "why": "a collision is prefixed with the previous segment, on both",
+   "expressions": [
+    {
+     "source": "a.name",
+     "shape": {
+      "member": [
+       "a",
+       "name"
+      ]
+     }
+    },
+    {
+     "source": "b.name",
+     "shape": {
+      "member": [
+       "b",
+       "name"
+      ]
+     }
+    }
+   ],
+   "names": [
+    "a_name",
+    "b_name"
+   ]
+  },
+  {
+   "id": "collision-count",
+   "why": "the prefix on a _count name is the segment before its base",
+   "expressions": [
+    {
+     "source": "a.items.length",
+     "shape": {
+      "member": [
+       "a",
+       "items",
+       "length"
+      ]
+     }
+    },
+    {
+     "source": "b.items.length",
+     "shape": {
+      "member": [
+       "b",
+       "items",
+       "length"
+      ]
+     }
+    }
+   ],
+   "names": [
+    "a_items_count",
+    "b_items_count"
+   ]
+  },
+  {
+   "id": "collision-no-prev",
+   "why": "with no previous segment, the later one is suffixed _2",
+   "expressions": [
+    {
+     "source": "firstName",
+     "shape": {
+      "identifier": "firstName"
+     }
+    },
+    {
+     "source": "first_name",
+     "shape": {
+      "identifier": "first_name"
+     }
+    }
+   ],
+   "names": [
+    "first_name",
+    "first_name_2"
+   ]
+  },
+  {
+   "id": "same-expression-twice",
+   "why": "the same expression twice is one placeholder",
+   "expressions": [
+    {
+     "source": "user.name",
+     "shape": {
+      "member": [
+       "user",
+       "name"
+      ]
+     }
+    },
+    {
+     "source": "user.name",
+     "shape": {
+      "member": [
+       "user",
+       "name"
+      ]
+     }
+    }
+   ],
+   "names": [
+    "name",
+    "name"
+   ]
+  },
+  {
+   "id": "explicit-wins",
+   "why": "an explicit name wins",
+   "expressions": [
+    {
+     "source": "user.name",
+     "shape": {
+      "member": [
+       "user",
+       "name"
+      ]
+     },
+     "explicit": "who"
+    }
+   ],
+   "names": [
+    "who"
+   ]
+  },
+  {
+   "id": "explicit-meets-derived",
+   "why": "an explicit name keeps its name; the derived one it meets is prefixed",
+   "expressions": [
+    {
+     "source": "user.name",
+     "shape": {
+      "member": [
+       "user",
+       "name"
+      ]
+     },
+     "explicit": "name"
+    },
+    {
+     "source": "b.name",
+     "shape": {
+      "member": [
+       "b",
+       "name"
+      ]
+     }
+    }
+   ],
+   "names": [
+    "name",
+    "b_name"
+   ]
+  },
+  {
+   "id": "explicit-snake",
+   "why": "an explicit name is put in snake_case to meet the grammar",
+   "expressions": [
+    {
+     "source": "user.name",
+     "shape": {
+      "member": [
+       "user",
+       "name"
+      ]
+     },
+     "explicit": "firstName"
+    }
+   ],
+   "names": [
+    "first_name"
+   ]
+  },
+  {
+   "id": "reserved",
+   "why": "a markup token name is taken: m<N>o and m<N>c are <Phrase>'s",
+   "expressions": [
+    {
+     "source": "m0o",
+     "shape": {
+      "identifier": "m0o"
+     }
+    }
+   ],
+   "names": [
+    "m0o_2"
+   ]
+  }
+ ]
+}

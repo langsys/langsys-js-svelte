@@ -1,6 +1,34 @@
 ## Unreleased
 
+### Changed
+
+- **`<Translate>` and `<Phrase>` register only what the build-time transform can read (VAR-7).**
+  Svelte compiles a variable straight into the DOM, so at runtime `Hello Ana` cannot be told from
+  `Hello {name}`, and a block registered from the DOM became one phrase per user. Without the
+  transform, and for a block it cannot read, the components still render every translation the
+  catalog holds but register nothing, on the server and in the browser; one debug notice names
+  the transform. `$t()` is unaffected. Measured through SvelteKit against the contract double: the
+  untransformed route registers nothing for two users, beside a transformed route that registers
+  in the same run.
+
 ### Added
+
+- **`langsys-js-svelte/preprocess` — the build-time transform (VAR-6).** One line in
+  `svelte.config.js`: `preprocess: [vitePreprocess(), langsysPreprocess()]`. Each `{expression}`
+  inside a `<Translate>` or `<Phrase>` becomes a named placeholder, with its value as a typed
+  param, so `Hello {user.name}` registers `Hello {name}` once for every user, and a count stays a
+  number a plural form can select on. Names come from the core's `derivePlaceholderNames` and pass
+  all 27 shared naming vectors. `{#if}`/`{#key}` branches, event handlers, attributes, and nested
+  `<Phrase>`, `<Translate>` and `<DontTranslate>` are read; ``$t(`…${x}`)`` template literals are
+  rewritten to placeholders too; anything else makes the block a fallback, named in a build
+  warning.
+
+- **Transformed blocks render on the server (SRV-1, MARK-1, SRV-5).** A transformed block is
+  rendered through the core's `renderBlock`, so the served HTML carries the translation, the
+  block's id and the resolved marker, and a server render's misses are registered through the
+  request scope after the response. The ids agree with a DOM reader's on the 37 rows of the
+  shared canonicalization fixture the build can express. Nested blocks are recorded once each; a
+  block holding `{#await}` is served as source and never captured.
 
 - **`syncNavigation()` in a new `langsys-js-svelte/kit` entry, and `notifyNavigation` on the main
   entry.** A layout stays mounted across client-side navigation and nothing re-evaluated its

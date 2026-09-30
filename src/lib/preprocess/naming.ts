@@ -1,49 +1,24 @@
 /**
- * VAR-2 — placeholder names derived from the source expression.
+ * VAR-2 — placeholder names, from the source expression.
  *
- * A name matches `[a-z][a-z0-9_]*`, so it is a valid ICU argument: a dotted name such as
- * `user.name` is a pattern syntax error in every formatter the fleet uses, and a phrase whose
- * placeholder cannot be formatted cannot be promoted to a plural or gendered form. The name is also
- * part of the registered phrase, so every SDK derives the same name for the same expression; the
- * shared naming vectors pin that.
+ * The naming itself is the core's (`derivePlaceholderNames`), so this binding derives exactly the
+ * names every other SDK does. What is Svelte's is the AST: this module maps an expression, as
+ * Svelte's parser hands it over, onto the language-neutral shape the core and the shared naming
+ * vectors use.
  *
  * Build-time only: this module runs inside the preprocessor, never in a browser.
  */
+import { derivePlaceholderNames, type ExpressionShape } from 'langsys-js-typescript/pure';
 
-/** The ESTree subset the derivation reads. Svelte's parser produces these nodes. */
+/** The ESTree subset the mapping reads. Svelte's parser produces these nodes. */
 export interface Expr {
     type: string;
     [key: string]: unknown;
 }
 
-/** What one expression contributes before collisions are resolved. */
-interface Derived {
-    /** The name on its own, or null when the expression is unnameable. */
-    base: string | null;
-    /** The segment before the one that named it, for a collision's prefix. */
-    prev: string | null;
-}
-
-/** `m<N>o` / `m<N>c` are `<Phrase>`'s markup tokens. */
-const RESERVED = /^m\d+[oc]$/;
-const COUNTED = new Set(['length', 'size', 'count']);
-const WRAPPED = new Set(['value', 'current']);
+/** Type assertions and parentheses say nothing about the value. */
 const WRAPPERS = new Set(['ChainExpression', 'TSNonNullExpression', 'TSAsExpression', 'TSSatisfiesExpression', 'ParenthesizedExpression']);
 
-/** `firstName` → `first_name`; null when nothing valid is left. */
-export function snakeCase(identifier: string): string | null {
-    const name = identifier
-        .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-        .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
-        .toLowerCase()
-        .replace(/[^a-z0-9_]+/g, '_')
-        .replace(/^[^a-z]+/, '')
-        .replace(/_+/g, '_')
-        .replace(/_$/, '');
-    return name === '' ? null : name;
-}
-
-/** Type wrappers and optional chaining say nothing about the value's name. */
 function unwrap(expr: Expr): Expr {
     let node = expr;
     while (WRAPPERS.has(node.type) && node.expression) node = node.expression as Expr;
@@ -65,20 +40,33 @@ function segmentsOf(expr: Expr): string[] | null {
     return segments;
 }
 
-function derive(expr: Expr): Derived {
+const OTHER: Record<string, string> = {
+    BinaryExpression: 'binary',
+    LogicalExpression: 'binary',
+    ConditionalExpression: 'conditional',
+    TemplateLiteral: 'template',
+    MemberExpression: 'computed',
+};
+
+/** An expression as the shape the core names. */
+export function shapeOf(expr: Expr): ExpressionShape {
     const node = unwrap(expr);
+    if (node.type === 'Identifier') return { identifier: node.name as string };
     if (node.type === 'CallExpression') {
         const args = node.arguments as Expr[];
-        return args.length === 1 && args[0].type !== 'SpreadElement' ? derive(args[0]) : { base: null, prev: null };
+        const callee = segmentsOf(node.callee as Expr);
+        return { call: { callee: callee ? callee.join('.') : '', args: args.map((a) => (a.type === 'SpreadElement' ? { other: 'spread' } : shapeOf(a))) } };
     }
     const segments = segmentsOf(node);
-    if (!segments || segments.length === 0) return { base: null, prev: null };
-    const snake = segments.map((s) => snakeCase(s));
-    const last = segments.length - 1;
-    const at = (i: number) => (i >= 0 ? snake[i] : null);
-    if (last > 0 && COUNTED.has(segments[last]) && snake[last - 1]) return { base: `${snake[last - 1]}_count`, prev: at(last - 2) };
-    if (last > 0 && WRAPPED.has(segments[last]) && snake[last - 1]) return { base: snake[last - 1], prev: at(last - 2) };
-    return { base: snake[last], prev: at(last - 1) };
+    if (segments && segments.length > 0) return segments.length === 1 ? { identifier: segments[0] } : { member: segments };
+    return { other: OTHER[node.type] ?? node.type };
+}
+
+/** True when the core can derive no name, so the value is `value…` and the build warns. */
+function unnameable(shape: ExpressionShape): boolean {
+    if ('other' in shape) return true;
+    if ('call' in shape) return shape.call.args.length !== 1 || unnameable(shape.call.args[0]);
+    return false;
 }
 
 export interface Occurrence {
@@ -99,40 +87,22 @@ export interface Naming {
 /**
  * Names every distinct expression in one phrase (one block's params), in source order.
  *
- * `explicit` holds the names the developer wrote — `%name%` in the text, keys of a literal
- * `params` — which always win: a derived name that meets one is a collision like any other.
+ * `explicit` holds the names the developer wrote without an expression — `%name%` in the text, keys
+ * of a literal `params` — which always win: they are handed to the core as taken names, so a
+ * derived name that meets one is a collision like any other.
  */
 export function assignNames(occurrences: readonly Occurrence[], explicit: ReadonlySet<string> = new Set()): Naming {
-    const given = new Map<string, string>();
-    for (const o of occurrences) if (o.explicit) given.set(o.key, o.explicit);
-    const reserved = new Set([...explicit, ...given.values()]);
-    const distinct: Array<{ key: string } & Derived> = [];
+    const distinct: Occurrence[] = [];
     const seen = new Set<string>();
-    for (const { key, expr } of occurrences) {
-        if (seen.has(key) || given.has(key)) continue;
-        seen.add(key);
-        distinct.push({ key, ...derive(expr) });
+    for (const o of occurrences) {
+        if (seen.has(o.key)) continue;
+        seen.add(o.key);
+        distinct.push(o);
     }
-
-    const unnameable = distinct.filter((d) => d.base === null).map((d) => d.key);
-    const wanted = distinct.map((d) => d.base ?? 'value');
-
-    // A name wanted by more than one expression, or already the developer's or reserved, is taken
-    // for all of them: each that has a previous segment takes it as a prefix.
-    const count = new Map<string, number>();
-    for (const name of wanted) count.set(name, (count.get(name) ?? 0) + 1);
-    const contested = (name: string) => (count.get(name) ?? 0) > 1 || reserved.has(name) || RESERVED.test(name);
-    const prefixed = distinct.map((d, i) => (contested(wanted[i]) && d.base !== null && d.prev ? `${d.prev}_${wanted[i]}` : wanted[i]));
-
-    // Whatever still meets a taken name is suffixed `_2`, `_3`, in source order.
-    const taken = new Set(reserved);
-    const names = new Map(given);
-    distinct.forEach((d, i) => {
-        const base = prefixed[i];
-        let name = base;
-        for (let n = 2; taken.has(name) || RESERVED.test(name); n++) name = `${base}_${n}`;
-        taken.add(name);
-        names.set(d.key, name);
-    });
-    return { names, unnameable };
+    const written = [...explicit].map((name) => ({ shape: { identifier: name }, explicit: name }));
+    const derived = derivePlaceholderNames([...written, ...distinct.map((o) => ({ shape: shapeOf(o.expr), explicit: o.explicit }))]).slice(written.length);
+    return {
+        names: new Map(distinct.map((o, i) => [o.key, derived[i]])),
+        unnameable: distinct.filter((o) => !o.explicit && unnameable(shapeOf(o.expr))).map((o) => o.key),
+    };
 }

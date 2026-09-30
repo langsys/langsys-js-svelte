@@ -23,13 +23,18 @@ src/lib/
     messages.ts                   # `serverMessage` — a store derived from `t` over the core's renderServerMessage
     kit.ts                        # `langsys-js-svelte/kit` entry — syncNavigation() (afterNavigate), hydrateFromServer()
     kit/server.ts                 # `langsys-js-svelte/kit/server` — createLangsysHandle(): the core's request scope per request
+    preprocess/
+        index.ts                  # `langsys-js-svelte/preprocess` — langsysPreprocess(), the build-time transform (VAR-6)
+        naming.ts                 # Svelte AST → the core's expression shape; names come from the core's derivePlaceholderNames
     components/
-        Translate.svelte          # Svelte 5 thin wrapper around langsys-js-typescript's vanilla DOM Translate class
-        Phrase.svelte             # thin wrapper around the vanilla Phrase rich-text handler
+        Translate.svelte          # tree path (renderBlock/registerBlock) when the transform ran; else the vanilla DOM Translate, register: false
+        Phrase.svelte             # the same two paths over the vanilla Phrase rich-text handler
+        RenderedNodes.svelte      # writes a rendered block's nodes as Svelte-owned elements, handlers back by `source` index
+        transform.ts              # the `__ls` prop's type, and param normalisation
         DontTranslate.svelte      # pure glue — emits translate="no"; no vanilla handler behind it
 ```
 
-That's the entire surface. Every other concern — HTTP, missing-token registration, persistence, SSR strategies, the proxy/lookup/interpolation logic — lives in `langsys-js-typescript`.
+That's the entire surface. Every other concern — HTTP, missing-token registration, persistence, SSR strategies, the proxy/lookup/interpolation logic, block rendering and placeholder naming — lives in `langsys-js-typescript`.
 
 ## How the wrapping works
 
@@ -40,7 +45,9 @@ That's the entire surface. Every other concern — HTTP, missing-token registrat
     - The function is called with `('Phrase', 'Cat')`, returning the current translation
     - Reactivity comes from the store re-emitting → the template re-runs `$t(...)`
 
-3. **`<Translate>`** — wraps `langsys-js-typescript`'s vanilla `Translate` DOM class. `bind:this` on a `svelte:element` gets us the host node; an `$effect` constructs `new Translate(host, opts)` on mount; `onDestroy` calls `instance.destroy()`. The DOM walking, content-block registration, attribute harvesting, and re-translation on locale change all live in the underlying class.
+3. **`<Translate>` / `<Phrase>`** — two paths.
+    - **With the transform** (`langsysPreprocess()` in svelte.config.js), the build hands the component its content as a `BlockNode` tree in the `__ls` prop: every `{expression}` a VAR-3 marker pair (`{comment:'ls:NAME'}`, value, `{comment:'/ls'}`) with the typed value in `params`; handlers and non-text attributes beside it in `dyn`, by pre-order element index. The component calls the core's `renderBlock` (server and browser) and renders the result through `RenderedNodes.svelte`; it calls `registerBlock` on the server inside the request scope, and after mount in the browser.
+    - **Without it, or for a block the transform marks as a fallback** (`__ls = { fallback }`), the vanilla `Translate`/`Phrase` class is constructed in an `$effect` with `register: false`: it translates from the catalog and registers nothing (VAR-7), because Svelte's compiled output interleaves variables with text the runtime cannot separate. `warnUnregistered` gives one notice naming the transform.
 
 ## Public API
 
@@ -67,8 +74,9 @@ writeEnabled                     // Readable<boolean | undefined> — tri-state,
 <Phrase category? params? tag? class? children />          // one markup-bearing sentence kept whole
 <DontTranslate tag? class? children />                     // never translated (translate="no")
 
-// Markup placeholders are %name%, not {name} — Svelte compiles a bare {name}
-// as its own expression tag. $t() keeps {name} (JS string, no collision).
+// Build-time transform (optional, svelte.config.js): langsys-js-svelte/preprocess
+langsysPreprocess({ from?, warn? })   // {expr} inside <Translate>/<Phrase> → {name} placeholder + typed param;
+                                      // $t(`…${x}`) → $t('…{x}…', cat, { x }). Without it, write %name% + params.
 
 // Direct API client access (vanilla — no Svelte concerns)
 LangsysAppAPI
@@ -177,7 +185,8 @@ The three trust-handshake strings must stay in sync, or CI will fail at the publ
 - **Docs that ship:** `README.md`, `README-SSR.md`, and the `src/lib/**` JSDoc go into the npm tarball (the JSDoc is what IDE hover shows); `CHANGELOG.md` is GitHub-only. `README-SSR.md` is listed in `files` — it did not ship before 3.6.15, which left `README.md` pointing at a document installed users did not have, and the failed-fetch reset rule reachable only from GitHub. A fix to a shipped doc only reaches npmjs.com on publish.
 
 - **Do not reimplement base-SDK behavior here.** API client, lookup logic, missing-token flow, persistence, SSR strategies all belong in `langsys-js-typescript`. If you need to extend any of that, the change goes in the base package and we re-export.
-- **Keep `<Translate>` to mount/destroy glue.** The DOM walking lives in the vanilla `Translate` class in `langsys-js-typescript`. Don't fork the tokenizer here.
+- **Keep `<Translate>` and `<Phrase>` to glue.** Rendering, registration and tokenizing are the core's (`renderBlock`, `registerBlock`, the vanilla classes); placeholder names are the core's `derivePlaceholderNames`. What is Svelte's is the AST → tree mapping in `src/lib/preprocess` and rendering the result as Svelte elements. Don't fork the tokenizer or the naming here.
+- **The testbed applies the transform per path**, in `vite.config.ts` (`varTransform`): `/fixture/var`, `/fixture/gate10` and `src/ssr-measure/var` only, so every other route keeps measuring the package without it.
 - **Type re-exports go through `index.ts`.** Consumers shouldn't have to reach into `langsys-js-typescript` for routine types.
 - **`t`'s reactivity story** depends on the base SDK re-emitting a fresh `TFunction` closure on every translations/locale change. If you find templates not re-rendering after a locale change, look at the `tSignal` subscriber wiring in `langsys-js-typescript`'s `Translations` class — not here.
 

@@ -26,7 +26,8 @@ As of v3.0.0, `langsys-js-svelte` is a thin Svelte binding over the framework-ag
 
 - A `LangsysApp` whose `init` accepts a Svelte `Writable<string>` for the user locale
 - A `t` store you read with `$t('Phrase', 'Category')` — re-renders any subscribed template when translations or the loaded locale change
-- Svelte 5 components wrapping the underlying DOM handlers: `<Translate>` (content blocks), `<Phrase>` (one markup-bearing sentence kept whole), `<DontTranslate>` (never translated)
+- Svelte 5 components: `<Translate>` (content blocks), `<Phrase>` (one markup-bearing sentence kept whole), `<DontTranslate>` (never translated)
+- An optional build-time transform, `langsys-js-svelte/preprocess`, that turns the variables inside `<Translate>` and `<Phrase>` into placeholders — see [Variables in text](#variables-in-text--the-build-time-transform)
 
 If you need the SDK outside Svelte (a Node script, a non-Svelte web app), import from `langsys-js-typescript` directly.
 
@@ -159,6 +160,45 @@ It lives in `langsys-js-svelte/kit` because it uses SvelteKit's `afterNavigate`;
 never imports `$app/*`. With another router, call `notifyNavigation()` — exported from the main
 entry — from that router's after-navigation hook.
 
+## Variables in text — the build-time transform
+
+Add one line to `svelte.config.js`, and put it **last** in the list — it reads the markup the other preprocessors produce:
+
+```js
+// svelte.config.js
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+import { langsysPreprocess } from 'langsys-js-svelte/preprocess';
+
+export default {
+    preprocess: [vitePreprocess(), langsysPreprocess()],
+    // …
+};
+```
+
+It works the same under SvelteKit and plain Vite, and changes nothing outside `<Translate>`, `<Phrase>` and ``$t(`…`)`` template literals.
+
+**Why it exists.** Svelte compiles `<p>Hello {user.name}</p>` into code that writes the name straight into the DOM, so at runtime nothing separates the word `Hello` from the value after it. Langsys needs that separation: a sentence must register once, as `Hello {name}`, with the value passed as a param. If it registers as `Hello Ana`, every user becomes a phrase of their own — translated, charged and never merged — and a sentence with no placeholder cannot be given a plural or gendered form in a target language. The source still shows which text is a variable, so the transform reads it there, at build time.
+
+**What it does.** Inside every `<Translate>` and `<Phrase>` imported from this package, each `{expression}` becomes a named placeholder, and its value, typed as your code holds it, becomes a param:
+
+| You write                          | Registers                      | Param                                     |
+| ---------------------------------- | ------------------------------ | ----------------------------------------- |
+| `Hello {firstName}`                | `Hello {first_name}`           | `first_name`                              |
+| `Hi {user.name}`                   | `Hi {name}`                    | `name`                                    |
+| `You have {items.length} items`    | `You have {items_count} items` | `items_count` (a number, so plurals work) |
+| `Total {formatPrice(order.total)}` | `Total {total}`                | `total`                                   |
+| `{a} and {a}`                      | `{a} and {a}`                  | one `a`                                   |
+
+The names follow the rules every Langsys SDK shares, so the same expression gives the same phrase whichever SDK renders it: a value that cannot be named — `{a + b}`, `{ok ? x : y}` — becomes `{value}` with a build warning, and a name you write yourself wins (`%name%` in the text with `params={{ name }}`). `{#if}` and `{#key}` blocks are read branch by branch. Event handlers, classes and other attributes stay on their elements. A `<Phrase>`, `<Translate>` or `<DontTranslate>` inside a block is part of it.
+
+The block is then rendered through the core's block renderer, so it is **translated in the served HTML** during SSR, not only after hydration, and its host carries its id (`data-ls-contentblock`).
+
+``$t(`Hello ${user.name}`)`` is rewritten the same way, to `$t('Hello {name}', undefined, { name: user.name })`.
+
+**What it cannot read** — an `{#each}`, an `{#await}`, `{@html}`, a snippet, another component, a directive (`bind:`, `use:`, `class:`), a spread — makes that block a **fallback**: the build names it in a warning, and the block renders as below.
+
+**Without the transform**, and for a fallback block, `<Translate>` and `<Phrase>` still render every translation the catalog holds, but **register nothing** — on the server and in the browser — because nothing at runtime can tell a variable from the text around it. One debug notice (with `debug: true`) names the transform. `$t()` is unaffected: its phrase is a string you wrote.
+
 ## Using translations
 
 ### `$t(phrase, category?, params?)` — the everyday API
@@ -191,7 +231,7 @@ Curly-brace placeholders are substituted from the params argument:
 <p>{$t('You have {count} new messages', 'Notifications', { count: 3 })}</p>
 ```
 
-Placeholder names are extracted from the phrase at compile time and **type-checked**: omitting a required key or adding an extra one is a TypeScript error.
+Placeholder names are extracted from the phrase at compile time and **type-checked**: omitting a required key or adding an extra one is a TypeScript error. With the [build-time transform](#variables-in-text--the-build-time-transform), a template literal — ``$t(`You have ${count} new messages`)`` — is rewritten into this form for you.
 
 ```typescript
 $t('You have {count} new messages', 'Notifications', {});
@@ -232,72 +272,57 @@ For larger blocks of HTML where the structure should be preserved for the transl
 ```svelte
 <script>
     import { Translate } from 'langsys-js-svelte';
+    let user = $state({ name: 'Sarah' });
 </script>
 
 <Translate category="Blog" tag="article">
     <h1 class="title">My article title</h1>
-    <p>My content <strong>is the best</strong> when internationalized by Langsys.</p>
+    <p>Welcome back, {user.name}. My content <strong>is the best</strong> when internationalized by Langsys.</p>
     <p>Translators see this exactly as users do — same styling, same structure.</p>
 </Translate>
 ```
 
 The component:
 
-- Recursively tokenizes text nodes, `<option>` text, and translatable attributes — `placeholder`, `alt`, `title`, `label`, the `aria-*` ones a screen reader speaks, and `data-*` validation messages among them. The canonical list is `TRANSLATABLE_ATTRIBUTES` in the base SDK's tokenizer and it grows, so treat these as examples rather than an exhaustive set.
+- Tokenizes text, `<option>` text, and translatable attributes — `placeholder`, `alt`, `title`, `label`, the `aria-*` ones a screen reader speaks, and `data-*` validation messages among them. The canonical list is `TRANSLATABLE_ATTRIBUTES` in the base SDK's tokenizer and it grows, so treat these as examples rather than an exhaustive set.
 - Translates `value` **only where it is a label rather than data**: on `<button>`, and on `<input type="submit">` / `<input type="button">`. Every other input type is left alone, so a text field's value is never rewritten. This is a separate mechanism from the attribute list above — `value` does _not_ appear in `TRANSLATABLE_ATTRIBUTES`.
 - Captures semantic CSS so translators see the styled appearance in the Translation Manager.
-- Registers the whole thing as a **content block** that translators handle as one unit while still translating the individual phrases inside.
-- Auto re-translates on locale change.
+- Registers the whole thing as a **content block** that translators handle as one unit while still translating the individual phrases inside — with each variable as a placeholder, through the [build-time transform](#variables-in-text--the-build-time-transform).
+- Re-renders on locale change.
 
-Use `<Translate>` for prose, marketing copy, CMS-rendered articles, forms with placeholders — anything where the structure matters. Use `$t()` for individual strings.
+With the transform, the block is rendered from its content as a tree: translated in the served HTML, its host stamped with its id, event handlers and bindings to state kept on their elements, and `{#if}` branches rendered as Svelte renders them. A block the transform cannot read, or any block without it, is translated by the base SDK's DOM handler after mount and registers nothing.
 
-```svelte
-<!-- CMS content goes through Translate as-is -->
-<Translate category="News" tag="div">
-    {@html article?.content}
-</Translate>
-```
+Use `<Translate>` for prose, marketing copy, forms with placeholders — anything where the structure matters. Use `$t()` for individual strings.
 
-#### Interpolation with `params`
+#### Values and `params`
 
-`<Translate>` accepts a `params` prop for runtime values. In markup, write placeholders with **percent delimiters — `%name%`** — not the single-brace `{name}` form:
+With the transform, write values as you would anywhere in Svelte — `{name}`, `{items.length}` — and they become placeholders with typed params. To name a placeholder yourself, write it with **percent delimiters — `%name%`** — and pass the value in `params`; this form works with or without the transform, and a name written this way wins:
 
 ```svelte
-<script>
-    import { Translate } from 'langsys-js-svelte';
-
-    let name = $state('Sarah');
-    let count = $state(3);
-</script>
-
 <Translate category="Dashboard" params={{ name, count }}>
     <p>Welcome back, %name%. You have %count% new messages.</p>
 </Translate>
 ```
 
-> [!IMPORTANT]
-> **Use `%name%`, not `{name}`, inside `<Translate>`/`<Phrase>` content.** Svelte (like JSX) treats `{name}` in markup as its own expression tag and would substitute it _before_ Langsys sees the text. The damage is worse than a broken placeholder: the substituted **value** becomes part of what Langsys captures, so **every distinct value registers its own catalog entry**. `You have {count} items` registers `You have 0 items`, `You have 1 items`, and so on — one per value the component ever renders, each needing its own translation, none of them reusable. And the base locale renders perfectly throughout, so nothing looks wrong until a translator opens a catalog full of near-duplicate junk.
->
-> The two components reach that through **different mechanisms**, which matters if you are debugging rather than just following the rule. `<Translate>` tokenizes the subtree and keys a content block on the resulting token array, so the value changes the `custom_id`. `<Phrase>` encodes the subtree to a single phrase string and looks it up like any other phrase — no content block, no `custom_id` — so the value lands in the lookup key itself. Measured on the same DOM: `%n%` gives `"Based on {n} {m0o}reviews{m0c}"` for every value, while `{n}` gives `"Based on 0 …"`, `"Based on 1 …"`, one per render. Same rule, same cost, two paths.
->
-> The base SDK normalizes `%name%` back to canonical `{name}` at capture time, so **translators still only ever see `{name}`** and both spellings resolve to the same entry. Only simple identifiers between the percents are matched (`%[A-Za-z_][A-Za-z0-9_]*%`), so literal `%` in prose — "50% off", "width: 100%" — is left untouched. The braces on the `params={{ … }}` prop itself are normal Svelte and stay as-is. This is a markup-only concern: `$t('Hello, {name}!', { name })` keeps single braces because the placeholder lives in a JS string, not the template.
+`{name}` cannot be written as literal text in Svelte markup — Svelte reads it as an expression — which is why the explicit form uses percents. The base SDK normalizes `%name%` to canonical `{name}`, so **translators only ever see `{name}`**. Only simple identifiers between the percents are matched (`%[A-Za-z_][A-Za-z0-9_]*%`), so literal `%` in prose — "50% off", "width: 100%" — is left untouched.
 
-- Placeholders interpolate into translated text nodes **and** translatable attributes, after the lookup — so translators translate the phrase and the values drop in per locale.
-- Unknown keys stay visible in canonical form (`%missing%` renders as `{missing}`) rather than blanked — matching `$t()`'s unknown-key behavior.
+- Values interpolate into translated text **and** translatable attributes, after the lookup — translators translate the phrase and the values drop in per locale.
+- A number reaches the translation as a number, so a plural form a translation grows (`{count, plural, one {…} other {…}}`) selects correctly.
 - `number` and `Date` values are formatted for the active locale via the base SDK's CLDR rules; `string` values pass through untouched.
-- The prop is **reactive** — changing `params` (e.g. an updated `count`) re-renders via the underlying `setParams()`. The same `%name%` rule applies to `<Phrase>` for markup-bearing runs.
-- **`debug: true` catches the mistake for you.** If you pass `params` whose keys match no placeholder in the content, the SDK warns and names the fix — that state is the fingerprint of having written `{name}` in markup and had the compiler eat it. ICU slots count as legitimate uses, the warning re-fires only when the params key-set changes (a ticking `count` won't spam the console), and it is silent in production.
+- Unknown keys stay visible in canonical form (`%missing%` renders as `{missing}`) rather than blanked — matching `$t()`'s unknown-key behavior.
+- The values are **reactive**: a changed `count` re-renders the block.
+- **`debug: true`** warns when `params` has keys that match no placeholder in the content, and names each block the transform could not read.
 
 `<Translate>` props: `category?`, `custom_id?`, `label?`, `tag?` (defaults to `translate`), `class?`, `params?`, `children`.
 
-#### Don't put dynamic content directly inside `<Translate>`
+#### Blocks the transform cannot read
 
 > [!WARNING]
-> **A `<Translate>` block whose whole content is a single phrase will stop updating once Svelte tries to change it.** Put `{#await}`, `{#if}`, or a lone reactive expression directly inside one and the block freezes on whatever it first rendered — permanently, with no error.
+> **A fallback block whose whole content is a single phrase stops updating once Svelte tries to change it.** This applies to blocks the transform cannot read (an `{#await}` or `{#each}` inside, a component, a directive) and to every block in an app without the transform — the base SDK's DOM handler translates those after mount.
 >
-> The cause is in the base SDK: when a block tokenizes to exactly one phrase, it writes the translation back with `element.innerText = …`. That assignment replaces **every child** of the host, including the `<!--[-->` / `<!--]-->` anchor comments Svelte 5 uses to find the block again. Svelte's next update targets nodes that are no longer in the document, so it succeeds silently and changes nothing.
+> The cause is in that handler: when a block tokenizes to exactly one phrase, it writes the translation back with `element.innerText = …`. That assignment replaces **every child** of the host, including the `<!--[-->` / `<!--]-->` anchor comments Svelte 5 uses to find the block again. Svelte's next update targets nodes that are no longer in the document, so it succeeds silently and changes nothing.
 >
-> Measured against `langsys-js-typescript@0.6.5`:
+> Measured against `langsys-js-typescript@0.6.5`, without the transform:
 >
 > | content                                                      | client-only           | hydrated   |
 > | ------------------------------------------------------------ | --------------------- | ---------- |
@@ -307,51 +332,39 @@ Use `<Translate>` for prose, marketing copy, CMS-rendered articles, forms with p
 > | `{#await}`                                                   | **registers nothing** | **frozen** |
 > | two or more phrases in the subtree                           | fine                  | fine       |
 >
-> The update mechanism doesn't matter — runes and store subscriptions fail identically. Only the token count does.
+> With the transform, `{#if}` and reactive expressions are part of the tree, which Svelte itself renders, so the first three rows do not arise. `{#await}` is always a fallback.
 >
-> **`{#await}` under a client-only mount is the worst cell in that table, not the safe one.** The block updates, so it looks correct — but when `<Translate>` tokenizes, the host holds only Svelte's anchor comments and no text yet, so it tokenizes to **nothing**. Its token list stays empty for the life of the block: neither the placeholder nor the real content is ever registered. Measured directly off the live instance, and it holds whether or not the catalog has loaded. So the visibly-broken case is the one that at least tells you something, and turning SSR on converts silent non-registration into a visible freeze.
->
-> There is a second cost even when nothing visibly breaks: **the placeholder is what gets registered.** `Loading…` reaches your catalog and the real content never does — and every block sharing that placeholder collapses onto the same entry.
->
-> **Keep the async or conditional boundary outside the block, and wrap the resolved content:**
+> **Keep the async boundary outside the block, and wrap the resolved content:**
 >
 > ```svelte
 > <!-- ✅ the block only ever sees settled content -->
 > {#await load()}
 >     Loading…
 > {:then page}
->     <Translate category="Docs">{page.body}</Translate>
+>     <Translate category="Docs"><p>{page.title}</p></Translate>
 > {/await}
 > ```
 >
 > ```svelte
-> <!-- ❌ freezes on "Loading…", and registers "Loading…" as the phrase -->
+> <!-- ❌ a fallback: freezes on "Loading…" -->
 > <Translate category="Docs">
->     {#await load()}Loading…{:then page}{page.body}{/await}
+>     {#await load()}Loading…{:then page}{page.title}{/await}
 > </Translate>
 > ```
->
-> For a value that changes rather than arrives, use `params` — `<Translate params={{ count }}>You have %count% items</Translate>` — which is the supported path for dynamic content and does not go through the write-back.
 
 ### `<Phrase>` — one sentence that happens to contain markup
 
-`<Translate>` **splits**: it walks its subtree and registers each translatable run as its own phrase. That's right for prose, and wrong the moment a single sentence is broken up by inline markup — because the fragments land in separate catalog entries, and a translator can't move words across them.
+`<Translate>` **splits**: it registers each translatable run as its own phrase. That's right for prose, and wrong the moment a single sentence is broken up by inline markup — because the fragments land in separate catalog entries, and a translator can't move words across them.
 
 ```svelte
-<!-- ❌ TWO separate mistakes here, both silent: -->
-<!--    1. <strong> splits the sentence — "Based on" and "reviews" register as
-           separate phrases, so no translation can move words between them.    -->
-<!--    2. {reviewCount} is a Svelte expression, compiled away before Langsys
-           sees the text — the count is baked into the registered phrase, and a
-           new phrase registers every time it changes. Write %n% instead.      -->
+<!-- ❌ <strong> splits the sentence: "Based on", the count and "reviews" register as
+        separate phrases, so no translation can move words between them. -->
 <Translate category="ProductCard">
     <p>Based on <strong>{reviewCount}</strong> reviews</p>
 </Translate>
 ```
 
-Fixing it takes **both** changes — `<Phrase>` for the split, `%n%` for the placeholder. `<Phrase>` alone does not make the brace form safe: the compiler substitutes `{n}` before any Langsys component sees the text, inside `<Phrase>` exactly as inside `<Translate>`.
-
-`<Phrase>` **keeps**: it encodes its whole subtree — inline markup and all — into a _single_ phrase, registers that one string, then reconstitutes your real elements around the translated text.
+`<Phrase>` **keeps**: it encodes its whole subtree — inline markup and all — into a _single_ phrase, registers that one string, then rebuilds your real elements around the translated text.
 
 ```svelte
 <script>
@@ -359,17 +372,16 @@ Fixing it takes **both** changes — `<Phrase>` for the split, `%n%` for the pla
     let reviewCount = $state(4);
 </script>
 
-<Phrase category="ProductCard" params={{ n: reviewCount }}>
-    Based on %n% <strong>reviews</strong>
-</Phrase>
+<Phrase category="ProductCard">Based on {reviewCount} <strong>reviews</strong></Phrase>
 ```
 
-**This is a correctness requirement, not a formatting preference.** A count and the noun it inflects must live in the same phrase for grammatical agreement to be expressible. Split them, and no ICU plural rule can select the right form — English tolerates this (two forms, and "1 reviews" merely reads badly), but Russian has 4 plural categories, Polish 4, Arabic 6. If `%n%` and `reviews` are in different catalog entries, those languages simply cannot be translated correctly. `<Phrase>` is the only primitive that prevents it.
+With the transform this registers `Based on {review_count} {m0o}reviews{m0c}` once, whatever the count; without it, write `%n%` with `params={{ n: reviewCount }}` for the same phrase, which then renders from the catalog and registers nothing.
+
+**This is a correctness requirement, not a formatting preference.** A count and the noun it inflects must live in the same phrase for grammatical agreement to be expressible. Split them, and no ICU plural rule can select the right form — English tolerates this (two forms, and "1 reviews" merely reads badly), but Russian has 4 plural categories, Polish 4, Arabic 6. If the count and `reviews` are in different catalog entries, those languages simply cannot be translated correctly. `<Phrase>` is the only primitive that prevents it.
 
 - **The markup never reaches the translator.** Inline elements are replaced with neutral tokens, so translators see one clean sentence and can reorder freely — the `<strong>` reattaches to whatever word it wraps in the target language.
-- **Your scoped CSS never enters the phrase key** — which is why hand-rolling this goes wrong in Svelte specifically. Passing an element's `innerHTML` to `$t()` yourself puts markup in the key, and in Svelte that markup carries scoped-style hashes like `class="svelte-a1b2c3"`. Those hashes are content-derived, so they change whenever the component's styles change: the phrase key silently drifts on a build, the old key orphans, the new one registers untranslated, and the page falls back to the base language with no error anywhere. Every restyle would cost a retranslation. `<Phrase>` keeps the real elements inside the SDK as shallow clones and puts only neutral `{m0o}`/`{m0c}` tokens on the wire, so nothing build-specific can reach the key — and because those tokens are valid ICU argument names, plural/select still parse around them.
-- **Composes with `<Translate>`.** A `<Phrase>` emits `data-ls-phrase`, which tells a wrapping `<Translate>` to skip that subtree and let `<Phrase>` own it — an internal marker the component sets for you, never something you write on an element yourself. The common pattern is `<Translate>` for the block, with `<Phrase>` around any run that must stay atomic.
-- **Same `%name%` rule** as `<Translate>` — write `%n%`, not `{n}` (see the note above).
+- **Your scoped CSS never enters the phrase key** — which is why hand-rolling this goes wrong in Svelte specifically. Passing an element's `innerHTML` to `$t()` yourself puts markup in the key, and in Svelte that markup carries scoped-style hashes like `class="svelte-a1b2c3"`. Those hashes are content-derived, so they change whenever the component's styles change: the phrase key silently drifts on a build, the old key orphans, the new one registers untranslated, and the page falls back to the base language with no error anywhere. `<Phrase>` puts only neutral `{m0o}`/`{m0c}` tokens in the phrase, so nothing build-specific can reach the key — and because those tokens are valid ICU argument names, plural/select still parse around them.
+- **Composes with `<Translate>`.** A `<Phrase>` emits `data-ls-phrase`, which tells a wrapping `<Translate>` to leave that run to it — an internal marker the component sets for you, never something you write on an element yourself. The common pattern is `<Translate>` for the block, with `<Phrase>` around any run that must stay atomic.
 - Use it for: a count plus its noun, a sentence with a bolded or linked span, anything where word order must be free across the markup.
 
 `<Phrase>` props: `category?`, `params?`, `tag?` (defaults to `span`), `class?`, `children`.

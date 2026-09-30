@@ -93,6 +93,18 @@ describe('VAR-6 — the preprocessor', () => {
         expect(block.params).toEqual({ n: 4 });
     });
 
+    it('inlines a nested <Translate> as a block of its own: declared, or identified by its custom_id', () => {
+        const { code } = run(
+            '<Translate category="UI"><p>Outer</p><Translate tag="div"><p>Inner {n}</p></Translate><Translate custom_id="app-id"><p>Mine</p></Translate></Translate>'
+        );
+        const [block] = blocks(code, { n: 2 }) as Array<{ tree: unknown[] }>;
+        expect(block.tree).toEqual([
+            { tag: 'p', attrs: {}, children: [{ text: 'Outer' }] },
+            { tag: 'div', attrs: { 'data-ls-contentblock': '' }, children: [{ tag: 'p', attrs: {}, children: [{ text: 'Inner ' }, ...v('n', '2')] }] },
+            { tag: 'translate', attrs: { 'data-ls-contentblock': 'app-id' }, children: [{ tag: 'p', attrs: {}, children: [{ text: 'Mine' }] }] },
+        ]);
+    });
+
     it('lets a name the developer wrote win', () => {
         const { code } = run('<Translate params={{ name: who }}><p>%name% met {user.name}</p></Translate>');
         const [block] = blocks(code, { who: 'Bo', user: { name: 'Ana' } }) as Array<{ params: unknown }>;

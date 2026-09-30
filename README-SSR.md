@@ -166,11 +166,10 @@ export async function load({ fetch, request, locals, setHeaders }) {
 These render base language in the server HTML and correct themselves at hydration.
 That is expected — see [What this does](#what-this-does--and-what-it-does-not).
 
-> Inside `<Translate>` and `<Phrase>` markup, interpolation placeholders are `%name%`,
-> not `{name}` — Svelte compiles a bare `{name}` in a template as its own expression
-> tag before the SDK ever sees the text. The `{name}` above is fine because it is a
-> JavaScript string argument to `$t()`, which the compiler does not touch. See the
-> main `README.md`.
+> Inside `<Translate>` and `<Phrase>` markup, `{name}` is a Svelte expression. With the
+> build-time transform (`langsysPreprocess()` in `svelte.config.js`) it becomes the placeholder
+> `{name}` with the value as a param; without it, write `%name%` and pass `params`. The `{name}`
+> above is a JavaScript string argument to `$t()`, which needs neither. See the main `README.md`.
 
 ## Rendering inside a request scope
 
@@ -212,8 +211,12 @@ the wrong locale.
   most once per locale per request); `match` limits which requests get a scope; `seed: false`
   skips the inline script — under a CSP that forbids inline scripts — and you pass
   `scope.seed()` to the client yourself; `storage` supplies your own `AsyncLocalStorage`.
-- **Components.** `<Translate>` and `<Phrase>` still serve their source text on the server and
-  translate after hydration; only `$t()` output is translated in the served HTML.
+- **Components.** With the build-time transform, `<Translate>` and `<Phrase>` are rendered
+  translated in the served HTML, their hosts stamped with the block's id, and the misses of a
+  server render are registered through the scope after the response. A block the transform
+  cannot read — or any block without the transform — is served as its source, with no resolved
+  marker and with an app-supplied `custom_id` stamped, and is translated after hydration; with
+  `debug: true` the SDK says why, once per reason.
 
 With a request scope you do not need the component-body seed below.
 

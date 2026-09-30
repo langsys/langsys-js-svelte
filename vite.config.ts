@@ -3,14 +3,15 @@ import { defineConfig, type Plugin } from 'vitest/config';
 import { langsysPreprocess } from './src/lib/preprocess/index.js';
 
 /**
- * Testbed only: the VAR-6 transform, applied to the routes and fixtures that measure it and to no
- * other file, so every other route keeps measuring the package without it. An app enables it with
- * one line in svelte.config.js instead; this runs the same `markup` step on the same source, just
- * before vite-plugin-svelte reads it.
+ * Testbed only: the VAR-6 transform, applied to the routes and fixtures that measure a
+ * registering <Translate> or <Phrase> — the VAR routes, and GATE-10's, whose controls register — and
+ * to no other file, so `/fixture/var-plain` and every other route keep measuring the package without
+ * it. An app enables it with one line in svelte.config.js instead; this runs the same `markup` step
+ * on the same source, just before vite-plugin-svelte reads it.
  */
 function varTransform(): Plugin {
     const transform = langsysPreprocess({ from: ['$lib/index.js'] });
-    const scoped = /\/src\/(routes\/fixture\/var|ssr-measure\/var)\/[^?]*\.svelte$/;
+    const scoped = /\/src\/(routes\/fixture\/(var|gate10)|ssr-measure\/var)\/[^?]*\.svelte$/;
     return {
         name: 'testbed-var-transform',
         enforce: 'pre',

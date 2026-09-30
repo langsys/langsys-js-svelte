@@ -1,13 +1,16 @@
 import { render } from 'svelte/server';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import ServedBytes from './ServedBytes.svelte';
-import { logger, type iCategories } from 'langsys-js-typescript';
+import { writable } from 'svelte/store';
+import type { iCategories } from 'langsys-js-typescript';
+import { LangsysApp } from '$lib/index.js';
 
 /**
  * SRV-1's fallback notice. Every `<Translate>` and `<Phrase>` rendered on the server is served as
  * source, and the core says why once per process per reason — `string-path-deferred`. Counted on
- * the logger's output, with debug on: the notice is debug-level. The control runs first, because
- * the core remembers a reason it has reported.
+ * the logger's output. The notice is debug-level, and one raised before `init()` is held until init
+ * says whether debug is on — as in an app, where a server render can precede init. The control runs
+ * first, because the core remembers a reason it has reported.
  */
 const props = { catalog: {} as iCategories, locale: 'it-it' };
 type Spy = { mock: { calls: unknown[][] } };
@@ -17,12 +20,11 @@ const spyOutput = () => [vi.spyOn(console, 'warn').mockImplementation(() => {}),
 /** `render()` renders only when its output is read, so every call reads `body`. */
 const serve = () => render(ServedBytes, { props }).body;
 
-beforeEach(() => {
-    logger.debugEnabled = true;
-});
+/** Settles the held notices with debug on. The API is unreachable on purpose; init never throws (WIRE-4). */
+const initWithDebug = () =>
+    void LangsysApp.init({ projectid: 'p', key: 'k', UserLocaleStore: writable('en-us'), debug: true, apiUrl: 'http://127.0.0.1:9/api' });
 
 afterEach(() => {
-    logger.debugEnabled = false;
     vi.restoreAllMocks();
     delete (globalThis as Record<string, unknown>).window;
 });
@@ -32,6 +34,7 @@ describe('the server fallback is reported once, and only on the server', () => {
         (globalThis as Record<string, unknown>).window = globalThis;
         const spies = spyOutput();
         serve();
+        initWithDebug(); // debug on, so a held notice would be said now
         expect(notices(...spies)).toBe(0);
     });
 

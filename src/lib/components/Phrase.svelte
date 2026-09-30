@@ -95,6 +95,10 @@
         instance = new VanillaPhrase(host, { category, params, register: false });
     });
 
+    // On the server, inside the request scope, which sends it after the response (SRV-3).
+    // svelte-ignore state_referenced_locally
+    if (tree && typeof window === 'undefined') registerBlock(tree, options);
+
     $effect(() => {
         if (!host || !tree) return;
         // eslint-disable-next-line @typescript-eslint/no-unused-expressions -- re-register on every catalog change

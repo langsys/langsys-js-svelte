@@ -86,7 +86,12 @@
         if (instance) instance.setParams(next);
     });
 
-    // The tree path registers what it renders — again on each catalog change, as the core asks.
+    // On the server, the tree path registers inside the request scope, which sends it after the
+    // response (SRV-3) and marks it collected in the seed, so the client does not send it again.
+    // svelte-ignore state_referenced_locally
+    if (tree && typeof window === 'undefined') registerBlock(tree, options);
+
+    // In the browser it registers what it renders — again on each catalog change, as the core asks.
     $effect(() => {
         if (!host || !tree) return;
         // eslint-disable-next-line @typescript-eslint/no-unused-expressions -- re-register on every catalog change
