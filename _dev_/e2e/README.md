@@ -2,6 +2,9 @@
 
 Dev-only. Not part of the published package; `_dev_/` is outside the `files` allowlist.
 
+For a by-hand tour of each feature — linking the core, the pages to open and what to look for —
+see [`../LOCAL-TESTING.md`](../LOCAL-TESTING.md).
+
 ## Setup
 
 Requires a `.env` (gitignored) with the API base, project id, one key per permission

@@ -4,7 +4,7 @@
      * and `/fixture/var-plain` with the same first block WITHOUT it. Driven by `_dev_/e2e/var.mjs`.
      */
     import { page } from '$app/state';
-    import { Phrase, Translate } from '$lib/index.js';
+    import { LangsysApp, Phrase, Translate, currentlyLoadedLocale } from '$lib/index.js';
 
     const params = page.url.searchParams;
     const user = $state({ name: params.get('user') ?? 'Ana' });
@@ -12,6 +12,10 @@
     // Raw HTML, as a CMS field arrives: content, not a variable.
     const cms = '<p>From the CMS, section one</p>';
     const cmsMixed = '<p>Mixed CMS text</p>';
+    // A placeholder that resolves: the build declines to capture an {#await} (a fallback).
+    const later = new Promise<string>((resolve) => setTimeout(() => resolve('Loaded after a moment'), 1500));
+    // The core's header for the app's own API calls, read again whenever the loaded locale changes.
+    const acceptLanguage = $derived($currentlyLoadedLocale ? (LangsysApp.localeHeaders()['Accept-Language'] ?? '(none)') : '(no locale yet)');
 </script>
 
 <Translate category="VAR" tag="div"><p id="greet">Hello {user.name}, welcome back</p></Translate>
@@ -30,3 +34,5 @@
     ><p id="mixed">Hi {user.name}</p>
     {@html cmsMixed}</Translate
 >
+<Translate category="VAR" tag="div"><p id="awaiting">{#await later}Loading…{:then text}{text}{/await}</p></Translate>
+<p id="locale-headers">Accept-Language: {acceptLanguage}</p>

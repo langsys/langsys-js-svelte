@@ -6,6 +6,7 @@
  * the contract double, and hydrate in Chromium against the same double.
  *
  *     node _dev_/e2e/var.mjs --serve                                      # terminal 1: the double on :8787
+ *     node _dev_/e2e/var.mjs --seed                                       # optional: seed it for a manual look, then exit
  *     SRV_API=http://127.0.0.1:8787/api SRV_KEY=k-write npm run dev       # terminal 2, fresh
  *     node _dev_/e2e/var.mjs
  *
@@ -66,6 +67,13 @@ if (process.argv.includes('--serve')) {
         return [...p.phrases.map((x) => x.phrase), ...p.blocks.flatMap((b) => b.phrases.map((x) => x.phrase))];
     };
     const text = (html, id) => (html.match(new RegExp(`id="${id}"[^>]*>([^]*?)</`)) ?? [])[1]?.replace(/<!--[^]*?-->/g, '').replace(/<[^>]+>/g, '');
+
+    if (process.argv.includes('--seed')) {
+        // For looking by hand (_dev_/LOCAL-TESTING.md): the catalog this harness runs against, nothing else.
+        await seed(SEED);
+        console.log('seeded: project p1 (en-us → it-it), key k-write, the VAR phrases and block');
+        process.exit(0);
+    }
 
     await seed(SEED);
 
