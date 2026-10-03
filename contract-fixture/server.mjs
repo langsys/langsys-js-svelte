@@ -72,6 +72,10 @@ function seed(doc) {
             subscription_suspended: p.subscription_suspended === true,
             credits_exhausted: p.credits_exhausted === true,
             discovery_base_locale_only: p.discovery_base_locale_only ?? false,
+            // HumanTranslationLimitService: the plan's cap on words added as new human
+            // translations in a rolling window (null = uncapped), and the words already used.
+            human_translation_word_limit: p.human_translation_word_limit ?? null,
+            human_translation_words_used: p.human_translation_words_used ?? 0,
             phrases: new Map(),
             blocks: new Map(),
         };
@@ -209,7 +213,55 @@ const header = (req, name) => {
     const v = req.headers[name];
     return typeof v === 'string' && v.trim() !== '' ? v.trim() : null;
 };
-const errorBody = (message) => ({ status: false, data: [], error: message });
+/**
+ * Error bodies, as the backend renders them (Handler::render, ApiResponse::errorResponse):
+ * `{status:false, error:{message, code, template[, params][, details][, errors]}}`. A plain
+ * ApiErrors case has its message as its template and no params.
+ */
+const apiError = (code, message, extra = {}) => ({ status: false, error: { message, code, template: message, ...extra } });
+/** ValidationFailedError: one entry per failed rule, each with its field, code and template. */
+const validationFailed = (entries) => ({
+    status: false,
+    error: { message: 'The request failed validation.', code: 'validation_failed', template: 'The request failed validation.', errors: entries },
+});
+const entry = (field, code, message, template = message, params = null) =>
+    params ? { field, code, message, template, params } : { field, code, message, template };
+
+/** The ApiErrors cases these routes answer with (ApiErrors.php at langsys main 17a191cd). */
+const ERRORS = {
+    unauthenticated: () => [401, apiError('unauthenticated', 'Unauthenticated.')],
+    apiKeyInvalid: () => [403, apiError('api_key_invalid', 'Invalid API key')],
+    apiKeyWriteNotAllowed: () => [403, apiError('api_key_write_not_allowed', 'This API key cannot make write requests.')],
+    subscriptionSuspended: () => [
+        402,
+        apiError('subscription_suspended', 'Subscription is suspended due to non-payment. Please pay the outstanding invoice to restore access.'),
+    ],
+    projectUnavailable: () => [403, apiError('project_unavailable', 'This project is not available. Its owners can see why in Langsys.')],
+    apiUnitsLimitExceeded: () => [402, apiError('api_units_limit_exceeded', 'Monthly API usage units limit exceeded. Upgrade your plan to continue.')],
+    duplicateRequest: () => [429, apiError('duplicate_request', 'Too many identical requests. Please wait a moment before retrying.')],
+    tooManyRequests: () => [429, apiError('too_many_requests', 'Too many requests. Please try again later.')],
+    forbidden: () => [403, apiError('forbidden', 'Forbidden.')],
+    notFound: () => [404, apiError('not_found', 'Resource not found')],
+    methodNotAllowed: () => [405, apiError('method_not_allowed', 'The requested method is not allowed for this route.')],
+};
+
+/** ApiErrorService::forStatus: the case a bare HTTP status renders as; any other status is internal_error. */
+const STATUS_ERRORS = {
+    400: ['bad_request', 'Bad request.'],
+    401: ['unauthenticated', 'Unauthenticated.'],
+    402: ['payment_required', 'Payment required.'],
+    403: ['forbidden', 'Forbidden.'],
+    404: ['not_found', 'Resource not found'],
+    405: ['method_not_allowed', 'The requested method is not allowed for this route.'],
+    409: ['conflict', 'Conflict.'],
+    410: ['gone', 'Gone.'],
+    422: ['unprocessable_entity', 'Unprocessable entity.'],
+    429: ['too_many_requests', 'Too many requests. Please try again later.'],
+    500: ['internal_error', 'Internal server error.'],
+    502: ['external_service_error', 'External service error.'],
+    503: ['service_unavailable', 'Service unavailable.'],
+};
+const statusError = (status) => apiError(...(STATUS_ERRORS[status] ?? STATUS_ERRORS[500]));
 
 /** prevent-duplicate-requests: only for keys configured for it. */
 function duplicateGuard(req, url, body) {
@@ -226,27 +278,35 @@ function duplicateGuard(req, url, body) {
     if (!entry || entry.resetAt <= t) state.duplicateGuard.set(hash, { count: 1, resetAt: t + windowMs });
     else entry.count += 1;
     if (state.duplicateGuard.get(hash).count > (cfg.max_attempts ?? 3)) {
-        return [429, errorBody('Too many identical requests')];
+        return ERRORS.duplicateRequest();
     }
     return null;
 }
 
-/** auth.apikey. Returns [status, body] on refusal, else { key, project, writeEnabled }. */
+/**
+ * auth.apikey (AuthorizeApiKey). Returns [status, body] on refusal, else { key, project,
+ * writeEnabled }. A missing key is 401 here on authorize-project; on the catalog and
+ * registration routes `auth:sanctum` answers it first (`sanctum`).
+ */
 function authApiKey(req) {
     const raw = header(req, 'x-authorization');
-    if (!raw) return [401, { message: 'Unauthenticated.' }];
+    if (!raw) return ERRORS.unauthenticated();
     const key = state.keys.get(raw);
-    if (!key) return [403, errorBody('Invalid API key')];
+    if (!key) return ERRORS.apiKeyInvalid();
     const project = key.project ? state.projects.get(key.project) : null;
-    if (!project) return [403, errorBody('Api key not associated with a project')];
-    if (project.subscription_suspended) return [402, errorBody('Subscription suspended')];
+    if (!project) return ERRORS.apiKeyInvalid();
+    // A suspended project: a write key is told why; any other key, only that it is unavailable.
+    if (project.subscription_suspended) return key.type === 'write' ? ERRORS.subscriptionSuspended() : ERRORS.projectUnavailable();
     const writeEnabled = allowsWrite(key, req);
     if (req.method === 'GET' || writeEnabled) return { key, project, writeEnabled };
-    return [403, errorBody('This action is unauthorized.')];
+    return ERRORS.apiKeyWriteNotAllowed();
 }
 
+/** auth:sanctum, first on the catalog and registration routes: no X-Authorization is 401 before anything else. */
+const sanctum = (req) => (header(req, 'x-authorization') ? null : ERRORS.unauthenticated());
+
 /** deduct.request */
-const deductRequest = (key) => (key.usage_exhausted ? [402, errorBody('API usage limit exceeded')] : null);
+const deductRequest = (key) => (key.usage_exhausted ? ERRORS.apiUnitsLimitExceeded() : null);
 
 // ---------------------------------------------------------------------------------------
 // Catalog
@@ -365,16 +425,21 @@ function hintThrottle(req) {
 // Routes
 // ---------------------------------------------------------------------------------------
 
+/**
+ * GET /authorize-project/{project}: RouteModelBinding (an unknown project is 404) →
+ * prevent-duplicate → auth.apikey (a missing key is 401 here) → deduct → the controller,
+ * which answers a key for another project as an invalid key.
+ */
 function authorizeProject(req, projectId, url) {
     const project = state.projects.get(projectId);
-    if (!project) return [404, errorBody('Not found')]; // route-model binding runs first
+    if (!project) return ERRORS.notFound();
     const dup = duplicateGuard(req, url, null);
     if (dup) return dup;
     const auth = authApiKey(req);
     if (Array.isArray(auth)) return auth;
     const deduct = deductRequest(auth.key);
     if (deduct) return deduct;
-    if (auth.key.project !== project.id) return [403, errorBody('Invalid Api Key for project')];
+    if (auth.key.project !== project.id) return ERRORS.apiKeyInvalid();
     const data = {
         id: project.id,
         title: project.title,
@@ -394,18 +459,27 @@ function authorizeProject(req, projectId, url) {
     return [200, { status: true, data }];
 }
 
+/**
+ * GET /translations[/data]: auth:sanctum (no key is 401) → RouteModelBinding (an unknown
+ * `project_id` is 404) → prevent-duplicate → auth.apikey → request-dto-processor (a missing
+ * locale is 422) → deduct → the DTO's own validation (a missing `project_id` is 422) →
+ * AccessGuard (a key for another project is 403 forbidden).
+ */
 function translations(req, query, url) {
+    const unauthenticated = sanctum(req);
+    if (unauthenticated) return unauthenticated;
+    const project = query.project_id ? state.projects.get(query.project_id) : null;
+    if (query.project_id && !project) return ERRORS.notFound();
     const dup = duplicateGuard(req, url, null);
     if (dup) return dup;
     const auth = authApiKey(req);
     if (Array.isArray(auth)) return auth;
-    if (!query.project_id) return [422, errorBody('The project id field is required.')];
-    const project = state.projects.get(query.project_id);
-    if (!project) return [404, errorBody('Not found')];
+    // ValidLocale validates a missing locale too (ValidatesWhenMissing): FieldErrors::InvalidLocale.
+    if (!query.locale) return [422, validationFailed([entry('locale', 'invalid_option', 'The locale is not valid.')])];
     const deduct = deductRequest(auth.key);
     if (deduct) return deduct;
-    if (auth.key.project !== project.id) return [403, errorBody('This action is unauthorized.')];
-    if (!query.locale) return [422, errorBody('The locale field is required.')];
+    if (!project) return [422, validationFailed([entry('project_id', 'required', 'The project is required.')])];
+    if (auth.key.project !== project.id) return ERRORS.forbidden();
     const { data, additional } = catalog(project, query.locale);
     const envelope = { status: true, ...additional };
     if (!state.config.legacy_omit_capability) {
@@ -417,7 +491,17 @@ function translations(req, query, url) {
     return [200, envelope];
 }
 
+/**
+ * POST /translatable-items: auth:sanctum → RouteModelBinding → prevent-duplicate →
+ * auth.apikey → validate-batch-size → deduct → the DTO's own validation (`project_id`
+ * required, `translatable_items` a list, both reported together) → AccessGuard → the
+ * target-locale check → writes.
+ */
 function translatableItems(req, body, url) {
+    const unauthenticated = sanctum(req);
+    if (unauthenticated) return unauthenticated;
+    const project = body?.project_id ? state.projects.get(body.project_id) : null;
+    if (body?.project_id && !project) return ERRORS.notFound();
     const dup = duplicateGuard(req, url, body);
     if (dup) return dup;
     const auth = authApiKey(req);
@@ -425,20 +509,21 @@ function translatableItems(req, body, url) {
     const items = body?.translatable_items;
     const count = Array.isArray(items) ? items.length : 0;
     if (count > state.config.batch_limit) {
-        return [
-            422,
-            errorBody(
-                `Batch size of ${count} exceeds the maximum allowed limit of ${state.config.batch_limit} translatable items per request.`
-            ),
-        ];
+        // BatchSizeExceededError: its values are details, not template markers.
+        const message = 'The request has more translatable items than one batch allows.';
+        return [422, apiError('batch_size_exceeded', message, { details: { limit: state.config.batch_limit, item_count: count } })];
     }
-    if (!body?.project_id) return [422, errorBody('The project id field is required.')];
-    const project = state.projects.get(body.project_id);
-    if (!project) return [404, errorBody('Not found')];
-    if (!Array.isArray(items)) return [422, errorBody('The translatable items field must be an array.')];
     const deduct = deductRequest(auth.key);
     if (deduct) return deduct;
-    if (auth.key.project !== project.id) return [403, errorBody('This action is unauthorized.')];
+    const invalid = [];
+    if (!project) invalid.push(entry('project_id', 'required', 'The project is required.'));
+    if (!Array.isArray(items)) invalid.push(entry('translatable_items', 'invalid_type', 'The translatable items must be a list.'));
+    if (invalid.length) return [422, validationFailed(invalid)];
+    if (auth.key.project !== project.id) return ERRORS.forbidden();
+    // ProvidedTranslationService::assertTargetLocales: a translation for a locale the project
+    // does not translate into is refused before anything is written.
+    const refused = assertTargetLocales(project, items);
+    if (refused) return refused;
     // TranslatableItemService::_prepareBatchData: skips, never rejects.
     for (const item of items) {
         if (!item || typeof item !== 'object') continue;
@@ -457,21 +542,95 @@ function translatableItems(req, body, url) {
             upsertBlock(project, item.category ?? null, item.custom_id ?? null, item.content ?? null, item.label ?? null, phrases);
         }
     }
-    return [200, { status: true }];
+    const outcome = storeProvidedTranslations(project, items);
+    // RegisteredTranslatableItemsResource, through resourceResponse.
+    return [200, { status: true, data: { human_translations_saved: outcome.saved, human_translations_skipped: outcome.skipped } }];
 }
 
+// ---------------------------------------------------------------------------------------
+// Translations sent with the phrases: ProvidedTranslationService, ported
+// ---------------------------------------------------------------------------------------
+
+/** UsesLocales::formatLocale. */
+const formatLocale = (locale) => String(locale).replace(/_/g, '-').toLowerCase();
+
+/**
+ * A `translations` key that is not one of the project's target locales answers 422, as a
+ * FieldValidationException renders through ValidationExceptionHandler: one entry, on the
+ * item's `translations` field, with TranslationLocaleNotTargetFieldError's code and template.
+ */
+function assertTargetLocales(project, items) {
+    for (const [index, item] of items.entries()) {
+        const map = item && typeof item === 'object' && item.translations && typeof item.translations === 'object' ? item.translations : {};
+        for (const raw of Object.keys(map)) {
+            const locale = formatLocale(raw);
+            if (project.target_locales.includes(locale)) continue;
+            const template = 'The locale {locale} is not a target locale of this project.';
+            return [422, validationFailed([entry(`translatable_items.${index}.translations`, 'invalid_option', template.replace('{locale}', locale), template, { locale })])];
+        }
+    }
+    return null;
+}
+
+/**
+ * Store each registered phrase's provided translations as human translations, served on
+ * later catalog reads. Content blocks, untranslatable phrases and items that registered
+ * nothing are ignored. A new translation counts its phrase's words against the cap; one
+ * that would exceed what is left is skipped (its locale is left for machine translation).
+ * Replacing a translation the phrase already has is an update and counts nothing.
+ */
+function storeProvidedTranslations(project, items) {
+    const outcome = { saved: 0, skipped: 0 };
+    const limit = project.human_translation_word_limit;
+    for (const item of items) {
+        if (!item || typeof item !== 'object' || !item.translations || typeof item.translations !== 'object') continue;
+        if ((item.type ?? 'phrase') !== 'phrase' || item.translatable === false) continue;
+        const phrase = item.phrase ? project.phrases.get(itemKey(item.category ?? null, item.phrase)) : null;
+        if (!phrase) continue;
+        for (const [raw, value] of Object.entries(item.translations)) {
+            const locale = formatLocale(raw);
+            const text = value === null || value === undefined ? '' : String(value);
+            const cost = words(phrase.phrase);
+            const isNew = !(locale in phrase.translations);
+            const remaining = limit === null ? null : Math.max(0, limit - project.human_translation_words_used);
+            if (isNew && remaining !== null && cost > remaining) {
+                outcome.skipped++;
+                continue;
+            }
+            outcome.saved++;
+            // TranslationService::createTranslation with no text undoes an untranslatable
+            // mark and writes no translation.
+            if (!text) continue;
+            phrase.translations[locale] = text;
+            if (isNew) project.human_translation_words_used += cost;
+        }
+    }
+    return outcome;
+}
+
+/**
+ * POST /discovery/hint: throttle:hint → the DTO's validation of `page_url`
+ * (`#[Url, Max(2048)] string`, every failed rule reported) → the acceptance rules. No
+ * API-key middleware runs: an unknown key is answered 204 like any other.
+ */
 function discoveryHint(req, body) {
-    if (hintThrottle(req)) return [429, { message: 'Too Many Attempts.' }];
+    if (hintThrottle(req)) return ERRORS.tooManyRequests();
     const pageUrl = body?.page_url;
-    let valid = typeof pageUrl === 'string' && pageUrl.length <= 2048;
-    if (valid) {
+    const invalid = [];
+    if (pageUrl === null || pageUrl === undefined) invalid.push(entry('page_url', 'required', 'The page URL is required.'));
+    else if (typeof pageUrl !== 'string') invalid.push(entry('page_url', 'invalid_type', 'The page URL must be text.'));
+    else {
         try {
             new URL(pageUrl);
         } catch {
-            valid = false;
+            invalid.push(entry('page_url', 'invalid_format', 'The page URL must be a valid URL.'));
+        }
+        if (pageUrl.length > 2048) {
+            const template = 'The page URL must not be longer than {max} characters.';
+            invalid.push(entry('page_url', 'too_long', template.replace('{max}', '2048'), template, { max: 2048 }));
         }
     }
-    if (!valid) return [422, errorBody('The page url field must be a valid URL.')];
+    if (invalid.length) return [422, validationFailed(invalid)];
     const raw = header(req, 'x-authorization');
     const key = raw ? state.keys.get(raw) : null;
     if (key) handleHint(key, req, pageUrl);
@@ -486,6 +645,7 @@ function acceptedState() {
     const projects = {};
     for (const p of state.projects.values()) {
         projects[p.id] = {
+            human_translation_words_used: p.human_translation_words_used,
             phrases: [...p.phrases.values()].map(({ category, phrase, translations }) => ({ category, phrase, translations })),
             blocks: [...p.blocks.values()].map(({ category, custom_id, content, label, phrases }) => ({
                 category,
@@ -571,18 +731,20 @@ const server = createServer(async (req, res) => {
         const [status, body] = fixtureRoute(method, url.pathname.slice('/__fixture'.length), rawBody);
         return send(res, status, body);
     }
-    if (!url.pathname.startsWith('/api/')) return send(res, 404, errorBody('Not found'));
+    if (!url.pathname.startsWith('/api/')) return send(res, ...ERRORS.notFound());
     const path = url.pathname.slice('/api'.length);
 
     const fault = takeFault(method, path);
     if (fault) {
         if (fault.delay_ms) await new Promise((r) => setTimeout(r, fault.delay_ms));
         if (fault.drop) return req.socket.destroy();
-        if (fault.status) return send(res, fault.status, errorBody('Injected fault'));
+        // A bare status renders as the case ApiErrorService maps it to, as the backend's own would.
+        if (fault.status) return send(res, fault.status, statusError(fault.status));
     }
 
-    if (rawBody === undefined) return send(res, 400, errorBody('Malformed JSON body'));
-    const body = clean(rawBody);
+    // Laravel reads a body that is not JSON as an empty one; nothing rejects it, so the route's
+    // own validation answers.
+    const body = clean(rawBody === undefined ? null : rawBody);
     const query = clean(Object.fromEntries(url.searchParams.entries()));
     const fullUrl = url.pathname + url.search;
 
@@ -592,7 +754,9 @@ const server = createServer(async (req, res) => {
     else if (method === 'GET' && (path === '/translations' || path === '/translations/data')) result = translations(req, query, fullUrl);
     else if (method === 'POST' && path === '/translatable-items') result = translatableItems(req, body, fullUrl);
     else if (method === 'POST' && path === '/discovery/hint') result = discoveryHint(req, body);
-    else result = [404, errorBody('Not found')];
+    else if (authorize || ['/translations', '/translations/data', '/translatable-items', '/discovery/hint'].includes(path)) {
+        result = ERRORS.methodNotAllowed();
+    } else result = ERRORS.notFound();
     return send(res, result[0], result[1]);
 });
 

@@ -100,6 +100,19 @@
                         "default": false,
                         "description": "GATE-9's project setting. Served inside authorize data and as a top-level sibling of data on both catalog routes."
                     },
+                    "human_translation_word_limit": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "default": null,
+                        "description": "The plan's cap on words added as new human translations in a rolling window (HumanTranslationLimitService). Null is uncapped. Translations sent with POST /translatable-items that would exceed what is left are skipped and counted in human_translations_skipped."
+                    },
+                    "human_translation_words_used": {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Words already used against human_translation_word_limit in the window."
+                    },
                     "phrases": {
                         "type": "array",
                         "items": {
