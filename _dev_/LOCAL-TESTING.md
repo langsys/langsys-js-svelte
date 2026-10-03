@@ -13,7 +13,7 @@ predates it, so a plain `npm install` gives you a core that cannot run this code
 at the SHA in `CONFORMANCE.md`'s **Core under test** row and link it in place:
 
 ```bash
-CORE_SHA=bb0198c4bd6040462f2f259ac35df559bb8faba5     # the "Core under test" row
+CORE_SHA=15e31041689710b3217099a6f223fa5f1f5aa678     # the "Core under test" row
 git -C ../langsys-js-typescript fetch origin
 git -C ../langsys-js-typescript worktree add --detach /tmp/langsys-core $CORE_SHA
 (cd /tmp/langsys-core && npm ci && npm run build)
