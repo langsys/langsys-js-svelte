@@ -13,7 +13,8 @@
     const cms = '<p>From the CMS, section one</p>';
     const cmsMixed = '<p>Mixed CMS text</p>';
     // A placeholder that resolves: the build declines to capture an {#await} (a fallback).
-    const later = new Promise<string>((resolve) => setTimeout(() => resolve('Loaded after a moment'), 1500));
+    // `?await=<ms>` sets how long it takes, to resolve inside or outside the core's settle window.
+    const later = new Promise<string>((resolve) => setTimeout(() => resolve('Loaded after a moment'), Number(params.get('await') ?? 1500)));
     // The core's header for the app's own API calls, read again whenever the loaded locale changes.
     const acceptLanguage = $derived($currentlyLoadedLocale ? (LangsysApp.localeHeaders()['Accept-Language'] ?? '(none)') : '(no locale yet)');
 </script>

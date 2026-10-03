@@ -153,12 +153,31 @@ if (process.argv.includes('--serve')) {
     check(!got.some((p) => /Mixed CMS text|^Hi\b/.test(p)), 'VAR-7: a block mixing {@html} with a variable registers nothing', JSON.stringify(got));
 
     // --- Without the transform (VAR-7) --------------------------------------------------------
+    // The {#await} block is a fallback: a placeholder never keys or registers anything, whether it
+    // resolves inside the core's settle window or after it.
+    for (const ms of [100, 2000]) {
+        const page = await visit(`/fixture/var?user=Await${ms}&key=k-write&await=${ms}&run=${RUN}`);
+        await page
+            .waitForFunction(() => document.querySelector('#awaiting')?.textContent === 'Loaded after a moment', null, { timeout: 15_000 })
+            .catch(() => {});
+        check(
+            (await page.textContent('#awaiting')) === 'Loaded after a moment',
+            `{#await} resolving after ${ms} ms renders the content`,
+            await page.textContent('#awaiting')
+        );
+    }
+
     const before = await registered();
     const plain = await visit(`/fixture/var-plain?user=Ana&key=k-write&debug=1&run=${RUN}`);
     await visit(`/fixture/var-plain?user=Luis&key=k-write&debug=1&run=${RUN}`);
     await sleep(35_000); // past the client's 5–30 s flush jitter
     const after = await registered();
     const added = after.filter((p) => !before.includes(p));
+    check(
+        !after.some((p) => /Loading|Loaded after/.test(p)),
+        'SRV-5/VAR-7: the {#await} block registers neither its placeholder nor its content, fast or slow',
+        JSON.stringify(after)
+    );
     check(!added.some((p) => /Hello (Ana|Luis)/.test(p)), 'VAR-7: without the transform, the interpolating block registers nothing', JSON.stringify(added));
     // Measured, not asserted: without the transform the runtime cannot tell a {@html}-only block from
     // one that interpolates, so it registers nothing either (VAR-7's carve-out needs the transform).
