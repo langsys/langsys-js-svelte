@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Spec revision read** | langsys2 9c1c5e23…, docs/sdk-spec.mdx blob 68e3020ae3208c2ef88c52c09add0f9a8622eaa5 |
+| **Spec revision read** | langsys2 83e26af1…, docs/sdk-spec.mdx blob d893ecf6f0d81230d34a22aeedd46e7fc1c6facb |
 | **Profiles** | browser, binding, all — derived: binding over langsys-js-typescript |
-| **specVersion** | 8.5.6, unpublished |
-| **Re-derived at this write** | `git -C ../langsys2 ls-tree 9c1c5e23108b8d4357b1b45cc0a3b91db1439532 docs/sdk-spec.mdx` → `68e3020a…`. The 129 rule ids are read out of that blob by `node _dev_/conformance-summary.mjs`, not counted from this file. |
+| **specVersion** | 8.5.8, unpublished |
+| **Re-derived at this write** | `git -C ../langsys2 ls-tree 83e26af1fc41aa526f3ff96bc5b50c8d7fcb4e92 docs/sdk-spec.mdx` → `d893ecf6…`. The 129 rule ids are read out of that blob by `node _dev_/conformance-summary.mjs`, not counted from this file. |
 | **Binding revision** | `feature/838_write_key_gating_reland`. The commit carrying this file is the one reported to the reviewer; a SHA written here could only name its parent. |
 | **Core under test** | `langsys-js-typescript` `473387b0e742a8fa7318a6363449c84304824155`, built clean from a detached worktree of that SHA and linked in place of the shared checkout, which carries uncommitted work. `node _dev_/delegation-probe.mjs` prints the checkout it resolves. Every `core row` citation below is read from that SHA's CONFORMANCE.md. |
 | **Contract fixture** | `contract-fixture/`, vendored byte-exact from langsys-js-typescript, tree `d7f89b89f911a90a06fc511ac72f8e0e913d4af3` (`git rev-parse HEAD:contract-fixture`). Node 18+, no dependencies. |
