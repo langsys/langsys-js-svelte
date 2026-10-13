@@ -186,6 +186,12 @@ The three trust-handshake strings must stay in sync, or CI will fail at the publ
 
 - **Do not reimplement base-SDK behavior here.** API client, lookup logic, missing-token flow, persistence, SSR strategies all belong in `langsys-js-typescript`. If you need to extend any of that, the change goes in the base package and we re-export.
 - **Keep `<Translate>` and `<Phrase>` to glue.** Rendering, registration and tokenizing are the core's (`renderBlock`, `registerBlock`, the vanilla classes); placeholder names are the core's `derivePlaceholderNames`. What is Svelte's is the AST → tree mapping in `src/lib/preprocess` and rendering the result as Svelte elements. Don't fork the tokenizer or the naming here.
+- **On the server, `<Translate>` and `<Phrase>` register only inside a request scope**
+  (`currentRequestScope()`), which sends the block after the response. Outside one there is nothing
+  to send it: the block registers from the browser after hydration, and the core would report the
+  server call as misplaced (`server-registration.test.ts` counts that notice).
+- **`hydrateFromServer()` passes the whole seed** as `seedCatalog`'s third argument: its blocks
+  and phrases, marked collected, are what keeps the client from sending them again.
 - **The testbed applies the transform per path**, in `vite.config.ts` (`varTransform`): `/fixture/var`, `/fixture/gate10` and `src/ssr-measure/var` only, so every other route keeps measuring the package without it.
 - **Type re-exports go through `index.ts`.** Consumers shouldn't have to reach into `langsys-js-typescript` for routine types.
 - **`t`'s reactivity story** depends on the base SDK re-emitting a fresh `TFunction` closure on every translations/locale change. If you find templates not re-rendering after a locale change, look at the `tSignal` subscriber wiring in `langsys-js-typescript`'s `Translations` class — not here.

@@ -1,5 +1,6 @@
 import { compile, parse } from 'svelte/compiler';
 import { describe, expect, it } from 'vitest';
+import { tSignal } from 'langsys-js-typescript';
 import { langsysPreprocess } from './index.js';
 
 const IMPORT = `import { Translate, Phrase, DontTranslate, t } from 'langsys-js-svelte';`;
@@ -124,6 +125,66 @@ describe('VAR-6 — the preprocessor', () => {
         expect(warnings).toHaveLength(1); // the mixed block only
     });
 
+    it('a readable block nested in a fallback block is transformed on its own', () => {
+        const { code } = run('<Translate><ul>{#each xs as x (x)}<li>{x}</li>{/each}</ul><Translate><p>Static text</p></Translate></Translate>');
+        expect(blocks(code, { xs: [] })).toEqual([
+            { fallback: '{#each}' },
+            { tree: [{ tag: 'p', attrs: {}, children: [{ text: 'Static text' }] }], dyn: [null], params: {} },
+        ]);
+    });
+
+    it('a self-naming expression is one placeholder wherever it repeats, however it is spaced', () => {
+        const { code } = run('<Translate><p>{name}, {a.b} … {name} {a . b}</p></Translate>');
+        const [block] = blocks(code, { name: 'Ana', a: { b: 1 } }) as Array<{ tree: Array<{ children: unknown }>; params: unknown }>;
+        expect(block.tree[0].children).toEqual([
+            ...v('name', 'Ana'),
+            { text: ', ' },
+            ...v('b', '1'),
+            { text: ' … ' },
+            ...v('name', 'Ana'),
+            { text: ' ' },
+            ...v('b', '1'),
+        ]);
+        expect(block.params).toEqual({ name: 'Ana', b: 1 });
+    });
+
+    it('an unnameable expression is its own placeholder every time, even when its source repeats', () => {
+        // The core cannot tell `{a + b}` twice from `{i++}` twice, so the build never merges them.
+        const { code, warnings } = run('<Translate><p>{a + b} and {a + b}</p></Translate>');
+        const [block] = blocks(code, { a: 1, b: 2 }) as Array<{ tree: Array<{ children: unknown }>; params: unknown }>;
+        expect(block.tree[0].children).toEqual([...v('value', '3'), { text: ' and ' }, ...v('value_2', '3')]);
+        expect(block.params).toEqual({ value: 3, value_2: 3 });
+        expect(warnings.filter((w) => w.includes('has no name to derive'))).toHaveLength(2);
+    });
+
+    it('a $t template literal names its values the same way', () => {
+        const { code } = run('<p>{$t(`${name} ${a + b} ${name} ${a + b}`)}</p>');
+        expect(code).toContain(`{$t("{name} {value} {name} {value_2}", undefined, { "name": (name), "value": (a + b), "value_2": (a + b) })}`);
+    });
+
+    it('the two newest naming rows, through the build: equal-shaped unnameable values stay apart', () => {
+        // var-naming-vectors.json rows unnameable-same-kind-twice and call-unnameable-arg-twice.
+        const { code } = run('<Translate><p>{a + b} {c * d} {fmt(a + b)} {fmt(c * d)}</p></Translate>');
+        const [block] = blocks(code, { a: 1, b: 2, c: 3, d: 4, fmt: (v: number) => `#${v}` }) as Array<{ params: unknown }>;
+        expect(block.params).toEqual({ value: 3, value_2: 12, value_3: '#3', value_4: '#12' });
+    });
+
+    it('the two repeat rows, through the build: a self-naming repeat is one placeholder, an unnameable one two', () => {
+        // var-naming-vectors.json rows self-naming-repeated-verbatim and unnameable-repeated-verbatim.
+        const named = blocks(run('<Translate><p>{name} {name}</p></Translate>').code, { name: 'Ana' })[0] as {
+            tree: Array<{ children: unknown }>;
+            params: unknown;
+        };
+        expect(named.tree[0].children).toEqual([...v('name', 'Ana'), { text: ' ' }, ...v('name', 'Ana')]);
+        expect(named.params).toEqual({ name: 'Ana' });
+        const unnamed = blocks(run('<Translate><p>{a + b} {a + b}</p></Translate>').code, { a: 1, b: 2 })[0] as {
+            tree: Array<{ children: unknown }>;
+            params: unknown;
+        };
+        expect(unnamed.tree[0].children).toEqual([...v('value', '3'), { text: ' ' }, ...v('value_2', '3')]);
+        expect(unnamed.params).toEqual({ value: 3, value_2: 3 });
+    });
+
     it('names an unnameable value `value`, with a warning', () => {
         const { code, warnings } = run('<Translate><p>Total {a + b}</p></Translate>');
         expect((blocks(code, { a: 1, b: 2 })[0] as { params: unknown }).params).toEqual({ value: 3 });
@@ -134,6 +195,23 @@ describe('VAR-6 — the preprocessor', () => {
         const { code } = run('<p>{$t(`Hi ${user.name}`, "UI")}</p>', 'const x = $t(`${items.length} left`);');
         expect(code).toContain(`const x = $t("{items_count} left", undefined, { "items_count": (items.length) });`);
         expect(code).toContain(`{$t("Hi {name}", "UI", { "name": (user.name) })}`);
+    });
+
+    it("a $t template literal keeps the core's argument order whatever the second argument is", () => {
+        // The core reads a string second argument as the category and anything else as the params.
+        const t = tSignal.get() as unknown as (...a: unknown[]) => string;
+        const rewritten = (call: string, scope: Record<string, unknown>) => {
+            const code = run('', `const r = ${call};`).code;
+            const expr = code.slice(code.indexOf('const r = ') + 'const r = '.length, code.indexOf(';</script>'));
+            return new Function('$t', ...Object.keys(scope), `return ${expr};`)(t, ...Object.values(scope));
+        };
+        expect(rewritten('$t(`Hello ${x}`, { other: 1 })', { x: 'Ana' })).toBe('Hello Ana');
+        expect(rewritten('$t(`Hello ${x}`, "UI", { other: 1 })', { x: 'Ana' })).toBe('Hello Ana');
+        expect(rewritten('$t(`Hello ${x}`)', { x: 'Ana' })).toBe('Hello Ana');
+        // Not knowable at build time: decided when the call runs, as the core decides it.
+        expect(rewritten('$t(`Hello ${x}`, second)', { x: 'Ana', second: { other: 1 } })).toBe('Hello Ana');
+        expect(rewritten('$t(`Hello ${x}`, second)', { x: 'Ana', second: 'UI' })).toBe('Hello Ana');
+        expect(rewritten('$t(`Hello ${x}`, second)', { x: 'Ana', second: undefined })).toBe('Hello Ana');
     });
 
     it('rewrites a $t call inside a block, in the code it copies too', () => {

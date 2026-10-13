@@ -105,6 +105,12 @@ await LangsysApp.init({ projectid, key, UserLocaleStore, apiUrl: 'http://langsys
 
 Pass it to `init()` rather than calling `LangsysAppAPI.setBaseUrl()`. `setBaseUrl` only works if it runs **before** `init()`; called after, the SDK has already authorized against the default host and stays inert for the life of the page — nothing throws, and translations simply never arrive. `apiUrl` is applied inside `init()`, before authorization, so the order cannot go wrong.
 
+### Running without credentials
+
+`init()` without a project id, an API key or a locale store does not throw: it resolves `{ status: false, errors }` and leaves the client unconfigured, so a preview build or a test run without secrets still renders. `$t()` shows the source text with its params filled and makes no request, `<Translate>` and `<Phrase>` render the text as written, and a block's registration resolves skipped with reason `'not-configured'`. An explicit write, such as `LangsysAppAPI.createTranslatableItems`, throws `LangsysConfigurationError`, exported from this package by reference so `instanceof` matches. `LangsysApp.isConfigured()` reports the state.
+
+To fail loudly instead, pass `requireCredentials: true`. `$t()` then throws `LangsysConfigurationError` while the client is unconfigured, which during SSR fails the request. `<Translate>` and `<Phrase>` never throw while rendering. In the browser each block that registers rejects its registration with that error instead — a block mounted before `init()` once `init()` refuses — and the rejection is left unhandled on purpose, so it reaches the page's unhandled-rejection handler. A block that only reads the catalog (one without the transform, or a fallback) never fails. A server render registers blocks only inside a request scope (`createLangsysHandle`), where nothing rejects.
+
 ### SSR token strategy
 
 `ssrTokenStrategy` (default `'client'`) controls when missing tokens are sent during server rendering:
@@ -189,7 +195,7 @@ It works the same under SvelteKit and plain Vite, and changes nothing outside `<
 | `Total {formatPrice(order.total)}` | `Total {total}`                | `total`                                   |
 | `{a} and {a}`                      | `{a} and {a}`                  | one `a`                                   |
 
-The names follow the rules every Langsys SDK shares, so the same expression gives the same phrase whichever SDK renders it: a value that cannot be named — `{a + b}`, `{ok ? x : y}` — becomes `{value}` with a build warning, and a name you write yourself wins (`%name%` in the text with `params={{ name }}`). `{#if}` and `{#key}` blocks are read branch by branch. Event handlers, classes and other attributes stay on their elements. A `<Phrase>`, `<Translate>` or `<DontTranslate>` inside a block is part of it.
+The names follow the rules every Langsys SDK shares, so the same expression gives the same phrase whichever SDK renders it: a value that cannot be named — `{a + b}`, `{ok ? x : y}` — becomes `{value}` with a build warning, and is a placeholder of its own each time it appears (`{value}`, `{value_2}`), while one that names itself, like `{name}`, is the same placeholder wherever it repeats; a name you write yourself wins (`%name%` in the text with `params={{ name }}`). `{#if}` and `{#key}` blocks are read branch by branch. Event handlers, classes and other attributes stay on their elements. A `<Phrase>`, `<Translate>` or `<DontTranslate>` inside a block is part of it.
 
 The block is then rendered through the core's block renderer, so it is **translated in the served HTML** during SSR, not only after hydration, and its host carries its id (`data-ls-contentblock`).
 
@@ -327,40 +333,15 @@ With the transform, write values as you would anywhere in Svelte — `{name}`, `
 
 #### Blocks the transform cannot read
 
-> [!WARNING]
-> **A fallback block whose whole content is a single phrase stops updating once Svelte tries to change it.** This applies to blocks the transform cannot read (an `{#await}` or `{#each}` inside, a component, a directive) and to every block in an app without the transform — the base SDK's DOM handler translates those after mount.
->
-> The cause is in that handler: when a block tokenizes to exactly one phrase, it writes the translation back with `element.innerText = …`. That assignment replaces **every child** of the host, including the `<!--[-->` / `<!--]-->` anchor comments Svelte 5 uses to find the block again. Svelte's next update targets nodes that are no longer in the document, so it succeeds silently and changes nothing.
->
-> Measured against `langsys-js-typescript@0.6.5`, without the transform:
->
-> | content                                                      | client-only           | hydrated   |
-> | ------------------------------------------------------------ | --------------------- | ---------- |
-> | `{#if flag}…{:else}…{/if}` (one phrase per branch)           | **frozen**            | **frozen** |
-> | a single reactive expression, e.g. `{msg}`                   | **frozen**            | **frozen** |
-> | the same two driven by a **store** (`{$msg}`, `{#if $flag}`) | **frozen**            | **frozen** |
-> | `{#await}`                                                   | **registers nothing** | **frozen** |
-> | two or more phrases in the subtree                           | fine                  | fine       |
->
-> With the transform, `{#if}` and reactive expressions are part of the tree, which Svelte itself renders, so the first three rows do not arise. `{#await}` is always a fallback.
->
-> **Keep the async boundary outside the block, and wrap the resolved content:**
->
-> ```svelte
-> <!-- ✅ the block only ever sees settled content -->
-> {#await load()}
->     Loading…
-> {:then page}
->     <Translate category="Docs"><p>{page.title}</p></Translate>
-> {/await}
-> ```
->
-> ```svelte
-> <!-- ❌ a fallback: freezes on "Loading…" -->
-> <Translate category="Docs">
->     {#await load()}Loading…{:then page}{page.title}{/await}
-> </Translate>
-> ```
+A block the transform cannot read (an `{#await}` or `{#each}` inside, a component, a directive), and every block in an app without the transform, is translated after mount by the base SDK's DOM handler. It registers nothing (see [Variables in text](#variables-in-text--the-build-time-transform)), and Svelte's own updates keep reaching it. What they show, measured hydrated and client-only alike:
+
+| content                                                   | after Svelte changes it                  |
+| --------------------------------------------------------- | ---------------------------------------- |
+| `{#if flag}…{:else}…{/if}`, or `{#if $flag}` from a store | the new branch, translated               |
+| a reactive expression, `{msg}` or `{$msg}`                | the new value as written, not translated |
+| `{#await}`                                                | the resolved content, translated         |
+
+A value that changes is shown as your code holds it, which is right for a variable. A sentence that must re-translate as its value changes belongs in a block the transform can read — `<p>Hello {name}</p>` — where it is a placeholder.
 
 ### `<Phrase>` — one sentence that happens to contain markup
 

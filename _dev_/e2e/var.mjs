@@ -152,6 +152,42 @@ if (process.argv.includes('--serve')) {
     check(got.includes('From the CMS, section one'), 'VAR-7: a block whose only dynamic part is {@html} registers its HTML as content', JSON.stringify(got));
     check(!got.some((p) => /Mixed CMS text|^Hi\b/.test(p)), 'VAR-7: a block mixing {@html} with a variable registers nothing', JSON.stringify(got));
 
+    // --- The client does not resend what the server collected (SRV-3, SRV-4) ---------------
+    // The server renders, collects its misses and sends them after the response, and its seed marks
+    // them collected. The double is then emptied, and the browser hydrates the SAME served HTML (no
+    // second server render): a phrase the server collected must not come back from the client.
+    // Control: a block rendered only in the browser registers through the same client.
+    {
+        const CLIENT_ONLY = 'Rendered in the browser for {name}';
+        await seed({ ...SEED, projects: [{ ...SEED.projects[0], phrases: [], blocks: [] }] });
+        const url = `${BASE}/fixture/var?user=Ana&key=k-write&run=${RUN}-seed`;
+        const served = await (await fetch(url)).text();
+        let collected = [];
+        for (let i = 0; i < 10 && !collected.includes(GREET); i++) {
+            await sleep(1000);
+            collected = await registered();
+        }
+        check(collected.includes(GREET), 'premise: the server collected and sent the placeholder phrase', JSON.stringify(collected));
+        await seed({ ...SEED, projects: [{ ...SEED.projects[0], phrases: [], blocks: [] }] });
+        const page = await browser.newPage();
+        await page.route(url, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: served }));
+        await page.goto(url);
+        await page.waitForFunction(() => document.querySelector('[data-testid=fx-status]')?.textContent === 'ready', null, { timeout: 60_000 });
+        let after = [];
+        for (let i = 0; i < 20 && !after.includes(CLIENT_ONLY); i++) {
+            await sleep(3000);
+            after = await registered();
+        }
+        check(after.includes(CLIENT_ONLY), 'control: the hydrated client registers a block only it rendered', JSON.stringify(after));
+        const resent = collected.filter((p) => after.includes(p));
+        check(
+            collected.includes(GREET) && resent.length === 0,
+            'the hydrated client resends nothing the server collected',
+            `collected ${JSON.stringify(collected)}; resent ${JSON.stringify(resent)}`
+        );
+        await page.close();
+    }
+
     // --- Without the transform (VAR-7) --------------------------------------------------------
     // The {#await} block is a fallback: a placeholder never keys or registers anything, whether it
     // resolves inside the core's settle window or after it.

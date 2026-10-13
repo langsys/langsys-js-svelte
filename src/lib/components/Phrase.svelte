@@ -20,6 +20,7 @@
      */
     import {
         PHRASE_MARKER_ATTR,
+        currentRequestScope,
         Phrase as VanillaPhrase,
         registerBlock,
         renderBlock,
@@ -103,13 +104,19 @@
 
     // On the server, inside the request scope, which sends it after the response (SRV-3).
     // svelte-ignore state_referenced_locally
-    if (tree && typeof window === 'undefined') registerBlock(tree, options);
+    // On the server, only inside a request scope (`createLangsysHandle`), which records the block
+    // and sends it after the response. Outside one there is nothing to send it: the block registers
+    // from the browser after hydration, and the core would only report the call as misplaced.
+    if (tree && typeof window === 'undefined' && currentRequestScope()) void registerBlock(tree, options);
 
     $effect(() => {
         if (!host || !tree) return;
         // eslint-disable-next-line @typescript-eslint/no-unused-expressions -- re-register on every catalog change
         $tSignal;
-        registerBlock(tree, { ...options, host });
+        // The promise is left unhandled on purpose: it rejects only under `requireCredentials` with
+        // no credentials (WIRE-4), Svelte has no lifecycle that takes a promise, and an unhandled
+        // rejection is how the core surfaces that.
+        void registerBlock(tree, { ...options, host });
     });
 
     // Re-render when params change (e.g. a changed count) after mount.

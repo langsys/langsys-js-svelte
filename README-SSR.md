@@ -189,7 +189,7 @@ export const handle = createLangsysHandle({
 ```
 
 ```typescript
-// src/hooks.client.ts
+// src/hooks.client.ts — SvelteKit 2.10 or later, which runs the `init` hook before hydration
 import { hydrateFromServer } from 'langsys-js-svelte/kit';
 
 export const init = () => hydrateFromServer();

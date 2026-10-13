@@ -29,7 +29,7 @@ import { writeEnabled as vanillaWriteEnabled } from 'langsys-js-typescript';
 const isBrowser = typeof window !== 'undefined';
 
 /**
- * Flips once the first subscription has handed over to the live signal.
+ * Flips on the first macrotask after the first subscribe (`endHydrationSoon`).
  *
  * Deliberately keyed on the first SUBSCRIBE, not on module init. Timing from
  * module init is wrong precisely in the case this store exists for: an awaited
@@ -41,6 +41,20 @@ const isBrowser = typeof window !== 'undefined';
  * completes, whatever delayed the mount.
  */
 let pastHydration = false;
+
+/**
+ * Ends the hydration pass on the first macrotask after the first subscribe, whatever happens to
+ * that subscription. A one-shot read — `get(writeEnabled)` subscribes and unsubscribes at once —
+ * still starts the clock, so the next read sees the live value instead of "unknown" forever.
+ */
+let hydrationEnding = false;
+function endHydrationSoon(): void {
+    if (hydrationEnding) return;
+    hydrationEnding = true;
+    setTimeout(() => {
+        pastHydration = true;
+    }, 0);
+}
 
 export const writeEnabled: Readable<boolean | undefined> = {
     subscribe(run) {
@@ -59,13 +73,14 @@ export const writeEnabled: Readable<boolean | undefined> = {
         // Hydration pass: publish the same "unknown" the server rendered, so the
         // hydrated markup matches, then adopt the real value immediately after.
         run(undefined);
+        endHydrationSoon();
 
         let stopLive: (() => void) | undefined;
         let cancelled = false;
 
+        // This subscriber's hand-over to the live signal, on the same tick, unless it unsubscribed.
         const timer = setTimeout(() => {
             if (cancelled) return;
-            pastHydration = true;
             stopLive = vanillaWriteEnabled.subscribe(run);
         }, 0);
 

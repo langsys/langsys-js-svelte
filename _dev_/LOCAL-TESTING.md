@@ -13,7 +13,7 @@ predates it, so a plain `npm install` gives you a core that cannot run this code
 at the SHA in `CONFORMANCE.md`'s **Core under test** row and link it in place:
 
 ```bash
-CORE_SHA=15e31041689710b3217099a6f223fa5f1f5aa678     # the "Core under test" row
+CORE_SHA=e1c39e78e5091cee6df3da79634c4db131a2fe1e     # the "Core under test" row
 git -C ../langsys-js-typescript fetch origin
 git -C ../langsys-js-typescript worktree add --detach /tmp/langsys-core $CORE_SHA
 (cd /tmp/langsys-core && npm ci && npm run build)
@@ -29,7 +29,7 @@ link lines again after any install.
 Check it took:
 
 ```bash
-npm test -- --run        # 268 tests, no network
+npm test -- --run        # 296 tests, no network
 npm run check            # 0 errors
 ```
 
@@ -114,8 +114,26 @@ Discovery hints are stored for read-only sessions, and are checked two ways:
   miss for the new page.
 - **Local Langsys:** `node --env-file=.env _dev_/e2e/verify.mjs`, TEST 10 (hint URL attribution).
 
-## 7. Everything at once
+## 7. Running without credentials
+
+`npm run dev` (fresh), then open **`http://127.0.0.1:5173/fixture/var?key=&require=1`**: no key,
+and `requireCredentials` on.
+
+- The page shows every block's text as written.
+- The browser console shows a `LangsysConfigurationError` for each block that registers, including
+  those mounted before the layout called `init()`. Without `&require=1` there are none.
+- `node _dev_/e2e/credentials.mjs` checks the same, that the page without `&require=1` raises
+  nothing, and that `/fixture/var-plain` (no transform, so nothing registers) raises nothing.
+
+## 8. A locale switch overtaken by another
+
+`npm run dev` (fresh), then `node _dev_/e2e/locale-race.mjs`. It picks one locale and, before its
+catalog arrives, another. A slow French overtaken by a German that fails leaves the source text and
+stores nothing under `de-de`; a slow Italian overtaken by a Portuguese that succeeds shows `Olá`.
+
+## 9. Everything at once
 
 The full run, each suite on a freshly started server, is the command block in `CONFORMANCE.md`
-under _Evidence — and re-running it_. On the core above every suite passes: unit 268, VAR 21,
-contract 22, live E2E 61, Svelte DOM 17, SRV concurrency 6, SRV-7 scope 9, SRV-3 flush 6 + 6.
+under _Evidence — and re-running it_. On the core above every suite passes: unit 296, VAR 24,
+contract 22, live E2E 61, Svelte DOM 17, SRV concurrency 6, SRV-7 scope 9, SRV-3 flush 6 + 6,
+locale race 4, running without credentials 6.

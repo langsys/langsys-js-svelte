@@ -33,6 +33,7 @@ describe('surface — re-exported by reference', () => {
 
     it('LangsysAppAPI and canonicalizeLocale pass through unchanged', () => {
         expect(binding.LangsysAppAPI).toBe(core.LangsysAppAPI);
+        expect(binding.LangsysConfigurationError).toBe(core.LangsysConfigurationError);
         expect(binding.canonicalizeLocale).toBe(core.canonicalizeLocale);
     });
 

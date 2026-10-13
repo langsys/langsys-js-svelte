@@ -57,10 +57,10 @@ const OPAQUE_ELEMENTS = new Set(['svg', 'math', 'script', 'style', 'textarea', '
 
 class Fallback extends Error {}
 
-type AttrPart = string | { key: string; expr: Expr };
+type AttrPart = string | { id: number; expr: Expr };
 type IR =
     | { k: 'text'; data: string }
-    | { k: 'var'; key: string; expr: Expr }
+    | { k: 'var'; id: number; expr: Expr }
     | { k: 'raw'; expr: Expr }
     | {
           k: 'el';
@@ -193,15 +193,18 @@ class Transform {
                 `${this.where(node)}: <${node.name}> keeps a ${e.message}, which the build cannot read. It renders from the catalog and registers nothing (VAR-7).`
             );
             inject(`{ fallback: ${JSON.stringify(e.message)} }`);
+            // A block inside it that the build can read is a block of its own: the core's walk of
+            // this one leaves a marked host to that block (MARK-4).
+            this.visit((node.fragment as Fragment).nodes);
             return;
         }
         trimEdges(ir);
 
         const { names, unnameable } = assignNames(occurrences, explicit);
-        for (const key of unnameable) {
-            const occ = occurrences.find((o) => o.key === key)!;
+        for (const id of unnameable) {
+            const { expr } = occurrences[id];
             this.warn(
-                `${this.where(occ.expr as unknown as Node)}: {${this.source(occ.expr)}} has no name to derive, so it registers as {${names.get(key)}}. Name it: write %name% and pass it in params.`
+                `${this.where(expr as unknown as Node)}: {${this.source(expr)}} has no name to derive, so it registers as {${names.get(id)}}. Name it: write %name% and pass it in params.`
             );
         }
         const g = new Gen(this, names);
@@ -235,11 +238,7 @@ class Transform {
                 case 'ExpressionTag': {
                     const expr = n.expression as Expr;
                     if (ctx.raw) out.push({ k: 'raw', expr });
-                    else {
-                        const key = this.key(expr);
-                        ctx.occurrences.push({ key, expr });
-                        out.push({ k: 'var', key, expr });
-                    }
+                    else out.push({ k: 'var', id: this.occur(ctx, expr), expr });
                     break;
                 }
                 case 'RegularElement':
@@ -292,9 +291,7 @@ class Transform {
                     value: parts.map((p) => {
                         if (p.type === 'Text') return p.data as string;
                         const expr = p.expression as Expr;
-                        const key = this.key(expr);
-                        ctx.occurrences.push({ key, expr });
-                        return { key, expr };
+                        return { id: this.occur(ctx, expr), expr };
                     }),
                 });
             } else {
@@ -369,26 +366,40 @@ class Transform {
     }
 
     private tCall(call: Node): string {
-        const [template, category, params, ...rest] = call.arguments as Node[];
+        const [template, second, third] = call.arguments as Node[];
         const quasis = template.quasis as Array<{ value: { cooked: string | null } }>;
         if (quasis.some((q) => q.value.cooked === null)) return this.content.slice(call.start, call.end);
+        // The core reads a string second argument as the category and anything else as the params.
+        // A literal is decided here; anything else is decided when the call runs, the same way.
+        const kind = !second
+            ? 'none'
+            : second.type === 'ObjectExpression'
+              ? 'params'
+              : (second.type === 'Literal' && typeof second.value === 'string') ||
+                  (second.type === 'TemplateLiteral' && (second.expressions as Node[]).length === 0)
+                ? 'category'
+                : 'unknown';
+        const params = kind === 'params' ? second : kind === 'unknown' ? undefined : third;
         const exprs = template.expressions as Expr[];
-        const occurrences = exprs.map((expr) => ({ key: this.key(expr), expr }));
+        const occurrences = exprs.map((expr, id) => ({ id, expr }));
         const explicit = new Set<string>();
         if (params)
             this.explicitKeys({ type: 'Attribute', start: 0, end: 0, value: { type: 'ExpressionTag', expression: params } } as unknown as Node, explicit);
         const { names, unnameable } = assignNames(occurrences, explicit);
-        for (const key of unnameable) {
-            const occ = occurrences.find((o) => o.key === key)!;
-            this.warn(
-                `${this.where(occ.expr as unknown as Node)}: \${${this.source(occ.expr)}} has no name to derive, so it registers as {${names.get(key)}}.`
-            );
+        for (const id of unnameable) {
+            const { expr } = occurrences[id];
+            this.warn(`${this.where(expr as unknown as Node)}: \${${this.source(expr)}} has no name to derive, so it registers as {${names.get(id)}}.`);
         }
-        const phrase = quasis.map((q, i) => q.value.cooked + (i < exprs.length ? `{${names.get(occurrences[i].key)}}` : '')).join('');
-        const entries = [...new Map(occurrences.map((o) => [names.get(o.key)!, this.code(o.expr)])).entries()].map(([n, c]) => `${JSON.stringify(n)}: (${c})`);
-        if (params) entries.push(`...(${this.code(params)})`);
-        const args = [JSON.stringify(phrase), category ? this.code(category) : 'undefined', `{ ${entries.join(', ')} }`, ...rest.map((r) => this.code(r))];
-        return `${this.content.slice(call.start, (call.callee as Node).end)}(${args.join(', ')})`;
+        const phrase = JSON.stringify(quasis.map((q, i) => q.value.cooked + (i < exprs.length ? `{${names.get(i)}}` : '')).join(''));
+        const derived = [...new Map(occurrences.map((o) => [names.get(o.id)!, this.code(o.expr)])).entries()].map(([n, c]) => `${JSON.stringify(n)}: (${c})`);
+        const withParams = (spread: string | undefined) => `{ ${[...derived, ...(spread ? [`...(${spread})`] : [])].join(', ')} }`;
+        const callee = this.content.slice(call.start, (call.callee as Node).end);
+        if (kind === 'params') return `${callee}(${phrase}, ${withParams(this.code(second))})`;
+        if (kind === 'unknown') {
+            const thirdCode = third ? this.code(third) : undefined;
+            return `((__lsArg) => typeof __lsArg === 'object' && __lsArg !== null ? ${callee}(${phrase}, ${withParams('__lsArg')}) : ${callee}(${phrase}, __lsArg, ${withParams(thirdCode)}))(${this.code(second)})`;
+        }
+        return `${callee}(${phrase}, ${second ? this.code(second) : 'undefined'}, ${withParams(third ? this.code(third) : undefined)})`;
     }
 
     // ------------------------------------------------------------------
@@ -420,10 +431,9 @@ class Transform {
         return this.content.slice(start, end);
     }
 
-    /** The same expression, however spaced, is the same value and so one placeholder. */
-    private key(expr: Expr): string {
-        const { start, end } = expr as unknown as Node;
-        return this.content.slice(start, end).replace(/\s+/g, '');
+    /** Records an expression as the block's next occurrence; the core names it (VAR-2). */
+    private occur(ctx: Ctx, expr: Expr): number {
+        return ctx.occurrences.push({ id: ctx.occurrences.length, expr }) - 1;
     }
 
     private where(node: Node): string {
@@ -448,7 +458,7 @@ interface Ctx {
 class Gen {
     constructor(
         private readonly t: Transform,
-        private readonly names: Map<string, string>
+        private readonly names: Map<number, string>
     ) {}
 
     tree(list: IR[]): string {
@@ -462,7 +472,7 @@ class Gen {
             case 'var':
                 // VAR-3's tree form: the value between the pair, named.
                 return [
-                    JSON.stringify({ comment: `ls:${this.names.get(n.key)}` }),
+                    JSON.stringify({ comment: `ls:${this.names.get(n.id)}` }),
                     `{ text: String((${this.t.code(n.expr)}) ?? '') }`,
                     JSON.stringify({ comment: '/ls' }),
                 ];
@@ -471,7 +481,7 @@ class Gen {
             case 'el': {
                 const attrs = n.attrs.map(
                     ({ name, value }) =>
-                        `${JSON.stringify(name)}: ${value === true ? 'true' : JSON.stringify(value.map((p) => (typeof p === 'string' ? p : `{${this.names.get(p.key)}}`)).join(''))}`
+                        `${JSON.stringify(name)}: ${value === true ? 'true' : JSON.stringify(value.map((p) => (typeof p === 'string' ? p : `{${this.names.get(p.id)}}`)).join(''))}`
                 );
                 return [`{ tag: ${JSON.stringify(n.tag)}, attrs: { ${attrs.join(', ')} }, children: ${this.tree(n.children)} }`];
             }
@@ -501,11 +511,11 @@ class Gen {
     }
 
     private paramsOf(n: IR): string[] {
-        const entry = (key: string, expr: Expr) => `${JSON.stringify(this.names.get(key))}: (${this.t.code(expr)})`;
-        if (n.k === 'var') return [entry(n.key, n.expr)];
+        const entry = (id: number, expr: Expr) => `${JSON.stringify(this.names.get(id))}: (${this.t.code(expr)})`;
+        if (n.k === 'var') return [entry(n.id, n.expr)];
         if (n.k === 'el')
             return [
-                ...n.attrs.flatMap((a) => (a.value === true ? [] : a.value.flatMap((p) => (typeof p === 'string' ? [] : [entry(p.key, p.expr)])))),
+                ...n.attrs.flatMap((a) => (a.value === true ? [] : a.value.flatMap((p) => (typeof p === 'string' ? [] : [entry(p.id, p.expr)])))),
                 ...n.children.flatMap((c) => this.paramsOf(c)),
             ];
         if (n.k === 'if') return [`...(${this.conditional(n.branches, (body) => `{ ${this.params(body)} }`, '{}')})`];

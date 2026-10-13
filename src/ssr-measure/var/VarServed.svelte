@@ -27,3 +27,9 @@
         {#each [1, 2] as i (i)}<li>Item {i}</li>{/each}
     </ul></Translate
 >
+<Translate category="VAR" tag="div"
+    ><ul>
+        {#each [1] as i (i)}<li>Row {i}</li>{/each}
+    </ul>
+    <Translate category="VAR" tag="div"><p id="inner">Welcome</p></Translate></Translate
+>

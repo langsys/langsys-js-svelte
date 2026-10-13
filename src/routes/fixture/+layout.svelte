@@ -29,6 +29,8 @@
 
     onMount(async () => {
         exposeIdentityForVerifier();
+        // For `_dev_/e2e/locale-race.mjs`: switch the user's locale as an app's picker would.
+        (window as unknown as { __fxSetLocale: (locale: string) => void }).__fxSetLocale = (locale) => userLocale.set(locale);
         const res = await LangsysApp.init({
             projectid: 'p1',
             key,
@@ -36,6 +38,7 @@
             baseLocale: 'en-us',
             apiUrl: `${window.location.origin}/__fx/api`,
             debug: params.has('debug'),
+            requireCredentials: params.has('require'),
         });
         status = res.status ? 'ready' : 'error';
     });

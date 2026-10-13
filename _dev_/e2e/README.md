@@ -185,6 +185,34 @@ npm run dev                          # fresh
 node _dev_/e2e/svelte-dom.mjs
 ```
 
+## VAR — variables in registered text
+
+`_dev_/e2e/var.mjs` runs `/fixture/var` (compiled with the build-time transform) and
+`/fixture/var-plain` (without it) through `createLangsysHandle`, against the contract double:
+served translations and ids, plurals, one phrase for two users, handlers, the `{#await}` and
+`{@html}` cases, and that a hydrated client resends nothing the server collected.
+
+```bash
+node _dev_/e2e/var.mjs --serve                                     # the double, :8787
+SRV_API=http://127.0.0.1:8787/api SRV_KEY=k-write npm run dev      # fresh server
+node _dev_/e2e/var.mjs
+```
+
+## Credentials, a locale race, fallback blocks
+
+Each needs only a freshly started `npm run dev`; the last two start the double themselves.
+
+- `_dev_/e2e/credentials.mjs` — `requireCredentials` with no key: every block that registers
+  surfaces a `LangsysConfigurationError`, mounted before `init()` or not, and the page shows the
+  text as written. Controls: the same page without `requireCredentials`, and a page without the
+  transform, whose blocks only read, surface nothing.
+- `_dev_/e2e/locale-race.mjs` — a locale switch overtaken by another: a slow French overtaken by a
+  failing German leaves source and stores nothing under `de-de`; a slow Italian overtaken by a
+  succeeding Portuguese shows Portuguese.
+- `_dev_/e2e/freeze.mjs` — what Svelte's updates show in a block on the core's DOM class
+  (`/fixture/freeze`, hydrated, and `/fixture/freeze-csr`, client-only). Prints a table, asserts
+  nothing; README.md's _Blocks the transform cannot read_ is that table.
+
 ## Testbed routes
 
 | Route                                                 | Covers                                                                                                                   |

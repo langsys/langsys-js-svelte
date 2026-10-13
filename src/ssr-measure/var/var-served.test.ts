@@ -22,6 +22,7 @@ function catalog(): iCategories {
             [CART]: '{props_count, plural, one {Hai # articolo} other {Hai # articoli}}',
             ...block([CART], { [CART]: '{props_count, plural, one {Hai # articolo} other {Hai # articoli}}' }),
             'Welcome, VIP': 'Benvenuto, VIP',
+            'Signed in as {m0o}{name}{m0c}': 'Connesso come {m0o}{name}{m0c}',
             Welcome: 'Benvenuto',
         },
     } as unknown as iCategories;
@@ -68,6 +69,22 @@ describe('VAR-6 / SRV-1 — a transformed block is served translated', () => {
 
     it('a <DontTranslate> inside a block shows its value as it is', () => {
         expect(text(serve(), 'sku')).toContain('Ana');
+    });
+
+    it('a translated <Phrase> host carries the resolved marker, so a reader never takes its text as source', () => {
+        const body = serve().replace(/<!--[^]*?-->/g, '');
+        const phrase = body.match(/<p data-ls-phrase[^>]*>([^]*?)<\/p>/);
+        expect(phrase?.[0]).toContain('data-ls-resolved="it-it"');
+        expect(phrase?.[1].replace(/<[^>]+>/g, '')).toBe('Connesso come Ana');
+    });
+
+    it('control: an untranslated <Phrase> host carries no resolved marker', () => {
+        const body = serve({ locale: 'it-it', catalog: {} as iCategories }).replace(/<!--[^]*?-->/g, '');
+        expect(body.match(/<p data-ls-phrase[^>]*>/)?.[0]).not.toContain('data-ls-resolved');
+    });
+
+    it('a block nested in a fallback block is rendered on its own: served translated', () => {
+        expect(text(serve(), 'inner')).toBe('Benvenuto');
     });
 
     it('a fallback block (an {#each}) is served as source', () => {

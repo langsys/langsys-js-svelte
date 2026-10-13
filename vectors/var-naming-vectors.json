@@ -544,6 +544,108 @@
    "names": [
     "m0o_2"
    ]
+  },
+  {
+   "id": "unnameable-same-kind-twice",
+   "why": "two unnameable values are two placeholders even of the same kind: a shape that cannot name an expression cannot tell two apart",
+   "expressions": [
+    {
+     "source": "a + b",
+     "shape": {
+      "other": "binary"
+     }
+    },
+    {
+     "source": "c * d",
+     "shape": {
+      "other": "binary"
+     }
+    }
+   ],
+   "names": [
+    "value",
+    "value_2"
+   ]
+  },
+  {
+   "id": "call-unnameable-arg-twice",
+   "why": "two calls whose one argument is unnameable are two placeholders, though their shapes are equal",
+   "expressions": [
+    {
+     "source": "fmt(a + b)",
+     "shape": {
+      "call": {
+       "callee": "fmt",
+       "args": [
+        {
+         "other": "binary"
+        }
+       ]
+      }
+     }
+    },
+    {
+     "source": "fmt(c * d)",
+     "shape": {
+      "call": {
+       "callee": "fmt",
+       "args": [
+        {
+         "other": "binary"
+        }
+       ]
+      }
+     }
+    }
+   ],
+   "names": [
+    "value",
+    "value_2"
+   ]
+  },
+  {
+   "id": "self-naming-repeated-verbatim",
+   "why": "a self-naming expression is the same placeholder wherever it repeats; the binding hands every occurrence to the naming rule and merges nothing itself",
+   "expressions": [
+    {
+     "source": "name",
+     "shape": {
+      "identifier": "name"
+     }
+    },
+    {
+     "source": "name",
+     "shape": {
+      "identifier": "name"
+     }
+    }
+   ],
+   "names": [
+    "name",
+    "name"
+   ]
+  },
+  {
+   "id": "unnameable-repeated-verbatim",
+   "why": "an unnameable expression is its own placeholder every time, even when its source text repeats: a + b cannot be told from i++",
+   "expressions": [
+    {
+     "source": "a + b",
+     "shape": {
+      "other": "binary"
+     }
+    },
+    {
+     "source": "a + b",
+     "shape": {
+      "other": "binary"
+     }
+    }
+   ],
+   "names": [
+    "value",
+    "value_2"
+   ]
   }
  ]
 }

@@ -1,5 +1,33 @@
 ## Unreleased
 
+### Upgrading from 3.6.17
+
+Measured against an app on 3.6.17 with core 0.6.5. Four things need a change in the app, and one
+moves catalog entries:
+
+- **`@sveltejs/kit` 2.10 or later.** `@sveltejs/kit` is an optional peer from `^2.10.0`, the
+  release that runs the `init` client hook. npm refuses the install in an app on Kit 2.0–2.9.
+- **Add `langsysPreprocess()` to keep registering content.** `<Translate>` and `<Phrase>` render
+  every translation the catalog holds either way, but register new content only through the
+  build-time transform (VAR-7). `$t()` registers as before.
+- **Locale values are lowercase.** `$currentlyLoadedLocale`, `canonicalizeLocale()` and
+  `detectPreferredLocale()` return `en-us`, `zh-hant-tw`. Code comparing them with `'en-US'`
+  compares with the lowercase form instead. The app's own locale store is never rewritten.
+- **`detectPreferredLocale()` returns `false`** when nothing in the supported list matches, where
+  it returned the visitor's own first preference.
+- **Some blocks are registered under a new id and render source text until translated again.** The
+  core's tokenizer converged with the other SDKs, so a block's id moves when it holds: an element
+  whose only text is an attribute (`<input placeholder="…">`), an attribute value with a line break
+  or a run of spaces, one of twelve attributes now translated (`data-tooltip`, `data-bs-title`,
+  `data-confirm` and others), a nested `<Translate>`, `<script>`, `<style>`, `<noscript>` or `<math>`,
+  or a C0 control character. The translation stored under the old id stays in the catalog, unused.
+  With the transform the block registers under its new id; without it, nothing registers it.
+
+Visible and harmless: each visitor's first page load fetches the catalog once more, because the
+cache is now keyed by project and locale; a block registers once it has been stable for 500 ms
+rather than at mount; and a `write` or `ip_write` key the server resolves read-only logs "this
+session cannot write" once per page load, with debug off.
+
 ### Changed
 
 - **`<Translate>` and `<Phrase>` register only what the build-time transform can read (VAR-7).**
@@ -13,21 +41,33 @@
 
 ### Added
 
+- **`LangsysConfigurationError` and `requireCredentials`.** The core runs without credentials:
+  `init()` with no project id, key or locale store leaves the client unconfigured, `$t()` and the
+  components render the text as written, and `LangsysApp.isConfigured()` reports it. The error class
+  is re-exported by reference, so `instanceof` matches what the core throws. Under
+  `requireCredentials` each block that registers surfaces the error as an unhandled rejection in the
+  browser, including a block mounted before `init()`, as SvelteKit mounts a page before its layout;
+  measured by `_dev_/e2e/credentials.mjs`. README, _Running without credentials_.
+
 - **`langsys-js-svelte/preprocess` — the build-time transform (VAR-6).** One line in
   `svelte.config.js`: `preprocess: [vitePreprocess(), langsysPreprocess()]`. Each `{expression}`
   inside a `<Translate>` or `<Phrase>` becomes a named placeholder, with its value as a typed
   param, so `Hello {user.name}` registers `Hello {name}` once for every user, and a count stays a
   number a plural form can select on. Names come from the core's `derivePlaceholderNames` and pass
-  all 27 shared naming vectors. `{#if}`/`{#key}` branches, event handlers, attributes, and nested
+  all 31 shared naming vectors: an expression that names itself is one placeholder wherever it
+  repeats, and one that cannot be named is a placeholder of its own each time. `{#if}`/`{#key}` branches, event handlers, attributes, and nested
   `<Phrase>`, `<Translate>` and `<DontTranslate>` are read; ``$t(`…${x}`)`` template literals are
-  rewritten to placeholders too; anything else makes the block a fallback, named in a build
-  warning. A block whose only dynamic parts are `{@html}` insertions is content, not a variable,
+  rewritten to placeholders too, keeping the core's argument order (an object second argument is
+  the params; one that is not a literal is decided when the call runs, as the core decides it);
+  anything else makes the block a fallback, named in a build warning, and a block inside a
+  fallback that the build can read is transformed on its own. A block whose only dynamic parts are `{@html}` insertions is content, not a variable,
   and registers its HTML's text through the DOM path.
 
 - **Transformed blocks render on the server (SRV-1, MARK-1, SRV-5).** A transformed block is
   rendered through the core's `renderBlock`, so the served HTML carries the translation, the
   block's id and the resolved marker, and a server render's misses are registered through the
-  request scope after the response. The ids agree with a DOM reader's on the 37 rows of the
+  request scope after the response. Outside a request scope a server render registers nothing, and
+  the block registers from the browser after hydration. The ids agree with a DOM reader's on the 37 rows of the
   shared canonicalization fixture the build can express. Nested blocks are recorded once each; a
   block holding `{#await}` is served as source and never captured.
 
@@ -37,7 +77,7 @@
   Called once in the root layout, `syncNavigation()` calls the core's `notifyNavigation()` from
   SvelteKit's `afterNavigate`, and mounted content is looked up again at the new URL. It lives in
   its own entry so the main one never imports `$app/*`; other routers call `notifyNavigation()`
-  from their own after-navigation hook. `@sveltejs/kit` is now an optional peer dependency, for this entry only. Proven against the shared contract double: a persistent
+  from their own after-navigation hook. `@sveltejs/kit` is an optional peer dependency from `^2.10.0`, the release that runs the `init` client hook, for the kit entries only. Proven against the shared contract double: a persistent
   layout's miss is stored as a hint for page B, and nothing is stored for B without the call.
 
 - **Server messages: `serverMessage`, `renderServerMessage` and `resolveServerMessages`.** The
@@ -78,7 +118,8 @@ seed?, storage? })` for `hooks.server.ts`: it opens the core's request scope for
   renders the whole response inside it — `load`, its awaits, every component — writes the scope's
   catalog into the page and closes the scope after the response, sending the request's missed
   phrases then when the key may write. `langsys-js-svelte/kit` gains `hydrateFromServer()` for
-  `hooks.client.ts`, which puts that catalog in place before hydration. Inside a scope `$t`,
+  `hooks.client.ts`, which puts that catalog in place before hydration, together with the blocks
+  and phrases the server collected, so the browser never sends those again. Inside a scope `$t`,
   `$currentlyLoadedLocale` and `$sTranslations` all read the request's own locale and catalog.
   Measured: 800 concurrent Italian and German renders that await before they read serve none in
   the wrong locale (400 without a scope); a hydrated page keeps the served text; with a 3 s flush,
@@ -228,7 +269,8 @@ LangsysApp.t` was `false` while the core's own `t` was stable. That identity is 
     - `writeEnabled` — a `Readable<boolean | undefined>`. The tri-state is load-bearing:
       `undefined` means _not known yet_, and is what the store reports during SSR and throughout
       hydration. Treating it as `false` tells a write-enabled session it is read-only, which it
-      cannot recover from without a reload.
+      cannot recover from without a reload. A one-shot read (`get(writeEnabled)`) is the live value
+      from the first macrotask after the first read.
     - `writeGrant` on `init()` — for authenticated apps, whose backend mints a short-lived JWT at
       login that the SDK sends as `X-Write-Grant`. Accepts the base SDK's `string` or provider
       function, **plus a Svelte store**, which is this binding's only addition to the surface.

@@ -8,4 +8,5 @@
 </script>
 
 <Translate category="VAR" tag="div"><p id="greet">Hello {user.name}, welcome back</p></Translate>
+<!-- eslint-disable-next-line svelte/no-at-html-tags -- constant markup written in this file -->
 <Translate category="VAR" tag="div"><div id="cms">{@html cms}</div></Translate>

@@ -70,39 +70,36 @@ function unnameable(shape: ExpressionShape): boolean {
 }
 
 export interface Occurrence {
-    /** Identifies the expression: the same key is the same value, so one placeholder. */
-    key: string;
+    /** This occurrence, in source order. Whether two occurrences are one value is the core's call. */
+    id: number;
     expr: Expr;
     /** A name the developer gave this expression; it is used as written. */
     explicit?: string;
 }
 
 export interface Naming {
-    /** Each occurrence key's placeholder name. */
-    names: Map<string, string>;
-    /** The keys named `value…` because nothing could be derived — each one a build warning. */
-    unnameable: string[];
+    /** Each occurrence's placeholder name. */
+    names: Map<number, string>;
+    /** The occurrences named `value…` because nothing could be derived — each one a build warning. */
+    unnameable: number[];
 }
 
 /**
- * Names every distinct expression in one phrase (one block's params), in source order.
+ * Names every expression in one phrase (one block's params), in source order.
+ *
+ * Every occurrence goes to the core as written, and its names are used as they come back: an
+ * expression that names itself is one placeholder wherever it repeats, and one that does not is a
+ * placeholder of its own each time, since `{a + b}` twice cannot be told from `{i++}` twice.
  *
  * `explicit` holds the names the developer wrote without an expression — `%name%` in the text, keys
  * of a literal `params` — which always win: they are handed to the core as taken names, so a
  * derived name that meets one is a collision like any other.
  */
 export function assignNames(occurrences: readonly Occurrence[], explicit: ReadonlySet<string> = new Set()): Naming {
-    const distinct: Occurrence[] = [];
-    const seen = new Set<string>();
-    for (const o of occurrences) {
-        if (seen.has(o.key)) continue;
-        seen.add(o.key);
-        distinct.push(o);
-    }
     const written = [...explicit].map((name) => ({ shape: { identifier: name }, explicit: name }));
-    const derived = derivePlaceholderNames([...written, ...distinct.map((o) => ({ shape: shapeOf(o.expr), explicit: o.explicit }))]).slice(written.length);
+    const derived = derivePlaceholderNames([...written, ...occurrences.map((o) => ({ shape: shapeOf(o.expr), explicit: o.explicit }))]).slice(written.length);
     return {
-        names: new Map(distinct.map((o, i) => [o.key, derived[i]])),
-        unnameable: distinct.filter((o) => !o.explicit && unnameable(shapeOf(o.expr))).map((o) => o.key),
+        names: new Map(occurrences.map((o, i) => [o.id, derived[i]])),
+        unnameable: occurrences.filter((o) => !o.explicit && unnameable(shapeOf(o.expr))).map((o) => o.id),
     };
 }

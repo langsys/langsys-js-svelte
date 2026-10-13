@@ -77,6 +77,11 @@ export { writeEnabled } from './stores.js';
 // API client (vanilla — no Svelte concerns)
 export { LangsysAppAPI } from 'langsys-js-typescript';
 
+// The client has no credentials (WIRE-4): an explicit write throws it, and so do `$t()` and a
+// block's registration under `requireCredentials`. Re-exported by reference, so `instanceof`
+// matches what the core throws.
+export { LangsysConfigurationError } from 'langsys-js-typescript';
+
 // Locale canonicalization (vanilla). Canonicalizes via `Intl.getCanonicalLocales`
 // and then LOWERCASES: 'en_us', 'en-US' and 'EN-us' all become 'en-us'. Lowercase
 // is the wire form the spec requires (WIRE-3) and the form used internally for

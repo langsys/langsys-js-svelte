@@ -3,6 +3,7 @@
      * VAR-6 testbed: this route is compiled WITH the transform (see `varTransform` in vite.config.ts),
      * and `/fixture/var-plain` with the same first block WITHOUT it. Driven by `_dev_/e2e/var.mjs`.
      */
+    import { onMount } from 'svelte';
     import { page } from '$app/state';
     import { LangsysApp, Phrase, Translate, currentlyLoadedLocale } from '$lib/index.js';
 
@@ -17,6 +18,10 @@
     const later = new Promise<string>((resolve) => setTimeout(() => resolve('Loaded after a moment'), Number(params.get('await') ?? 1500)));
     // The core's header for the app's own API calls, read again whenever the loaded locale changes.
     const acceptLanguage = $derived($currentlyLoadedLocale ? (LangsysApp.localeHeaders()['Accept-Language'] ?? '(none)') : '(no locale yet)');
+    // Rendered only in the browser: what the client registers on its own (the control for "the
+    // client does not resend what the server collected").
+    let mounted = $state(false);
+    onMount(() => (mounted = true));
 </script>
 
 <Translate category="VAR" tag="div"><p id="greet">Hello {user.name}, welcome back</p></Translate>
@@ -30,10 +35,15 @@
         {#each items as i (i)}<li>Item {i}</li>{/each}
     </ul></Translate
 >
+<!-- eslint-disable-next-line svelte/no-at-html-tags -- constant markup written in this file -->
 <Translate category="VAR" tag="div"><div id="cms">{@html cms}</div></Translate>
 <Translate category="VAR" tag="div"
     ><p id="mixed">Hi {user.name}</p>
+    <!-- eslint-disable-next-line svelte/no-at-html-tags -- constant markup written in this file -->
     {@html cmsMixed}</Translate
 >
 <Translate category="VAR" tag="div"><p id="awaiting">{#await later}Loading…{:then text}{text}{/await}</p></Translate>
 <p id="locale-headers">Accept-Language: {acceptLanguage}</p>
+{#if mounted}
+    <Translate category="VAR" tag="div"><p id="client-only">Rendered in the browser for {user.name}</p></Translate>
+{/if}

@@ -10,7 +10,10 @@ import type { BlockNode, ParamPrimitive } from 'langsys-js-typescript';
  * block whose only dynamic parts are `{@html}` insertions: raw HTML is content, which the DOM
  * reader registers (VAR-7).
  */
-export type TransformOutput = { tree: BlockNode[]; dyn: Array<Record<string, unknown> | null>; params: Record<string, unknown> } | { fallback: string };
+export type TransformOutput =
+    | { tree: BlockNode[]; dyn: Array<Record<string, unknown> | null>; params: Record<string, unknown> }
+    | { fallback: string }
+    | { content: 'raw-html' };
 
 /** The reason `warnUnregistered` reports when a block reaches the runtime without the transform. */
 export const NO_TRANSFORM = 'svelte-transform-missing: add langsysPreprocess() from langsys-js-svelte/preprocess to svelte.config.js';

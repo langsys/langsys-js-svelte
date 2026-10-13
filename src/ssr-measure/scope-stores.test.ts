@@ -14,16 +14,23 @@ const text = (body: string, id: string) => body.match(new RegExp(`<p id="${id}">
 
 afterEach(() => sTranslations.set({} as iCategories));
 
-describe('exported stores inside an Italian request scope, with the process seeded German', () => {
+describe('every server-render read inside an Italian request scope, with the process seeded German', () => {
     it('measures each store', async () => {
         sTranslations.set(catalog('Preise'));
         currentlyLoadedLocale.set('de-de');
         const scope = await createRequestScope({ locale: 'it-it', catalog: catalog('Prezzi') });
         const body = scope.run(() => render(ScopeStores).body);
-        const measured = { t: text(body, 't'), locale: text(body, 'locale'), catalog: text(body, 'catalog') };
-        // All three follow the scope. A `$store` read is a subscription, and inside a scope the
-        // core answers a subscriber's first emission — like `get()` — from the scope.
-        expect(measured).toEqual({ t: 'Prezzi', locale: 'it-it', catalog: 'Prezzi' });
+        const measured = {
+            t: text(body, 't'),
+            locale: text(body, 'locale'),
+            catalog: text(body, 'catalog'),
+            message: text(body, 'message'),
+            header: text(body, 'header'),
+        };
+        // Every read follows the scope. A `$store` read is a subscription, and inside a scope the
+        // core answers a subscriber's first emission — like `get()` — from the scope; the
+        // server-message store and the locale header read through it too.
+        expect(measured).toEqual({ t: 'Prezzi', locale: 'it-it', catalog: 'Prezzi', message: 'Prezzi', header: 'it-it' });
 
         const read = scope.run(() => {
             let subscribed: unknown;
@@ -35,15 +42,17 @@ describe('exported stores inside an Italian request scope, with the process seed
         await scope.close();
     });
 
-    it('control: outside any scope all three read the process', () => {
+    it('control: outside any scope every read follows the process', () => {
         sTranslations.set(catalog('Preise'));
         currentlyLoadedLocale.set('de-de');
         const body = render(ScopeStores).body;
-        expect({ t: text(body, 't'), locale: text(body, 'locale'), catalog: text(body, 'catalog') }).toEqual({
-            t: 'Preise',
-            locale: 'de-de',
-            catalog: 'Preise',
-        });
+        expect({
+            t: text(body, 't'),
+            locale: text(body, 'locale'),
+            catalog: text(body, 'catalog'),
+            message: text(body, 'message'),
+            header: text(body, 'header'),
+        }).toEqual({ t: 'Preise', locale: 'de-de', catalog: 'Preise', message: 'Preise', header: 'de-de' });
     });
 });
 

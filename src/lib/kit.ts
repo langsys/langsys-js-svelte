@@ -3,7 +3,7 @@
  * imports `$app/*` and keeps working in Svelte apps that do not use SvelteKit.
  */
 import { afterNavigate } from '$app/navigation';
-import { LangsysApp, notifyNavigation, type iCategories } from 'langsys-js-typescript';
+import { LangsysApp, notifyNavigation, type RequestSeed } from 'langsys-js-typescript';
 import { SEED_GLOBAL } from './kit/seed.js';
 
 /**
@@ -33,11 +33,14 @@ export function syncNavigation(): void {
  *
  * It reads the seed the server wrote for this request and hands it to the core's synchronous
  * `seedCatalog`, so the first client render reads the catalog the server rendered with and agrees
- * with the served HTML. Returns whether a seed was found.
+ * with the served HTML, and nothing the server already sent is sent again. Returns whether a seed
+ * was found.
  */
 export function hydrateFromServer(): boolean {
-    const seed = (globalThis as unknown as Record<string, { locale: string; catalog: iCategories } | undefined>)[SEED_GLOBAL];
+    const seed = (globalThis as unknown as Record<string, RequestSeed | undefined>)[SEED_GLOBAL];
     if (!seed) return false;
-    LangsysApp.seedCatalog(structuredClone(seed.catalog), seed.locale);
+    // The whole seed, not only its catalog: the blocks and phrases the server rendered, with what
+    // it already collected and sends itself, so the client never sends those again (SRV-3).
+    LangsysApp.seedCatalog(structuredClone(seed.catalog), seed.locale, structuredClone(seed));
     return true;
 }
