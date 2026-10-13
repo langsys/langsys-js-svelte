@@ -204,43 +204,52 @@ describe('VAR-6 — the preprocessor', () => {
         expect(code).toContain(`{$t("Hi {name}", "UI", { "name": (user.name) })}`);
     });
 
+    /** A rewritten `$t(...)` run against the core's `t`; `calls` holds what the core received. */
+    const runT = (call: string, scope: Record<string, unknown>, { async = false } = {}) => {
+        const core = tSignal.get() as unknown as (...a: unknown[]) => string;
+        const calls: unknown[][] = [];
+        const t = (...a: unknown[]) => (calls.push(a), core(...a));
+        const code = run('', `const r = ${call};`).code;
+        const expr = code.slice(code.indexOf('const r = ') + 'const r = '.length, code.indexOf(';</script>'));
+        const body = async ? `return (async () => ${expr})();` : `return ${expr};`;
+        return { result: new Function('$t', ...Object.keys(scope), body)(t, ...Object.values(scope)), calls };
+    };
+
     it("a $t template literal keeps the core's argument order whatever the second argument is", () => {
         // The core reads a string second argument as the category and anything else as the params.
-        const t = tSignal.get() as unknown as (...a: unknown[]) => string;
-        const rewritten = (call: string, scope: Record<string, unknown>) => {
-            const code = run('', `const r = ${call};`).code;
-            const expr = code.slice(code.indexOf('const r = ') + 'const r = '.length, code.indexOf(';</script>'));
-            return new Function('$t', ...Object.keys(scope), `return ${expr};`)(t, ...Object.values(scope));
-        };
-        expect(rewritten('$t(`Hello ${x}`, { other: 1 })', { x: 'Ana' })).toBe('Hello Ana');
-        expect(rewritten('$t(`Hello ${x}`, "UI", { other: 1 })', { x: 'Ana' })).toBe('Hello Ana');
-        expect(rewritten('$t(`Hello ${x}`)', { x: 'Ana' })).toBe('Hello Ana');
+        expect(runT('$t(`Hello ${x}`, { other: 1 })', { x: 'Ana' }).result).toBe('Hello Ana');
+        expect(runT('$t(`Hello ${x}`, "UI", { other: 1 })', { x: 'Ana' }).result).toBe('Hello Ana');
+        expect(runT('$t(`Hello ${x}`)', { x: 'Ana' }).result).toBe('Hello Ana');
         // Not knowable at build time: decided when the call runs, as the core decides it.
-        expect(rewritten('$t(`Hello ${x}`, second)', { x: 'Ana', second: { other: 1 } })).toBe('Hello Ana');
-        expect(rewritten('$t(`Hello ${x}`, second)', { x: 'Ana', second: 'UI' })).toBe('Hello Ana');
-        expect(rewritten('$t(`Hello ${x}`, second)', { x: 'Ana', second: undefined })).toBe('Hello Ana');
+        expect(runT('$t(`Hello ${x}`, second)', { x: 'Ana', second: { other: 1 } }).result).toBe('Hello Ana');
+        expect(runT('$t(`Hello ${x}`, second)', { x: 'Ana', second: 'UI' }).result).toBe('Hello Ana');
+        expect(runT('$t(`Hello ${x}`, second)', { x: 'Ana', second: undefined }).result).toBe('Hello Ana');
+    });
+
+    it('a $t template literal hands the core its other arguments as the call wrote them', () => {
+        const received = (call: string, scope: Record<string, unknown>) => runT(call, { x: 'Ana', ...scope }).calls[0];
         // `null` is an object to the core, so it is the params.
-        expect(rewritten('$t(`Hello ${x}`, null)', { x: 'Ana' })).toBe('Hello Ana');
-        expect(rewritten('$t(`Hello ${x}`, second)', { x: 'Ana', second: null })).toBe('Hello Ana');
-        // Spread and comma arguments reach the core as the call wrote them.
-        expect(rewritten('$t(`Hello ${x}`, "UI", ...rest)', { x: 'Ana', rest: [{ other: 1 }] })).toBe('Hello Ana');
-        expect(rewritten('$t(`Hello ${x}`, ...rest)', { x: 'Ana', rest: ['UI', { other: 1 }] })).toBe('Hello Ana');
-        expect(rewritten('$t(`Hello ${x}`, ...rest)', { x: 'Ana', rest: [{ other: 1 }] })).toBe('Hello Ana');
-        expect(rewritten('$t(`Hello ${x}`, (a, b))', { x: 'Ana', a: { other: 1 }, b: 'UI' })).toBe('Hello Ana');
+        expect(received('$t(`Hello ${x}`, null)', {})).toEqual(['Hello {x}', { x: 'Ana' }]);
+        expect(received('$t(`Hello ${x}`, second)', { second: null })).toEqual(['Hello {x}', { x: 'Ana' }]);
+        expect(received('$t(`Hello ${x}`, "UI", ...rest)', { rest: [{ other: 1 }] })).toEqual(['Hello {x}', 'UI', { other: 1, x: 'Ana' }]);
+        expect(received('$t(`Hello ${x}`, ...rest)', { rest: ['UI', { other: 1 }] })).toEqual(['Hello {x}', 'UI', { other: 1, x: 'Ana' }]);
+        expect(received('$t(`Hello ${x}`, ...rest)', { rest: [{ other: 1 }] })).toEqual(['Hello {x}', { other: 1, x: 'Ana' }]);
+        // A comma expression is one argument: its last value.
+        expect(received('$t(`Hello ${x}`, (a, b))', { a: { other: 1 }, b: 'UI' })).toEqual(['Hello {x}', 'UI', { x: 'Ana' }]);
+    });
+
+    it('a $t template literal keeps an awaited argument in the caller', async () => {
+        const { result } = runT('$t(`Hello ${x}`, await category())', { x: 'Ana', category: async () => 'UI' }, { async: true });
+        expect(await result).toBe('Hello Ana');
     });
 
     it("a $t template literal's own values win over params of the same name, and are read first", () => {
-        const t = tSignal.get() as unknown as (...a: unknown[]) => string;
-        const rewritten = (call: string, scope: Record<string, unknown>) => {
-            const code = run('', `const r = ${call};`).code;
-            const expr = code.slice(code.indexOf('const r = ') + 'const r = '.length, code.indexOf(';</script>'));
-            return new Function('$t', ...Object.keys(scope), `return ${expr};`)(t, ...Object.values(scope));
-        };
-        expect(rewritten('$t(`Hello ${name}`, extra)', { name: 'Ana', extra: { name: 'Zed' } })).toBe('Hello Ana');
-        expect(rewritten('$t(`Hello ${name}`, "UI", extra)', { name: 'Ana', extra: { name: 'Zed' } })).toBe('Hello Ana');
+        expect(runT('$t(`Hello ${name}`, extra)', { name: 'Ana', extra: { name: 'Zed' } }).result).toBe('Hello Ana');
+        expect(runT('$t(`Hello ${name}`, "UI", extra)', { name: 'Ana', extra: { name: 'Zed' } }).result).toBe('Hello Ana');
+        expect(runT('$t(`Hello ${name}`, { [k]: "Bob" })', { name: 'Ana', k: 'name' }).result).toBe('Hello Ana');
         const order: string[] = [];
         const read = (v: string) => (order.push(v), v);
-        rewritten('$t(`${read("template")}`, read("second"))', { read });
+        runT('$t(`${read("template")}`, read("second"))', { read });
         expect(order).toEqual(['template', 'second']);
     });
 

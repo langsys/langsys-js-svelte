@@ -50,22 +50,27 @@ for (const [tag, dir] of [
 // Row 2: the 3.6.17 surface, read from the tag.
 const published = execFileSync('git', ['-C', REPO, 'show', 'v3.6.17:src/lib/index.ts']).toString();
 const tip = readFileSync(resolve(REPO, 'src/lib/index.ts'), 'utf8');
-const exportBlocks = [...published.matchAll(/export\s+(?:type\s+)?\{([^}]*)\}/g)].flatMap((b) =>
-    b[1]
-        .split(',')
-        .map((s) =>
-            s
-                .trim()
-                .split(/\s+as\s+/)
-                .pop()
-        )
-        .filter(Boolean)
-);
-const declared = [...published.matchAll(/export\s+(?:const|interface|type|class)\s+(\w+)/g)].map((m) => m[1]);
-const names = [...new Set([...exportBlocks, ...declared])];
+/** The names a module's export statements publish: `export { a, b as c }` blocks and declarations. */
+const exported = (source) => {
+    const fromBlocks = [...source.matchAll(/export\s+(?:type\s+)?\{([^}]*)\}/g)].flatMap((b) =>
+        b[1]
+            .split(',')
+            .map((s) =>
+                s
+                    .trim()
+                    .split(/\s+as\s+/)
+                    .pop()
+            )
+            .filter(Boolean)
+    );
+    const declared = [...source.matchAll(/export\s+(?:const|interface|type|class|function)\s+(\w+)/g)].map((m) => m[1]);
+    return new Set([...fromBlocks, ...declared]);
+};
+const names = [...exported(published)];
+const tipNames = exported(tip);
 const members = [...published.matchAll(/public\s+(?:get\s+)?(\w+)\s*\(/g)].map((m) => m[1]);
 const core = await load(process.env.NEW_CORE);
-const missingNames = (list) => list.filter((n) => !new RegExp(`\\b${n}\\b`).test(tip));
+const missingNames = (list) => list.filter((n) => !tipNames.has(n));
 const missingMembers = (list) => list.filter((k) => !(k in core.LangsysApp));
 out['3.6.17 surface at the tip'] = {
     names: names.length,

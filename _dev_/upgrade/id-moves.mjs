@@ -20,7 +20,7 @@
 // blockContentMatches and both attribute lists) are bundled from each core's src with the new
 // core's esbuild.
 
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -71,6 +71,7 @@ const OLD = await import(pathToFileURL(resolve(OLD_CORE, 'dist/index.mjs')).href
 const NEW = await import(pathToFileURL(resolve(NEW_CORE, 'dist/index.mjs')).href);
 const OLD_H = await import(pathToFileURL(resolve(BUILD, 'helpers-old.mjs')).href);
 const NEW_H = await import(pathToFileURL(resolve(BUILD, 'helpers-new.mjs')).href);
+rmSync(BUILD, { recursive: true, force: true }); // loaded; the bundles are not needed again
 
 const coreSha = (dir) => {
     try {
@@ -88,7 +89,7 @@ function host(html) {
 
 // How each core's `Translate` would register this host (no caller custom_id).
 //  0.6.5 : exactly one token -> t(token, category) phrase; otherwise a content block.
-//  e1c3  : a marker-only unit registers nothing; one token that is the unit's single
+//  new   : a marker-only unit registers nothing; one token that is the unit's single
 //          text node, or a single marked run, -> phrase; otherwise a content block.
 function oldRoute(tokens) {
     return tokens.length === 1 ? 'phrase' : 'block';

@@ -55,6 +55,16 @@ async function visit(path) {
 }
 {
     const { page, errors } = await visit('/fixture/var-plain?key=&require=1&user=Ana');
+    const shown = await page.evaluate(() => ({
+        multi: document.querySelector('#plain-multi')?.textContent,
+        late: document.querySelector('#plain-late')?.textContent,
+        phrase: [...document.querySelectorAll('[data-ls-phrase]')].map((e) => e.textContent).join(' | '),
+    }));
+    check(
+        shown.multi === 'First line' && shown.late === 'Mounted after init' && /Signed in as Ana/.test(shown.phrase),
+        'premise: the read-only blocks rendered, the late one after init()',
+        JSON.stringify(shown)
+    );
     check(errors.length === 0, 'a register: false block never fails: one phrase, several, a <Phrase>, before and after init()', JSON.stringify(errors));
     await page.close();
 }

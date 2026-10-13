@@ -481,8 +481,10 @@ write-enabled session it is read-only — a state it cannot recover from without
 
 `$writeEnabled` in a component reads the live value from the first moment after hydration. A
 one-shot read, `get(writeEnabled)`, does too once a component has rendered the store, or once the
-first page has mounted in a SvelteKit app that calls `syncNavigation()`. Before then, as in a
-universal `load`, it is `undefined`, as the server rendered it.
+first page has mounted in a SvelteKit app that calls `syncNavigation()`; in an app with neither,
+it stays `undefined`. Before then, as in a universal `load`, it is `undefined`, as the server
+rendered it. In a `load`, read it with `get()`: a subscription held there counts as a render and
+ends the guard before the page hydrates.
 
 For authenticated apps, your backend mints a short-lived JWT at login and the SDK sends it
 as `X-Write-Grant`, which lets the server treat the session as write-enabled:

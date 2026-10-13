@@ -15,18 +15,21 @@ change in the app, and one moves catalog entries:
   compares with the lowercase form instead. The app's own locale store is never rewritten.
 - **`detectPreferredLocale()` returns `false`** when nothing in the supported list matches, where
   it returned the visitor's own first preference.
-- **Some blocks are registered under a new id and render source text until translated again.** The
-  core's tokenizer converged with the other SDKs, so a block's id moves when it holds: an element
-  whose only text is an attribute (`<input placeholder="…">`), an attribute value with a line break
-  or a run of spaces, one of twelve attributes now translated (`data-tooltip`, `data-bs-title`,
-  `data-confirm` and others), a nested `<Translate>`, `<script>`, `<style>`, `<noscript>` or `<math>`,
-  or a C0 control character. The translation stored under the old id stays in the catalog, unused.
-  With the transform the block registers under its new id; without it, nothing registers it.
+- **Some blocks are looked up under a new id and render source text until translated again.** The
+  core's tokenizer converged with the other SDKs, so a block's id moves when it holds an attribute
+  value with a line break or a run of spaces, one of twelve attributes now translated
+  (`data-tooltip`, `data-bs-title`, `data-confirm` and others), a nested `<Translate>`, `<script>`,
+  `<style>`, `<noscript>` or `<math>`, or a C0 control character. A block whose only text is one
+  attribute (`<input placeholder="…">`) keeps its id but is looked up as a block, where 3.6.17
+  stored it as a phrase. The old translation stays in the catalog, unused. With the transform the
+  block registers again; without it, nothing registers it.
 
 Visible and harmless: each visitor's first page load fetches the catalog once more, because the
 cache is now keyed by project and locale; a block registers after mount once the first catalog
-has arrived, and a block on the core's DOM class once it has also been stable for 500 ms; and a `write` or `ip_write` key the server resolves read-only logs "this
-session cannot write" once per page load, with debug off.
+has arrived, and a block on the core's DOM class once it has also been stable for 500 ms. With
+debug off, a `write` or `ip_write` key the server resolves read-only logs "this session cannot
+write" once per page load, and a phrase the message formatter cannot render logs that it was
+rendered by the SDK's own branch selection.
 
 ### Changed
 
@@ -273,7 +276,8 @@ LangsysApp.t` was `false` while the core's own `t` was stable. That identity is 
       hydration. Treating it as `false` tells a write-enabled session it is read-only, which it
       cannot recover from without a reload. A one-shot read (`get(writeEnabled)`) is the live value
       once a component has rendered the store, or once the first page has mounted in an app that
-      calls `syncNavigation()`; in a universal `load` it is `undefined`, as the server rendered it.
+      calls `syncNavigation()`, and stays `undefined` in an app with neither; in a universal `load`
+      it is `undefined`, as the server rendered it.
     - `writeGrant` on `init()` — for authenticated apps, whose backend mints a short-lived JWT at
       login that the SDK sends as `X-Write-Grant`. Accepts the base SDK's `string` or provider
       function, **plus a Svelte store**, which is this binding's only addition to the surface.

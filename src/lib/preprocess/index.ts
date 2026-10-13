@@ -373,7 +373,8 @@ class Transform {
         // The core reads an object second argument (`null` included) as the params and anything else
         // as the category. Literals are decided here: an object literal whose keys are all written,
         // or a string. Anything else — a variable, a spread, a call — is decided when the call runs.
-        const literalObject = (n: Node | undefined) => n?.type === 'ObjectExpression' && (n.properties as Node[]).every((p) => p.type === 'Property');
+        const literalObject = (n: Node | undefined) =>
+            n?.type === 'ObjectExpression' && (n.properties as Node[]).every((p) => p.type === 'Property' && !p.computed);
         const literalString = (n: Node) =>
             (n.type === 'Literal' && typeof n.value === 'string') || (n.type === 'TemplateLiteral' && (n.expressions as Node[]).length === 0);
         const kind =
@@ -404,11 +405,12 @@ class Transform {
         if (kind === 'params') return `${callee}(${phrase}, ${withParams(second)})`;
         if (kind === 'category') return `${callee}(${phrase}, ${this.code(second)}, ${withParams(third)})`;
         // The template's values are read first, as the call wrote them, and win over params of the same
-        // name; the other arguments reach the core as written, spreads included.
+        // name; the other arguments reach the core as written, spreads included. Both are arguments of
+        // the call, so an `await` or `yield` in them stays in the caller.
         const args = rest.map((a) => (a.type === 'SpreadElement' ? `...(${this.code(a.argument as Node)})` : `(${this.code(a)})`)).join(', ');
         return (
-            `((__lsV) => ((__lsA, ...__lsR) => typeof __lsA === 'object' ` +
-            `? ${callee}(${phrase}, { ...__lsA, ...__lsV }) : ${callee}(${phrase}, __lsA, { ...__lsR[0], ...__lsV }))(${args}))(${withParams(undefined)})`
+            `((__lsV, __lsA, ...__lsR) => typeof __lsA === 'object' ` +
+            `? ${callee}(${phrase}, { ...__lsA, ...__lsV }) : ${callee}(${phrase}, __lsA, { ...__lsR[0], ...__lsV }))(${withParams(undefined)}, ${args})`
         );
     }
 

@@ -44,7 +44,10 @@ const isBrowser = typeof window !== 'undefined';
  * A render is a subscription still held once the task that made it has run. A
  * one-shot read — `get(writeEnabled)`, which subscribes and unsubscribes at once —
  * is not one: the same read in a universal `load` happens before hydration, so it
- * reports "unknown" and leaves the guard on for the render that follows.
+ * reports "unknown" and leaves the guard on for the render that follows. A
+ * subscription a `load` holds is indistinguishable from a render, so the README
+ * tells a `load` to use `get()`. `syncNavigation()` also ends the pass, once
+ * SvelteKit has mounted the first page.
  */
 let pastHydration = false;
 
