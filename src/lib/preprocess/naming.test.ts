@@ -5,7 +5,7 @@ import vectorFile from '../../../vectors/var-naming-vectors.json';
 
 /**
  * VAR-2, run on the shared naming vectors (`vectors/var-naming-vectors.json`, vendored byte-exact
- * from the JS core, blob da9cf3d5). The naming is the core's; what these rows pin here is that
+ * from the JS core, blob 0513e1cb). The naming is the core's; what these rows pin here is that
  * Svelte's AST maps onto each row's shape, and that the names come out as the row says.
  */
 
@@ -31,7 +31,7 @@ function names(sources: string[], explicit: Array<string | undefined> = [], take
 
 describe('VAR-2 — the shared naming vectors', () => {
     it('are the vendored file, with every row the spec table asks for', () => {
-        expect(vectors.cases.length).toBe(31);
+        expect(vectors.cases.length).toBe(32);
     });
 
     it.each(vectors.cases.map((c) => [c.id, c] as const))('%s', (_, c) => {

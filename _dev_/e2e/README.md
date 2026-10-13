@@ -202,10 +202,10 @@ node _dev_/e2e/var.mjs
 
 Each needs only a freshly started `npm run dev`; the last two start the double themselves.
 
-- `_dev_/e2e/credentials.mjs` — `requireCredentials` with no key: every block that registers
-  surfaces a `LangsysConfigurationError`, mounted before `init()` or not, and the page shows the
-  text as written. Controls: the same page without `requireCredentials`, and a page without the
-  transform, whose blocks only read, surface nothing.
+- `_dev_/e2e/credentials.mjs` — `requireCredentials` with no key: the page's blocks surface
+  `LangsysConfigurationError`s, mounted before `init()` or not, and the page shows the text as
+  written, while `/fixture/var-plain`, whose blocks only read (`register: false`), surfaces nothing.
+  Control: the same page without `requireCredentials` surfaces nothing.
 - `_dev_/e2e/locale-race.mjs` — a locale switch overtaken by another: a slow French overtaken by a
   failing German leaves source and stores nothing under `de-de`; a slow Italian overtaken by a
   succeeding Portuguese shows Portuguese.

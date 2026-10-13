@@ -366,20 +366,25 @@ class Transform {
     }
 
     private tCall(call: Node): string {
-        const [template, second, third] = call.arguments as Node[];
+        const [template, ...rest] = call.arguments as Node[];
+        const [second, third] = rest;
         const quasis = template.quasis as Array<{ value: { cooked: string | null } }>;
         if (quasis.some((q) => q.value.cooked === null)) return this.content.slice(call.start, call.end);
-        // The core reads a string second argument as the category and anything else as the params.
-        // A literal is decided here; anything else is decided when the call runs, the same way.
-        const kind = !second
-            ? 'none'
-            : second.type === 'ObjectExpression'
-              ? 'params'
-              : (second.type === 'Literal' && typeof second.value === 'string') ||
-                  (second.type === 'TemplateLiteral' && (second.expressions as Node[]).length === 0)
-                ? 'category'
-                : 'unknown';
-        const params = kind === 'params' ? second : kind === 'unknown' ? undefined : third;
+        // The core reads an object second argument (`null` included) as the params and anything else
+        // as the category. Literals are decided here: an object literal whose keys are all written,
+        // or a string. Anything else — a variable, a spread, a call — is decided when the call runs.
+        const literalObject = (n: Node | undefined) => n?.type === 'ObjectExpression' && (n.properties as Node[]).every((p) => p.type === 'Property');
+        const literalString = (n: Node) =>
+            (n.type === 'Literal' && typeof n.value === 'string') || (n.type === 'TemplateLiteral' && (n.expressions as Node[]).length === 0);
+        const kind =
+            rest.length === 0
+                ? 'none'
+                : rest.length === 1 && literalObject(second)
+                  ? 'params'
+                  : literalString(second) && (rest.length === 1 || (rest.length === 2 && literalObject(third)))
+                    ? 'category'
+                    : 'runtime';
+        const params = kind === 'params' ? second : kind === 'category' ? third : undefined;
         const exprs = template.expressions as Expr[];
         const occurrences = exprs.map((expr, id) => ({ id, expr }));
         const explicit = new Set<string>();
@@ -392,14 +397,19 @@ class Transform {
         }
         const phrase = JSON.stringify(quasis.map((q, i) => q.value.cooked + (i < exprs.length ? `{${names.get(i)}}` : '')).join(''));
         const derived = [...new Map(occurrences.map((o) => [names.get(o.id)!, this.code(o.expr)])).entries()].map(([n, c]) => `${JSON.stringify(n)}: (${c})`);
-        const withParams = (spread: string | undefined) => `{ ${[...derived, ...(spread ? [`...(${spread})`] : [])].join(', ')} }`;
+        // A literal's keys are taken names, so a derived name never meets one.
+        const withParams = (literal: Node | undefined) => `{ ${[...derived, ...(literal ? [`...(${this.code(literal)})`] : [])].join(', ')} }`;
         const callee = this.content.slice(call.start, (call.callee as Node).end);
-        if (kind === 'params') return `${callee}(${phrase}, ${withParams(this.code(second))})`;
-        if (kind === 'unknown') {
-            const thirdCode = third ? this.code(third) : undefined;
-            return `((__lsArg) => typeof __lsArg === 'object' && __lsArg !== null ? ${callee}(${phrase}, ${withParams('__lsArg')}) : ${callee}(${phrase}, __lsArg, ${withParams(thirdCode)}))(${this.code(second)})`;
-        }
-        return `${callee}(${phrase}, ${second ? this.code(second) : 'undefined'}, ${withParams(third ? this.code(third) : undefined)})`;
+        if (kind === 'none') return `${callee}(${phrase}, undefined, ${withParams(undefined)})`;
+        if (kind === 'params') return `${callee}(${phrase}, ${withParams(second)})`;
+        if (kind === 'category') return `${callee}(${phrase}, ${this.code(second)}, ${withParams(third)})`;
+        // The template's values are read first, as the call wrote them, and win over params of the same
+        // name; the other arguments reach the core as written, spreads included.
+        const args = rest.map((a) => (a.type === 'SpreadElement' ? `...(${this.code(a.argument as Node)})` : `(${this.code(a)})`)).join(', ');
+        return (
+            `((__lsV) => ((__lsA, ...__lsR) => typeof __lsA === 'object' ` +
+            `? ${callee}(${phrase}, { ...__lsA, ...__lsV }) : ${callee}(${phrase}, __lsA, { ...__lsR[0], ...__lsV }))(${args}))(${withParams(undefined)})`
+        );
     }
 
     // ------------------------------------------------------------------

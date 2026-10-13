@@ -27,3 +27,7 @@ yarn.lock
 # would change the tree id and break the citation.
 /contract-fixture
 /vectors
+
+# The upgrade audit is one wide table for the same reason: padded, every row is the width of
+# the longest evidence cell.
+_dev_/upgrade/AUDIT.md

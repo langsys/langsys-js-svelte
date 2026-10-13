@@ -646,6 +646,42 @@
     "value",
     "value_2"
    ]
+  },
+  {
+   "id": "call-unspellable-callee-twice",
+   "why": "a call whose callee cannot be spelled has callee '' and does not identify its expression: getA()(n) and getB()(n) are two placeholders, each named from its argument",
+   "expressions": [
+    {
+     "source": "getA()(n)",
+     "shape": {
+      "call": {
+       "callee": "",
+       "args": [
+        {
+         "identifier": "n"
+        }
+       ]
+      }
+     }
+    },
+    {
+     "source": "getB()(n)",
+     "shape": {
+      "call": {
+       "callee": "",
+       "args": [
+        {
+         "identifier": "n"
+        }
+       ]
+      }
+     }
+    }
+   ],
+   "names": [
+    "n",
+    "n_2"
+   ]
   }
  ]
 }

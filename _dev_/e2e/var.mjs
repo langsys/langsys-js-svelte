@@ -30,6 +30,7 @@ if (process.argv.includes('--serve')) {
     const CART = 'You have {items_count} items';
     const PLAIN_ANA = 'Hello Ana, welcome back'; // what the plain route's DOM reads
     const cartBlock = generateCustomId('VAR', [CART, 'Add one']);
+    const PHOTO = 'Photo of {name}'; // a readable block inside a fallback block, its only text an attribute
     const SEED = {
         projects: [
             {
@@ -39,6 +40,7 @@ if (process.argv.includes('--serve')) {
                 phrases: [
                     { category: 'VAR', phrase: GREET, translations: { 'it-it': 'Ciao {name}, bentornato' } },
                     { category: 'VAR', phrase: PLAIN_ANA, translations: { 'it-it': 'Ciao Ana, bentornato' } },
+                    { category: 'VAR', phrase: PHOTO, translations: { 'it-it': 'Foto di {name}' } },
                 ],
                 blocks: [
                     {
@@ -49,6 +51,12 @@ if (process.argv.includes('--serve')) {
                             { phrase: CART, translations: { 'it-it': '{items_count, plural, one {Hai # articolo} other {Hai # articoli}}' } },
                             { phrase: 'Add one', translations: { 'it-it': 'Aggiungi' } },
                         ],
+                    },
+                    {
+                        category: 'VAR',
+                        custom_id: generateCustomId('VAR', [PHOTO]),
+                        content: '<img alt="Photo of {name}">',
+                        phrases: [{ phrase: PHOTO, translations: { 'it-it': 'Foto di {name}' } }],
                     },
                 ],
             },
@@ -89,6 +97,8 @@ if (process.argv.includes('--serve')) {
         greetId
     );
     check(text(html, 'cart') === 'Hai 1 articolo', 'served: the ICU plural the catalog holds, for 1', text(html, 'cart'));
+    const photoAlt = (html.match(/id="photo"[^>]*alt="([^"]*)"|alt="([^"]*)"[^>]*id="photo"/) ?? []).slice(1).find(Boolean);
+    check(photoAlt === 'Foto di Ana', 'premise: a readable block inside a fallback block is served translated', photoAlt);
     const five = await (await fetch(`${BASE}/fixture/var?locale=it-it&user=Ana&n=5&key=k-write`)).text();
     check(text(five, 'cart') === 'Hai 5 articoli', 'served: … and for 5', text(five, 'cart'));
     // The page, not the hydration seed: the seed carries the catalog's source keys by design.
@@ -232,6 +242,15 @@ if (process.argv.includes('--serve')) {
         (await it.textContent('#greet')) === 'Ciao Ana, bentornato',
         'VAR-7: a catalogued translation still renders without the transform',
         await it.textContent('#greet')
+    );
+
+    // The binding renders the nested block itself; the fallback around it must leave it alone.
+    const nested = await visit(`/fixture/var?user=Ana&key=k-write&locale=it-it&run=${RUN}-nested`);
+    await sleep(1500);
+    check(
+        (await nested.getAttribute('#photo', 'alt')) === 'Foto di Ana',
+        'MARK-4: after hydration, a readable block inside a fallback block keeps its value',
+        await nested.getAttribute('#photo', 'alt')
     );
 
     await browser.close();

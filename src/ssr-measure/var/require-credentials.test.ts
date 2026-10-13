@@ -7,11 +7,10 @@ import VarCredentials from './VarCredentials.svelte';
 
 /**
  * WIRE-4 under `requireCredentials`, on the server: `init()` without a key leaves the client
- * unconfigured. A server render registers only inside a request scope, where the core never
- * rejects, so no block surfaces anything during SSR — outside a scope or in one — and the served
- * bytes carry the text as written. In the browser each block's registration rejects and is left
- * unhandled (`_dev_/e2e/credentials.mjs`). Its own file: a second `init()` in one process is a
- * no-op.
+ * unconfigured. The core never rejects a server registration, inside a request scope or outside
+ * one, so no block surfaces anything during SSR and the served bytes carry the text as written.
+ * In the browser the page's blocks surface the error, left unhandled (`_dev_/e2e/credentials.mjs`).
+ * Its own file: a second `init()` in one process is a no-op.
  *
  * The runner's own unhandled-rejection listeners are set aside for the render and restored after,
  * so a rejection would be collected here rather than failing the run.

@@ -5,6 +5,7 @@
 import { afterNavigate } from '$app/navigation';
 import { LangsysApp, notifyNavigation, type RequestSeed } from 'langsys-js-typescript';
 import { SEED_GLOBAL } from './kit/seed.js';
+import { endHydrationSoon } from './stores.js';
 
 /**
  * Tell the SDK about every client-side route change (HINT-13).
@@ -16,11 +17,14 @@ import { SEED_GLOBAL } from './kit/seed.js';
  * content is looked up again at the new URL. It sends nothing itself.
  *
  * The initial page load is skipped: the first render already records its misses at the URL
- * it rendered on.
+ * it rendered on. It ends `writeEnabled`'s hydration pass instead.
  */
 export function syncNavigation(): void {
     afterNavigate(({ type }) => {
-        if (type !== 'enter') notifyNavigation();
+        // The first page has mounted, so hydration is over: `writeEnabled` reads live from here,
+        // for a one-shot `get()` too.
+        if (type === 'enter') endHydrationSoon();
+        else notifyNavigation();
     });
 }
 

@@ -109,7 +109,7 @@ Pass it to `init()` rather than calling `LangsysAppAPI.setBaseUrl()`. `setBaseUr
 
 `init()` without a project id, an API key or a locale store does not throw: it resolves `{ status: false, errors }` and leaves the client unconfigured, so a preview build or a test run without secrets still renders. `$t()` shows the source text with its params filled and makes no request, `<Translate>` and `<Phrase>` render the text as written, and a block's registration resolves skipped with reason `'not-configured'`. An explicit write, such as `LangsysAppAPI.createTranslatableItems`, throws `LangsysConfigurationError`, exported from this package by reference so `instanceof` matches. `LangsysApp.isConfigured()` reports the state.
 
-To fail loudly instead, pass `requireCredentials: true`. `$t()` then throws `LangsysConfigurationError` while the client is unconfigured, which during SSR fails the request. `<Translate>` and `<Phrase>` never throw while rendering. In the browser each block that registers rejects its registration with that error instead — a block mounted before `init()` once `init()` refuses — and the rejection is left unhandled on purpose, so it reaches the page's unhandled-rejection handler. A block that only reads the catalog (one without the transform, or a fallback) never fails. A server render registers blocks only inside a request scope (`createLangsysHandle`), where nothing rejects.
+To fail loudly instead, pass `requireCredentials: true`. `$t()` then throws `LangsysConfigurationError` while the client is unconfigured, which during SSR fails the request. `<Translate>` and `<Phrase>` never throw while rendering. In the browser a block that registers surfaces the error as a rejected promise instead — a block mounted before `init()` once `init()` refuses — left unhandled on purpose, so it reaches the page's unhandled-rejection handler. A block that only reads the catalog — one without the transform, or a fallback, both `register: false` — never fails: the option fails on the first `t()` call or registration. A server render registers blocks only inside a request scope (`createLangsysHandle`), where nothing rejects.
 
 ### SSR token strategy
 
@@ -478,6 +478,11 @@ network and read-only from another — so nothing on the client can infer it.
 `undefined` means _not known yet_ and is genuinely different from `false`. It is what the
 store reports during SSR and throughout hydration, and treating it as `false` would tell a
 write-enabled session it is read-only — a state it cannot recover from without a reload.
+
+`$writeEnabled` in a component reads the live value from the first moment after hydration. A
+one-shot read, `get(writeEnabled)`, does too once a component has rendered the store, or once the
+first page has mounted in a SvelteKit app that calls `syncNavigation()`. Before then, as in a
+universal `load`, it is `undefined`, as the server rendered it.
 
 For authenticated apps, your backend mints a short-lived JWT at login and the SDK sends it
 as `X-Write-Grant`, which lets the server treat the session as write-enabled:

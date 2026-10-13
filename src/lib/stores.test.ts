@@ -163,16 +163,26 @@ describe('writeEnabled — teardown', () => {
 });
 
 describe('writeEnabled — one-shot reads', () => {
-    it("svelte/store's get() reads the live value from the first macrotask on, with nothing held", async () => {
+    it('a read before anything renders the store — a universal load — leaves the hydration render its "unknown"', async () => {
+        const { get } = await import('svelte/store');
+        signal.set(true); // `await init()` in the load resolved authorization first
+        const writeEnabled = await loadStore({ browser: true });
+
+        expect(get(writeEnabled)).toBeUndefined();
+        await vi.runAllTimersAsync(); // the rest of the load, then the mount
+
+        const seen: (boolean | undefined)[] = [];
+        writeEnabled.subscribe((v) => seen.push(v)); // the hydration render
+        expect(seen).toEqual([undefined]);
+    });
+
+    it("svelte/store's get() reads the live value once a component has rendered the store", async () => {
         const { get } = await import('svelte/store');
         signal.set(true);
         const writeEnabled = await loadStore({ browser: true });
 
-        // The first read is part of the hydration pass, so it reports the server's "unknown".
-        expect(get(writeEnabled)).toBeUndefined();
-        // get() subscribes and unsubscribes at once; the hydration pass still ends a tick later.
-        vi.advanceTimersByTime(0);
+        writeEnabled.subscribe(() => {}); // the hydration render, held
+        await vi.runAllTimersAsync();
         expect(get(writeEnabled)).toBe(true);
-        expect(signal.subscriberCount()).toBe(0);
     });
 });

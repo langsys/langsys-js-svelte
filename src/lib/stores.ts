@@ -29,26 +29,28 @@ import { writeEnabled as vanillaWriteEnabled } from 'langsys-js-typescript';
 const isBrowser = typeof window !== 'undefined';
 
 /**
- * Flips on the first macrotask after the first subscribe (`endHydrationSoon`).
+ * Flips on the first macrotask after the first render that reads the store
+ * (`endHydrationSoon`).
  *
- * Deliberately keyed on the first SUBSCRIBE, not on module init. Timing from
- * module init is wrong precisely in the case this store exists for: an awaited
- * universal `load` runs several macrotasks' worth of network work between
- * importing this module and mounting the app, so a timer started at import has
- * long since fired by the time hydration renders, and the guard would be off
- * exactly when it was needed. The first subscribe, by contrast, happens *during*
- * the hydration render — so a macrotask scheduled from it lands after hydration
- * completes, whatever delayed the mount.
+ * Deliberately keyed on a render, not on module init. Timing from module init is
+ * wrong precisely in the case this store exists for: an awaited universal `load`
+ * runs several macrotasks' worth of network work between importing this module
+ * and mounting the app, so a timer started at import has long since fired by the
+ * time hydration renders, and the guard would be off exactly when it was needed.
+ * A render's subscription, by contrast, is made *during* the hydration render —
+ * so a macrotask scheduled from it lands after hydration completes, whatever
+ * delayed the mount.
+ *
+ * A render is a subscription still held once the task that made it has run. A
+ * one-shot read — `get(writeEnabled)`, which subscribes and unsubscribes at once —
+ * is not one: the same read in a universal `load` happens before hydration, so it
+ * reports "unknown" and leaves the guard on for the render that follows.
  */
 let pastHydration = false;
 
-/**
- * Ends the hydration pass on the first macrotask after the first subscribe, whatever happens to
- * that subscription. A one-shot read — `get(writeEnabled)` subscribes and unsubscribes at once —
- * still starts the clock, so the next read sees the live value instead of "unknown" forever.
- */
 let hydrationEnding = false;
-function endHydrationSoon(): void {
+/** Ends the hydration pass a macrotask from now. `syncNavigation()` calls it once the first page has mounted. */
+export function endHydrationSoon(): void {
     if (hydrationEnding) return;
     hydrationEnding = true;
     setTimeout(() => {
@@ -73,10 +75,14 @@ export const writeEnabled: Readable<boolean | undefined> = {
         // Hydration pass: publish the same "unknown" the server rendered, so the
         // hydrated markup matches, then adopt the real value immediately after.
         run(undefined);
-        endHydrationSoon();
 
         let stopLive: (() => void) | undefined;
         let cancelled = false;
+
+        // Still held once this task has run: a render, so the pass ends a macrotask later.
+        void Promise.resolve().then(() => {
+            if (!cancelled) endHydrationSoon();
+        });
 
         // This subscriber's hand-over to the live signal, on the same tick, unless it unsubscribed.
         const timer = setTimeout(() => {

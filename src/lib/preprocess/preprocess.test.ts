@@ -185,6 +185,13 @@ describe('VAR-6 — the preprocessor', () => {
         expect(unnamed.params).toEqual({ value: 3, value_2: 3 });
     });
 
+    it('a call whose callee cannot be spelled is its own placeholder, named from its argument', () => {
+        // var-naming-vectors.json row call-unspellable-callee-twice.
+        const { code } = run('<Translate><p>{getA()(n)} and {getB()(n)}</p></Translate>');
+        const [block] = blocks(code, { n: 1, getA: () => (v: number) => `A${v}`, getB: () => (v: number) => `B${v}` }) as Array<{ params: unknown }>;
+        expect(block.params).toEqual({ n: 'A1', n_2: 'B1' });
+    });
+
     it('names an unnameable value `value`, with a warning', () => {
         const { code, warnings } = run('<Translate><p>Total {a + b}</p></Translate>');
         expect((blocks(code, { a: 1, b: 2 })[0] as { params: unknown }).params).toEqual({ value: 3 });
@@ -212,6 +219,29 @@ describe('VAR-6 — the preprocessor', () => {
         expect(rewritten('$t(`Hello ${x}`, second)', { x: 'Ana', second: { other: 1 } })).toBe('Hello Ana');
         expect(rewritten('$t(`Hello ${x}`, second)', { x: 'Ana', second: 'UI' })).toBe('Hello Ana');
         expect(rewritten('$t(`Hello ${x}`, second)', { x: 'Ana', second: undefined })).toBe('Hello Ana');
+        // `null` is an object to the core, so it is the params.
+        expect(rewritten('$t(`Hello ${x}`, null)', { x: 'Ana' })).toBe('Hello Ana');
+        expect(rewritten('$t(`Hello ${x}`, second)', { x: 'Ana', second: null })).toBe('Hello Ana');
+        // Spread and comma arguments reach the core as the call wrote them.
+        expect(rewritten('$t(`Hello ${x}`, "UI", ...rest)', { x: 'Ana', rest: [{ other: 1 }] })).toBe('Hello Ana');
+        expect(rewritten('$t(`Hello ${x}`, ...rest)', { x: 'Ana', rest: ['UI', { other: 1 }] })).toBe('Hello Ana');
+        expect(rewritten('$t(`Hello ${x}`, ...rest)', { x: 'Ana', rest: [{ other: 1 }] })).toBe('Hello Ana');
+        expect(rewritten('$t(`Hello ${x}`, (a, b))', { x: 'Ana', a: { other: 1 }, b: 'UI' })).toBe('Hello Ana');
+    });
+
+    it("a $t template literal's own values win over params of the same name, and are read first", () => {
+        const t = tSignal.get() as unknown as (...a: unknown[]) => string;
+        const rewritten = (call: string, scope: Record<string, unknown>) => {
+            const code = run('', `const r = ${call};`).code;
+            const expr = code.slice(code.indexOf('const r = ') + 'const r = '.length, code.indexOf(';</script>'));
+            return new Function('$t', ...Object.keys(scope), `return ${expr};`)(t, ...Object.values(scope));
+        };
+        expect(rewritten('$t(`Hello ${name}`, extra)', { name: 'Ana', extra: { name: 'Zed' } })).toBe('Hello Ana');
+        expect(rewritten('$t(`Hello ${name}`, "UI", extra)', { name: 'Ana', extra: { name: 'Zed' } })).toBe('Hello Ana');
+        const order: string[] = [];
+        const read = (v: string) => (order.push(v), v);
+        rewritten('$t(`${read("template")}`, read("second"))', { read });
+        expect(order).toEqual(['template', 'second']);
     });
 
     it('rewrites a $t call inside a block, in the code it copies too', () => {

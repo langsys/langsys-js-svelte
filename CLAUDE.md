@@ -47,7 +47,7 @@ That's the entire surface. Every other concern — HTTP, missing-token registrat
 
 3. **`<Translate>` / `<Phrase>`** — two paths.
     - **With the transform** (`langsysPreprocess()` in svelte.config.js), the build hands the component its content as a `BlockNode` tree in the `__ls` prop: every `{expression}` a VAR-3 marker pair (`{comment:'ls:NAME'}`, value, `{comment:'/ls'}`) with the typed value in `params`; handlers and non-text attributes beside it in `dyn`, by pre-order element index. The component calls the core's `renderBlock` (server and browser) and renders the result through `RenderedNodes.svelte`; it calls `registerBlock` on the server inside the request scope, and after mount in the browser.
-    - **Without it, or for a block the transform marks as a fallback** (`__ls = { fallback }`), the vanilla `Translate`/`Phrase` class is constructed in an `$effect` with `register: false`: it translates from the catalog and registers nothing (VAR-7), because Svelte's compiled output interleaves variables with text the runtime cannot separate. `warnUnregistered` gives one notice naming the transform.
+    - **Without it, or for a block the transform marks as a fallback** (`__ls = { fallback }`), the vanilla `Translate`/`Phrase` class is constructed in an `$effect` with `register: false`: it translates from the catalog and registers nothing (VAR-7), because Svelte's compiled output interleaves variables with text the runtime cannot separate. `warnUnregistered` gives a debug notice naming the transform, beside the core's own for `register: false`.
 
 ## Public API
 

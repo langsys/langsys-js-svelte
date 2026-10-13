@@ -1,16 +1,16 @@
 /**
  * WIRE-4 under `requireCredentials`, in a browser, in SvelteKit's own order: the page's blocks
  * mount first, and the root layout calls `init()` in `onMount`, after its children. With no key the
- * client is unconfigured, and every block's registration must fail loudly — each surfacing a
+ * client is unconfigured, and the page's blocks must fail loudly — each failure a
  * `LangsysConfigurationError` — while the page still shows the text as written.
  *
  *     npm run dev                                   # 127.0.0.1:5173, freshly started
  *     node _dev_/e2e/credentials.mjs                # no double needed: nothing is sent
  *
- * `/fixture/var` (with the transform) holds blocks that register: tree-path <Translate> and <Phrase>
- * blocks and an {@html}-only block on the core's DOM class. Its fallback blocks run with
- * `register: false`, a read that never reaches `t()`, and so never fail. `/fixture/var-plain`
- * (without the transform) is all such reads: nothing registers there, so nothing fails.
+ * `/fixture/var` (with the transform) holds tree-path <Translate> and <Phrase> blocks, an
+ * {@html}-only block on the core's DOM class, and fallback blocks. `/fixture/var-plain` (without
+ * it) holds only `register: false` blocks — one phrase, several, a <Phrase>, one mounted after
+ * `init()` — which read the catalog and never fail.
  */
 import { chromium } from 'playwright';
 
@@ -43,7 +43,7 @@ async function visit(path) {
         'every surfaced error is a LangsysConfigurationError',
         JSON.stringify(errors)
     );
-    check(errors.length >= 5, 'each registering block, mounted before init(), surfaces its failure', `${errors.length} surfaced`);
+    check(errors.length >= 5, "the page's blocks, mounted before init(), surface the failure", `${errors.length} surfaced`);
     await page.close();
 }
 {
@@ -55,7 +55,7 @@ async function visit(path) {
 }
 {
     const { page, errors } = await visit('/fixture/var-plain?key=&require=1&user=Ana');
-    check(errors.length === 0, 'without the transform nothing registers, so nothing fails: its blocks only read the catalog', `${errors.length} surfaced`);
+    check(errors.length === 0, 'a register: false block never fails: one phrase, several, a <Phrase>, before and after init()', JSON.stringify(errors));
     await page.close();
 }
 

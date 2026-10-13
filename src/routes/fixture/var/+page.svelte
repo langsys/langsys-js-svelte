@@ -43,6 +43,11 @@
     {@html cmsMixed}</Translate
 >
 <Translate category="VAR" tag="div"><p id="awaiting">{#await later}Loading…{:then text}{text}{/await}</p></Translate>
+<!-- A readable block inside a fallback block (the {#each}): a block of its own, rendered by the binding. -->
+<Translate category="VAR" tag="div"
+    >{#each items.slice(0, 1) as i (i)}<span>Gallery</span>{/each}
+    <Translate category="VAR" tag="div"><img id="photo" alt="Photo of {user.name}" src="data:," /></Translate></Translate
+>
 <p id="locale-headers">Accept-Language: {acceptLanguage}</p>
 {#if mounted}
     <Translate category="VAR" tag="div"><p id="client-only">Rendered in the browser for {user.name}</p></Translate>
