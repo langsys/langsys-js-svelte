@@ -252,8 +252,7 @@ class Transform {
                 case 'ExpressionTag': {
                     const expr = n.expression as Expr;
                     // Text in a <DontTranslate> stays as written, and a phrase holds it whole.
-                    if (ctx.raw && ctx.phrase)
-                        throw new Fallback('value inside a <DontTranslate>', 'which the phrase would register as written, once per value');
+                    if (ctx.raw && ctx.phrase) throw new Fallback('value inside a <DontTranslate>', 'which a phrase would register as written, once per value');
                     if (ctx.raw) out.push({ k: 'raw', expr });
                     else out.push({ k: 'var', id: this.occur(ctx, expr), expr });
                     break;
@@ -357,7 +356,9 @@ class Transform {
         }
         // A nested block is declared (an empty marker) or, with an app-supplied id, identified by it.
         attrs.unshift(kind === 'Translate' ? { name: CONTENT_BLOCK_MARKER_ATTR, value: [customId] } : { name: PHRASE_MARKER_ATTR, value: [''] });
-        const children = this.children((n.fragment as Fragment).nodes, { ...ctx, phrase: kind === 'Phrase' });
+        // A phrase reads everything under its host, a nested block too. Inside a block's <DontTranslate>
+        // nothing is read, a nested <Phrase> included.
+        const children = this.children((n.fragment as Fragment).nodes, { ...ctx, phrase: ctx.phrase || (kind === 'Phrase' && !ctx.raw) });
         trimEdges(children);
         return { k: 'el', tag, attrs, dyn, children };
     }

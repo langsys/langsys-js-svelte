@@ -130,10 +130,22 @@ describe('VAR-6 — the preprocessor', () => {
         const found = blocks(code, { user: { email: 'a@b.c' }, author: 'Ana', owner: 'Ana' }) as Array<{ fallback?: string; tree?: unknown }>;
         expect(found[0].fallback).toMatch(/<DontTranslate>/);
         expect(found[1].fallback).toMatch(/<DontTranslate>/);
-        expect(warnings[0]).toMatch(/^Test\.svelte:2:\d+: <Phrase> keeps a value inside a <DontTranslate>.*registers nothing \(VAR-7\)/);
+        expect(warnings[0]).toMatch(
+            /^Test\.svelte:2:\d+: <Phrase> keeps a value inside a <DontTranslate>, which a phrase would register as written, once per value\. It renders from the catalog and registers nothing \(VAR-7\)/
+        );
         // In a block such a value is in no phrase: the block is read (its content shows the value).
         // Text written in a <DontTranslate> is the same for everyone, so a phrase may hold it.
         expect(found.slice(-2).map((b) => b.tree !== undefined)).toEqual([true, true]);
+        // A phrase reads everything under its host, a nested <Translate> too; a block reads nothing
+        // inside its <DontTranslate>, a nested <Phrase> included.
+        const deeper = run(
+            '<Phrase>By <Translate><DontTranslate>{email}</DontTranslate></Translate> now</Phrase>' +
+                '<Translate><p>Hi {x}</p><DontTranslate><Phrase>Version {ver}</Phrase></DontTranslate></Translate>'
+        );
+        // The fallback phrase's nested <Translate> is a block of its own, so the outer block is last.
+        const units = blocks(deeper.code, { email: 'a@b.c', x: 'Ana', ver: '1.2' }) as Array<{ fallback?: string; params?: unknown }>;
+        expect(units[0].fallback).toMatch(/<DontTranslate>/);
+        expect(units[units.length - 1].params).toEqual({ x: 'Ana' });
     });
 
     it('marks what it cannot read as a fallback, and says so at build time', () => {

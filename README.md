@@ -197,11 +197,11 @@ It works the same under SvelteKit and plain Vite, and changes nothing outside `<
 
 The names follow the rules every Langsys SDK shares, so the same expression gives the same phrase whichever SDK renders it: a value that cannot be named — `{a + b}`, `{ok ? x : y}` — becomes `{value}` with a build warning, and is a placeholder of its own each time it appears (`{value}`, `{value_2}`), while one that names itself, like `{name}`, is the same placeholder wherever it repeats; a name you write yourself wins (`%name%` in the text with `params={{ name }}`). `{#if}` and `{#key}` blocks are read branch by branch. Event handlers, classes and other attributes stay on their elements. A `<Phrase>`, `<Translate>` or `<DontTranslate>` inside a block is part of it.
 
-The block is then rendered through the core's block renderer, so it is **translated in the served HTML** during SSR, not only after hydration, and its host carries its id (`data-ls-contentblock`). What it registers holds a placeholder for each value the transform marks: its phrases, and the content translators see beside them, where a nested `<Translate>` or `<Phrase>` is its element alone. Text inside a `<DontTranslate>` is not translated and holds no placeholder: in a block it is no phrase, and the content shows it as rendered, values included, so keep a per-user value out of a `<DontTranslate>` inside a block.
+The block is then rendered through the core's block renderer, so it is **translated in the served HTML** during SSR, not only after hydration, and its host carries its id (`data-ls-contentblock`). What it registers holds a placeholder for each value the transform marks: its phrases, and the content translators see beside them, where a nested `<Translate>` or `<Phrase>` is its element alone. Text inside a `<DontTranslate>` is not translated and holds no placeholder: in a block nothing inside it is read, a nested `<Phrase>` included, and the content shows it as rendered, values included, so keep a per-user value out of a `<DontTranslate>` inside a block.
 
 ``$t(`Hello ${user.name}`)`` is rewritten the same way, to `$t('Hello {name}', undefined, { name: user.name })`. A key you write in an object literal argument is a name you chose, so ``$t(`Hello ${name}`, { name: nickname })`` registers `Hello {name_2}`.
 
-**What it cannot read** — an `{#each}`, an `{#await}`, a snippet, another component, a directive (`bind:`, `use:`, `class:`), a spread, `{@html}` beside a variable, or a `{value}` inside a `<DontTranslate>` within a `<Phrase>`, which the phrase would hold as written — makes that block a **fallback**: the build names it in a warning, and the block renders as below.
+**What it cannot read** — an `{#each}`, an `{#await}`, a snippet, another component, a directive (`bind:`, `use:`, `class:`), a spread, `{@html}` beside a variable, or a `{value}` inside a `<DontTranslate>` anywhere under a `<Phrase>`, which the phrase would hold as written — makes that block a **fallback**: the build names it in a warning, and the block renders as below.
 
 **Raw HTML is content.** A block whose only dynamic parts are `{@html}` insertions — a CMS field, say — holds text to translate, not a variable, so it registers the HTML's text as the page shows it:
 
@@ -392,7 +392,7 @@ Marks a region as never-translated. Brand names, product names, domains, identif
 </p>
 ```
 
-The host carries the standard [`translate="no"`](https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/translate) attribute, which the base SDK's tokenizer and renderer both honor — so the content is never tokenized, never registered, and never replaced. It's presentational glue with no vanilla handler behind it. As a bonus, `translate="no"` is the same signal browser-level translators (Chrome, Safari) respect, so the content is protected from those too.
+The host carries the standard [`translate="no"`](https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/translate) attribute, which the base SDK's tokenizer and renderer both honor — so the content is never translated. A block reads no phrase from it; a `<Phrase>` keeps it as written, as a markup pair the translation must keep (`Built with {m0o}Kangen®{m0c} on`). It's presentational glue with no vanilla handler behind it. As a bonus, `translate="no"` is the same signal browser-level translators (Chrome, Safari) respect, so the content is protected from those too.
 
 `<DontTranslate>` props: `tag?` (defaults to `span`), `class?`, `children`.
 

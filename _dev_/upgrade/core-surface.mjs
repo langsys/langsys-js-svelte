@@ -75,8 +75,6 @@ const exported = (source) => {
         else if (has(statement, ts.SyntaxKind.ExportKeyword)) {
             if (has(statement, ts.SyntaxKind.DefaultKeyword)) names.add('default');
             else if (ts.isVariableStatement(statement)) for (const declaration of statement.declarationList.declarations) bind(declaration.name);
-            // `declare module 'x'` describes another module; it publishes no name here.
-            else if (ts.isModuleDeclaration(statement) && ts.isStringLiteral(statement.name)) continue;
             else if (statement.name) names.add(statement.name.text);
         }
     }
@@ -104,7 +102,6 @@ export default class extends Base {}`,
     ['export default 42;', ['default']],
     ['export = api;', ['default']],
     ['export import A = B.C;', ['A']],
-    ["export declare module 'other' {}", []],
 ];
 for (const [source, expected] of readerCases) {
     const read = [...exported(source)].sort();
@@ -114,8 +111,8 @@ for (const [source, expected] of readerCases) {
 let refused = false;
 try {
     exported(`export * from './x.js';`);
-} catch {
-    refused = true;
+} catch (error) {
+    refused = /cannot list the names of `export \*`/.test(error.message);
 }
 if (!refused) throw new Error('core-surface: the export reader listed an `export *`');
 const names = [...exported(published)];
