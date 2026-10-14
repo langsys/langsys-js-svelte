@@ -17,7 +17,7 @@ export interface Expr {
 }
 
 /** Type assertions and parentheses say nothing about the value. */
-const WRAPPERS = new Set(['ChainExpression', 'TSNonNullExpression', 'TSAsExpression', 'TSSatisfiesExpression', 'ParenthesizedExpression']);
+const WRAPPERS = new Set(['ChainExpression', 'TSNonNullExpression', 'TSAsExpression', 'TSSatisfiesExpression', 'TSTypeAssertion', 'ParenthesizedExpression']);
 
 function unwrap(expr: Expr): Expr {
     let node = expr;

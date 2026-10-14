@@ -75,15 +75,18 @@ const exported = (source) => {
         else if (has(statement, ts.SyntaxKind.ExportKeyword)) {
             if (has(statement, ts.SyntaxKind.DefaultKeyword)) names.add('default');
             else if (ts.isVariableStatement(statement)) for (const declaration of statement.declarationList.declarations) bind(declaration.name);
+            // `declare module 'x'` describes another module; it publishes no name here.
+            else if (ts.isModuleDeclaration(statement) && ts.isStringLiteral(statement.name)) continue;
             else if (statement.name) names.add(statement.name.text);
         }
     }
     return names;
 };
-// Control for the reader itself: every statement form, names written only in comments or strings,
-// and an `export *`, which it refuses.
-const readerControl = [
-    ...exported(`// export { commentedOut }
+// Controls for the reader itself, one per branch: every statement form, names written only in
+// comments or strings, and an `export *`, which it refuses.
+const readerCases = [
+    [
+        `// export { commentedOut }
 /* export { alsoCommented } */
 const glob = 'src/*.ts', url = 'a//b', re = /\\/*x/; // see dist/*
 export { a, type B, c as d,
@@ -92,12 +95,22 @@ export type { F } from './y.js';
 export * as ns from './z.js';
 export const g = 1, g2 = 2; export const { h, i: h2 } = o; export let [k1, , k2] = list;
 export enum I {} export async function j() {} export function* gen() {} export abstract class K {}
-export interface L {} export type M = 1; export declare const n: number;
+export interface L {} export type M = 1; export declare const n: number; export namespace N {}
 /** a doc comment */
-export default class extends Base {}`),
-].sort();
-const readerExpected = ['B', 'F', 'I', 'K', 'L', 'M', 'a', 'd', 'default', 'e', 'g', 'g2', 'gen', 'h', 'h2', 'j', 'k1', 'k2', 'n', 'ns'];
-if (JSON.stringify(readerControl) !== JSON.stringify(readerExpected)) throw new Error(`core-surface: the export reader read ${JSON.stringify(readerControl)}`);
+export default class extends Base {}`,
+        ['B', 'F', 'I', 'K', 'L', 'M', 'N', 'a', 'd', 'default', 'e', 'g', 'g2', 'gen', 'h', 'h2', 'j', 'k1', 'k2', 'n', 'ns'],
+    ],
+    ['const x = 1; export { x, x as y };', ['x', 'y']],
+    ['export default 42;', ['default']],
+    ['export = api;', ['default']],
+    ['export import A = B.C;', ['A']],
+    ["export declare module 'other' {}", []],
+];
+for (const [source, expected] of readerCases) {
+    const read = [...exported(source)].sort();
+    if (JSON.stringify(read) !== JSON.stringify(expected))
+        throw new Error(`core-surface: the export reader read ${JSON.stringify(read)} from ${JSON.stringify(source.slice(0, 40))}`);
+}
 let refused = false;
 try {
     exported(`export * from './x.js';`);
@@ -119,7 +132,7 @@ out['3.6.17 surface at the tip'] = {
     // Controls: the same checks report a name and a member that do not exist, and the export reader
     // lists every statement form (checked above, before anything is compared).
     control: [...missingNames(['notExportedByLangsys']), ...missingMembers(['notALangsysMember'])],
-    'export reader control': readerControl.join(' '),
+    'export reader control': `${readerCases.length} sources read as expected; export * refused`,
 };
 
 // Row 7: the tree path's id for `%name%`, beside the `{name}` marker form.

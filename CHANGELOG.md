@@ -61,7 +61,9 @@ a malformed catalog logs "Ignoring non-category member".
   param, so `Hello {user.name}` registers `Hello {name}` once for every user, and a count stays a
   number a plural form can select on. The content a block registers with holds `{name}` where a
   marked value was, as its phrases do, and a nested `<Translate>` or `<Phrase>` as its element
-  alone; text inside a `<DontTranslate>` holds no placeholder and is stored as rendered. Names come from the core's `derivePlaceholderNames` and pass
+  alone. In a block, text inside a `<DontTranslate>` is in no phrase and is stored in the content
+  as rendered; in a `<Phrase>`, which would hold it as written, a value there makes the phrase a
+  fallback. Names come from the core's `derivePlaceholderNames` and pass
   all 32 shared naming vectors: an expression that names itself is one placeholder wherever it
   repeats, and one that cannot be named is a placeholder of its own each time. `{#if}`/`{#key}` branches, event handlers, attributes, and nested
   `<Phrase>`, `<Translate>` and `<DontTranslate>` are read; ``$t(`…${x}`)`` template literals are

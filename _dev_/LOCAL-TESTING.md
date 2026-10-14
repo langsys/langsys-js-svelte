@@ -29,7 +29,7 @@ link lines again after any install.
 Check it took:
 
 ```bash
-npm test -- --run        # 310 tests, no network
+npm test -- --run        # 313 tests, no network
 npm run check            # 0 errors
 ```
 
@@ -75,8 +75,16 @@ afterwards was registered by the page:
 curl -s -X POST http://127.0.0.1:8787/__fixture/seed -H 'content-type: application/json' -d '{"projects":[{"id":"p1","base_locale":"en-us","target_locales":["it-it"],"phrases":[],"blocks":[]}],"keys":[{"key":"k-write","project":"p1","type":"write"}]}'
 ```
 
-Open the same page **without** `locale=` (base language, so misses register) as two users, wait
-about 30 s for the browser's flush, and read the double's state:
+Then wait a minute: a server render reuses a catalog it fetched within the last minute, and one
+fetched before the emptying still holds the seed's entries, so the page's phrases would read as
+known and nothing would register.
+
+A server render alone registers: `curl` the page once with `user=Zoe` (no `locale=`, the base
+language, so misses register) and read the state below — `Hello {name}, welcome back` is there
+within a few seconds, with no browser involved and no `Zoe` anywhere.
+
+Then open the same page **without** `locale=` as two users, wait about 30 s for the browser's
+flush, and read the double's state:
 
 ```bash
 curl -s http://127.0.0.1:8787/__fixture/state | jq '.projects.p1 | [.phrases[].phrase, (.blocks[].phrases[].phrase)]'
@@ -91,9 +99,6 @@ curl -s http://127.0.0.1:8787/__fixture/state | jq '.projects.p1 | [.phrases[].p
 - `From the CMS, section one` registers: a block whose only dynamic part is `{@html}` is content.
 - Nothing from the `{#each}` list, the `{#await}` block, or the block mixing `{@html}` with a name.
 
-A server render alone registers too: `curl` the page once with `user=Zoe` and read the state —
-the placeholder phrase is there within a few seconds, with no browser involved.
-
 ## 4. Without the transform
 
 Same servers, with the catalog seeded again (`node _dev_/e2e/var.mjs --seed`). Open
@@ -101,7 +106,8 @@ Same servers, with the catalog seeded again (`node _dev_/e2e/var.mjs --seed`). O
 
 - The notice: _A `<Translate>` or `<Phrase>` registers nothing (svelte-transform-missing: add
   langsysPreprocess() from langsys-js-svelte/preprocess to svelte.config.js)…_
-- The double's state gains nothing from this page, for any user.
+- The double's state gains nothing from the page's blocks, for any user. (`Layout phrase 0`, the
+  fixture layout's own `$t`, registers as it does on every page.)
 - With `&locale=it-it` the catalogued translation still renders: `Ciao Ana, bentornato`.
 
 ## 5. Request scope and the hydration seed (`$t`)
@@ -143,6 +149,6 @@ stores nothing under `de-de`; a slow Italian overtaken by a Portuguese that succ
 ## 9. Everything at once
 
 The full run, each suite on a freshly started server, is the command block in `CONFORMANCE.md`
-under _Evidence — and re-running it_. On the core above every suite passes: unit 310, VAR 28,
+under _Evidence — and re-running it_. On the core above every suite passes: unit 313, VAR 28,
 contract 22, live E2E 61, Svelte DOM 17, SRV concurrency 6, SRV-7 scope 9, SRV-3 flush 6 + 6,
 locale race 4, running without credentials 7.

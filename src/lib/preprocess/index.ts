@@ -58,7 +58,15 @@ const TS_WRAPPERS = new Set(['TSAsExpression', 'TSSatisfiesExpression', 'TSNonNu
 /** Elements the tree renderer cannot reproduce faithfully: another namespace, or raw text. */
 const OPAQUE_ELEMENTS = new Set(['svg', 'math', 'script', 'style', 'textarea', 'template']);
 
-class Fallback extends Error {}
+/** What makes a block a fallback, and why, for the build warning. */
+class Fallback extends Error {
+    constructor(
+        message: string,
+        readonly why = 'which the build cannot read'
+    ) {
+        super(message);
+    }
+}
 
 type AttrPart = string | { id: number; expr: Expr };
 type IR =
@@ -192,9 +200,7 @@ class Transform {
                 inject(`{ content: 'raw-html' }`);
                 return;
             }
-            this.warn(
-                `${this.where(node)}: <${node.name}> keeps a ${e.message}, which the build cannot read. It renders from the catalog and registers nothing (VAR-7).`
-            );
+            this.warn(`${this.where(node)}: <${node.name}> keeps a ${e.message}, ${e.why}. It renders from the catalog and registers nothing (VAR-7).`);
             inject(`{ fallback: ${JSON.stringify(e.message)} }`);
             // A block inside it that the build can read is a block of its own: the core's walk of
             // this one leaves a marked host to that block (MARK-4).
@@ -245,6 +251,9 @@ class Transform {
                     break;
                 case 'ExpressionTag': {
                     const expr = n.expression as Expr;
+                    // Text in a <DontTranslate> stays as written, and a phrase holds it whole.
+                    if (ctx.raw && ctx.phrase)
+                        throw new Fallback('value inside a <DontTranslate>', 'which the phrase would register as written, once per value');
                     if (ctx.raw) out.push({ k: 'raw', expr });
                     else out.push({ k: 'var', id: this.occur(ctx, expr), expr });
                     break;
@@ -348,7 +357,7 @@ class Transform {
         }
         // A nested block is declared (an empty marker) or, with an app-supplied id, identified by it.
         attrs.unshift(kind === 'Translate' ? { name: CONTENT_BLOCK_MARKER_ATTR, value: [customId] } : { name: PHRASE_MARKER_ATTR, value: [''] });
-        const children = this.children((n.fragment as Fragment).nodes, ctx);
+        const children = this.children((n.fragment as Fragment).nodes, { ...ctx, phrase: kind === 'Phrase' });
         trimEdges(children);
         return { k: 'el', tag, attrs, dyn, children };
     }
@@ -472,6 +481,7 @@ interface Ctx {
     /** Inside `<DontTranslate>`: values are shown as they are, never placeholders. */
     raw: boolean;
     pre: boolean;
+    /** The unit being read is a phrase: a `<Phrase>`, or one nested in a block. */
     phrase: boolean;
 }
 

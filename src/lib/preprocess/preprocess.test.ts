@@ -110,6 +110,30 @@ describe('VAR-6 — the preprocessor', () => {
         const { code } = run('<Translate params={{ name: who }}><p>%name% met {user.name}</p></Translate>');
         const [block] = blocks(code, { who: 'Bo', user: { name: 'Ana' } }) as Array<{ params: unknown }>;
         expect(block.params).toEqual({ user_name: 'Ana' });
+        // A key written in the params is taken without `%name%`, through a TypeScript cast too.
+        for (const cast of ['{ name: who }', '{ name: who } as Record<string, string>', '<Record<string, string>>{ name: who }']) {
+            const [cast_block] = blocks(run(`<Translate params={${cast}}><p>Met {user.name}</p></Translate>`).code, {
+                who: 'Bo',
+                user: { name: 'Ana' },
+            }) as Array<{ params: unknown }>;
+            expect(cast_block.params, cast).toEqual({ user_name: 'Ana' });
+        }
+    });
+
+    it('a value inside <DontTranslate> within a phrase makes it a fallback, since the phrase would hold the value', () => {
+        const { code, warnings } = run(
+            '<Phrase>Signed in as <DontTranslate>{user.email}</DontTranslate> today</Phrase>' +
+                '<Translate><p>Intro</p><Phrase>By <DontTranslate>{author}</DontTranslate></Phrase></Translate>' +
+                '<Translate><p>Owner: <DontTranslate>{owner}</DontTranslate> here</p></Translate>' +
+                '<Phrase>Powered by <DontTranslate>Langsys</DontTranslate></Phrase>'
+        );
+        const found = blocks(code, { user: { email: 'a@b.c' }, author: 'Ana', owner: 'Ana' }) as Array<{ fallback?: string; tree?: unknown }>;
+        expect(found[0].fallback).toMatch(/<DontTranslate>/);
+        expect(found[1].fallback).toMatch(/<DontTranslate>/);
+        expect(warnings[0]).toMatch(/^Test\.svelte:2:\d+: <Phrase> keeps a value inside a <DontTranslate>.*registers nothing \(VAR-7\)/);
+        // In a block such a value is in no phrase: the block is read (its content shows the value).
+        // Text written in a <DontTranslate> is the same for everyone, so a phrase may hold it.
+        expect(found.slice(-2).map((b) => b.tree !== undefined)).toEqual([true, true]);
     });
 
     it('marks what it cannot read as a fallback, and says so at build time', () => {

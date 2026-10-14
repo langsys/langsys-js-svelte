@@ -54,6 +54,8 @@ describe('VAR-2 — what Svelte adds', () => {
         ['a store read', '$count', 'count'],
         ['optional chaining', 'user?.profile?.displayName', 'display_name'],
         ['a TypeScript assertion', 'user.name!', 'name'],
+        ['an angle-bracket TypeScript assertion', '<string>user.name', 'name'],
+        ['an `as` TypeScript assertion', 'user.name as string', 'name'],
         ['a nested one-argument call', 'upper(trim(user.name))', 'name'],
     ])('%s: {%s} → %s', (_, source, expected) => {
         expect(names([source]).names).toEqual([expected]);
