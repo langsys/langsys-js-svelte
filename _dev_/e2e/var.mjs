@@ -28,6 +28,7 @@ if (process.argv.includes('--serve')) {
 } else {
     const GREET = 'Hello {name}, welcome back';
     const CART = 'You have {items_count} items';
+    const CLIENT_BLOCK = 'Shown in the browser to {name}';
     const PLAIN_ANA = 'Hello Ana, welcome back'; // what the plain route's DOM reads
     const cartBlock = generateCustomId('VAR', [CART, 'Add one']);
     const PHOTO = 'Photo of {name}'; // a readable block inside a fallback block, its only text an attribute
@@ -152,6 +153,22 @@ if (process.argv.includes('--serve')) {
     check(got.filter((p) => p === GREET).length === 1, 'VAR-6: two users register the one placeholder phrase', JSON.stringify(got));
     check(got.includes(CART), 'VAR-2: the count registers under its derived name', JSON.stringify(got));
     check(!got.some((p) => /Ana|Luis/.test(p)), 'VAR-1: no per-user phrase is registered', JSON.stringify(got));
+    // The content a block registers with: the count's block from the server's flush, and a block
+    // only the browser renders, mounted before init(). Each marked value is its {NAME}.
+    let stored = [];
+    const holds = (phrase) => stored.some((b) => b.phrases.some((p) => p.phrase === phrase) && /<!--ls:/.test(b.content ?? ''));
+    for (let i = 0; i < 10 && !(holds(CART) && holds(CLIENT_BLOCK)); i++) {
+        if (i) await sleep(1000);
+        stored = (await state()).blocks;
+    }
+    const contents = stored.map((b) => b.content ?? '');
+    const pairs = contents.flatMap((c) => [...c.matchAll(/<!--ls:([^>]*?)-->([^]*?)<!--\/ls-->/g)]);
+    check(holds(CART) && holds(CLIENT_BLOCK), 'premise: both blocks registered marked content, from the server and from the browser', JSON.stringify(contents));
+    check(
+        pairs.length >= 2 && pairs.every(([, name, value]) => value === `{${name}}`) && !contents.some((c) => /Ana|Luis|Zoe/.test(c)),
+        "VAR-1: a block's registered content holds each value as its placeholder",
+        JSON.stringify(contents)
+    );
     check(!got.some((p) => /^Item\b/.test(p)), 'VAR-7: the {#each} block (a fallback) registers nothing', JSON.stringify(got));
     // VAR-7's carve-out: raw HTML is content. The {@html}-only block registers its text; the block
     // that also interpolates a variable registers nothing.

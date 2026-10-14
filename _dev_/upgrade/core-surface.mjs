@@ -50,22 +50,56 @@ for (const [tag, dir] of [
 // Row 2: the 3.6.17 surface, read from the tag.
 const published = execFileSync('git', ['-C', REPO, 'show', 'v3.6.17:src/lib/index.ts']).toString();
 const tip = readFileSync(resolve(REPO, 'src/lib/index.ts'), 'utf8');
-/** The names a module's export statements publish: `export { a, b as c }` blocks and declarations. */
+/**
+ * The names a module's export statements publish: `export { a, type b, c as d }` lists, with or
+ * without `from`, and named declarations. Comments are removed first. `export *` and an anonymous
+ * `export default` publish names this cannot list, so either one stops the run.
+ */
 const exported = (source) => {
-    const fromBlocks = [...source.matchAll(/export\s+(?:type\s+)?\{([^}]*)\}/g)].flatMap((b) =>
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"\\])\/\/[^\n]*/g, '$1');
+    const unread = code.match(/export\s+\*|export\s+default\s+(?!(?:async\s+)?(?:function|class)\s+\w)/);
+    if (unread) throw new Error(`core-surface: cannot list the names of \`${unread[0]}\``);
+    const fromLists = [...code.matchAll(/export\s+(?:type\s+)?\{([^}]*)\}/g)].flatMap((b) =>
         b[1]
             .split(',')
             .map((s) =>
                 s
                     .trim()
+                    .replace(/^type\s+/, '')
                     .split(/\s+as\s+/)
                     .pop()
             )
             .filter(Boolean)
     );
-    const declared = [...source.matchAll(/export\s+(?:const|interface|type|class|function)\s+(\w+)/g)].map((m) => m[1]);
-    return new Set([...fromBlocks, ...declared]);
+    const declared = [
+        ...code.matchAll(
+            /export\s+(?:declare\s+)?(?:default\s+)?(?:async\s+)?(?:const|let|var|interface|type|enum|abstract\s+class|class|function\*?)\s+(\w+)/g
+        ),
+    ].map((m) => m[1]);
+    return new Set([...fromLists, ...declared]);
 };
+// Control for the reader itself: every form above, and a name that appears only in comments.
+const readerControl = [
+    ...exported(`// export { commentedOut }
+/* export { alsoCommented } */
+export { a, type B, c as d,
+    e } from './x.js';
+export type { F } from './y.js';
+export const g = 1; export let h = 2; export enum I {} export async function j() {} export abstract class K {}
+export default function l() {}`),
+].sort();
+const readerExpected = ['B', 'F', 'I', 'K', 'a', 'd', 'e', 'g', 'h', 'j', 'l'];
+if (JSON.stringify(readerControl) !== JSON.stringify(readerExpected)) throw new Error(`core-surface: the export reader read ${JSON.stringify(readerControl)}`);
+const refuses = (source) => {
+    try {
+        exported(source);
+        return false;
+    } catch {
+        return true;
+    }
+};
+if (!refuses(`export * from './x.js';`) || !refuses('export default {};'))
+    throw new Error('core-surface: the export reader listed an `export *` or an anonymous default');
 const names = [...exported(published)];
 const tipNames = exported(tip);
 const members = [...published.matchAll(/public\s+(?:get\s+)?(\w+)\s*\(/g)].map((m) => m[1]);
@@ -77,8 +111,10 @@ out['3.6.17 surface at the tip'] = {
     'names missing from src/lib/index.ts': missingNames(names),
     members: members.length,
     "members missing from the pinned core's LangsysApp": missingMembers(members),
-    // Control: the same checks report a name and a member that do not exist.
+    // Controls: the same checks report a name and a member that do not exist, and the export reader
+    // lists every statement form (checked above, before anything is compared).
     control: [...missingNames(['notExportedByLangsys']), ...missingMembers(['notALangsysMember'])],
+    'export reader control': readerControl.join(' '),
 };
 
 // Row 7: the tree path's id for `%name%`, beside the `{name}` marker form.

@@ -56,7 +56,7 @@ export const PROBES = [
     ['REG-4', 'keepalive|sendBeacon'],
     ['REG-5', 'installTeardownFlush|visibilitychange|pagehide'],
     ['REG-6', '\\[\\.\\.\\.this\\.missingTokens\\]'],
-    ['REG-7', 'updateInFlight'],
+    ['REG-7', 'updateInFlight|registrationsInFlight'],
     ['REG-8', 'consecutiveFailures|retryNotBefore'],
     ['REG-9', 'batch_limit'],
     ['REG-10', 'noteSendFailure|createTranslatableItems'],

@@ -18,9 +18,12 @@ export OLD_CORE=/tmp/core-065 NEW_CORE=/tmp/core-pin
 - `core-surface.mjs`: what the surface a 3.6.17 app uses answers on both cores. That covers locale
   values, `detectPreferredLocale` and console output with debug off. It also checks every name and
   member 3.6.17 published, read from its tag, against this tree, and gives the tree path's id for
-  `%name%`. Run `node _dev_/upgrade/core-surface.mjs`. Backs rows 2, 7, 8, 9 and 15.
+  `%name%`. Its export reader is checked against every statement form first, and stops on one
+  whose names it cannot list (`export *`, an anonymous default). Run
+  `node _dev_/upgrade/core-surface.mjs`. Backs rows 2, 7, 8, 9 and 15.
 - `id-moves.mjs`: the tokens, id, route and catalog entry each core derives for the 41
   canonicalization rows and twelve more shapes. It also records what the pinned core renders, and
   sends, for a block whose translation 0.6.5 stored. Run `node _dev_/upgrade/id-moves.mjs`, which
-  writes `results.md` and `results.json` to `$OUT`, or to a temp directory. Takes about 35 s.
+  writes `results.md` and `results.json` to `$OUT`, or to a temp directory; its build files are
+  removed whether or not the run succeeds. Takes about 35 s.
   Backs rows 6, 7, 10 and 11.

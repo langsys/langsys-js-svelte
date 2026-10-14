@@ -185,4 +185,16 @@ describe('writeEnabled — one-shot reads', () => {
         await vi.runAllTimersAsync();
         expect(get(writeEnabled)).toBe(true);
     });
+
+    it('… from the macrotask after that render: the same task, as the first onMount runs, still reads "unknown"', async () => {
+        const { get } = await import('svelte/store');
+        signal.set(true);
+        const writeEnabled = await loadStore({ browser: true });
+
+        writeEnabled.subscribe(() => {}); // the hydration render, held
+        await Promise.resolve(); // the render's own task finishes
+        expect(get(writeEnabled)).toBeUndefined();
+        await vi.runAllTimersAsync();
+        expect(get(writeEnabled)).toBe(true);
+    });
 });

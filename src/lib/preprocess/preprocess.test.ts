@@ -204,13 +204,18 @@ describe('VAR-6 — the preprocessor', () => {
         expect(code).toContain(`{$t("Hi {name}", "UI", { "name": (user.name) })}`);
     });
 
+    /** The expression a `$t(...)` call is rewritten to. */
+    const rewrite = (call: string) => {
+        const code = run('', `const r = ${call};`).code;
+        return code.slice(code.indexOf('const r = ') + 'const r = '.length, code.indexOf(';</script>'));
+    };
+
     /** A rewritten `$t(...)` run against the core's `t`; `calls` holds what the core received. */
     const runT = (call: string, scope: Record<string, unknown>, { async = false } = {}) => {
         const core = tSignal.get() as unknown as (...a: unknown[]) => string;
         const calls: unknown[][] = [];
         const t = (...a: unknown[]) => (calls.push(a), core(...a));
-        const code = run('', `const r = ${call};`).code;
-        const expr = code.slice(code.indexOf('const r = ') + 'const r = '.length, code.indexOf(';</script>'));
+        const expr = rewrite(call);
         const body = async ? `return (async () => ${expr})();` : `return ${expr};`;
         return { result: new Function('$t', ...Object.keys(scope), body)(t, ...Object.values(scope)), calls };
     };
@@ -236,11 +241,41 @@ describe('VAR-6 — the preprocessor', () => {
         expect(received('$t(`Hello ${x}`, ...rest)', { rest: [{ other: 1 }] })).toEqual(['Hello {x}', { other: 1, x: 'Ana' }]);
         // A comma expression is one argument: its last value.
         expect(received('$t(`Hello ${x}`, (a, b))', { a: { other: 1 }, b: 'UI' })).toEqual(['Hello {x}', 'UI', { x: 'Ana' }]);
+        // Anything but an object is the category, `undefined` included, and the params follow it.
+        expect(received('$t(`Hello ${x}`, second, { other: 1 })', { second: undefined })).toEqual(['Hello {x}', undefined, { other: 1, x: 'Ana' }]);
+        expect(received('$t(`Hello ${x}`, second, { other: 1 })', { second: 7 })).toEqual(['Hello {x}', 7, { other: 1, x: 'Ana' }]);
+        // A parenthesised callee is the same call.
+        expect(received('($t)(`Hello ${x}`, "UI")', {})).toEqual(['Hello {x}', 'UI', { x: 'Ana' }]);
     });
 
     it('a $t template literal keeps an awaited argument in the caller', async () => {
-        const { result } = runT('$t(`Hello ${x}`, await category())', { x: 'Ana', category: async () => 'UI' }, { async: true });
+        const { result, calls } = runT('$t(`Hello ${x}`, await category())', { x: 'Ana', category: async () => 'UI' }, { async: true });
         expect(await result).toBe('Hello Ana');
+        expect(calls[0]).toEqual(['Hello {x}', 'UI', { x: 'Ana' }]);
+    });
+
+    it('a $t template literal reads the store before its arguments, as the call does', () => {
+        // In an async template an `await` in an argument ends what Svelte tracks, so the store read
+        // that keeps the text following the locale has to come first.
+        const core = tSignal.get() as unknown as (...a: unknown[]) => string;
+        for (const call of ['$t(`${read("template")}`, read("second"))', '$t(`${read("template")}`, "UI")']) {
+            const order: string[] = [];
+            const scope = {
+                read: (v: string) => (order.push(v), v),
+                get $t() {
+                    return (order.push('$t'), core);
+                },
+            };
+            new Function('scope', `with (scope) return ${rewrite(call)};`)(scope);
+            expect(order, call).toEqual(call.includes('second') ? ['$t', 'template', 'second'] : ['$t', 'template']);
+        }
+    });
+
+    it('a key the call writes in an object literal is a taken name, whatever else the object holds', () => {
+        const received = (call: string, scope: Record<string, unknown>) => runT(call, { name: 'Ana', ...scope }).calls[0];
+        expect(received('$t(`Hello ${name}`, { name: "Zed" })', {})).toEqual(['Hello {name_2}', { name_2: 'Ana', name: 'Zed' }]);
+        expect(received('$t(`Hello ${name}`, { [k]: 1, name: "Zed" })', { k: 'other' })).toEqual(['Hello {name_2}', { name_2: 'Ana', name: 'Zed', other: 1 }]);
+        expect(received('$t(`Hello ${name}`, { name: "Zed" }, "ignored")', {})[0]).toBe('Hello {name_2}');
     });
 
     it("a $t template literal's own values win over params of the same name, and are read first", () => {

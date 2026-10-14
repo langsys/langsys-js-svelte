@@ -214,7 +214,11 @@ class Transform {
 
     private explicitKeys(attribute: Node | undefined, into: Set<string>): void {
         const value = attribute?.value as Node | undefined;
-        const expr = value && !Array.isArray(value) && value.type === 'ExpressionTag' ? (value.expression as Node) : undefined;
+        this.writtenKeys(value && !Array.isArray(value) && value.type === 'ExpressionTag' ? (value.expression as Node) : undefined, into);
+    }
+
+    /** The keys an object literal writes out: each is a name the developer chose. */
+    private writtenKeys(expr: Node | undefined, into: Set<string>): void {
         if (expr?.type !== 'ObjectExpression') return;
         for (const p of expr.properties as Node[]) {
             const k = p.type === 'Property' && !p.computed ? (p.key as Node) : undefined;
@@ -385,12 +389,12 @@ class Transform {
                   : literalString(second) && (rest.length === 1 || (rest.length === 2 && literalObject(third)))
                     ? 'category'
                     : 'runtime';
-        const params = kind === 'params' ? second : kind === 'category' ? third : undefined;
         const exprs = template.expressions as Expr[];
         const occurrences = exprs.map((expr, id) => ({ id, expr }));
+        // Every key an object literal argument writes is taken, whichever way the call is decided,
+        // so the registered phrase does not depend on the rest of the call.
         const explicit = new Set<string>();
-        if (params)
-            this.explicitKeys({ type: 'Attribute', start: 0, end: 0, value: { type: 'ExpressionTag', expression: params } } as unknown as Node, explicit);
+        for (const arg of rest) this.writtenKeys(arg, explicit);
         const { names, unnameable } = assignNames(occurrences, explicit);
         for (const id of unnameable) {
             const { expr } = occurrences[id];
@@ -400,17 +404,18 @@ class Transform {
         const derived = [...new Map(occurrences.map((o) => [names.get(o.id)!, this.code(o.expr)])).entries()].map(([n, c]) => `${JSON.stringify(n)}: (${c})`);
         // A literal's keys are taken names, so a derived name never meets one.
         const withParams = (literal: Node | undefined) => `{ ${[...derived, ...(literal ? [`...(${this.code(literal)})`] : [])].join(', ')} }`;
-        const callee = this.content.slice(call.start, (call.callee as Node).end);
+        const callee = this.content.slice((call.callee as Node).start, (call.callee as Node).end);
         if (kind === 'none') return `${callee}(${phrase}, undefined, ${withParams(undefined)})`;
         if (kind === 'params') return `${callee}(${phrase}, ${withParams(second)})`;
         if (kind === 'category') return `${callee}(${phrase}, ${this.code(second)}, ${withParams(third)})`;
-        // The template's values are read first, as the call wrote them, and win over params of the same
-        // name; the other arguments reach the core as written, spreads included. Both are arguments of
-        // the call, so an `await` or `yield` in them stays in the caller.
+        // The store, then the template's values, then the other arguments, read in the call's order:
+        // all three are arguments here, so an `await` or `yield` in one stays in the caller, and the
+        // store is read before it. The template's values win over params of the same name; the other
+        // arguments reach the core as written, spreads included.
         const args = rest.map((a) => (a.type === 'SpreadElement' ? `...(${this.code(a.argument as Node)})` : `(${this.code(a)})`)).join(', ');
         return (
-            `((__lsV, __lsA, ...__lsR) => typeof __lsA === 'object' ` +
-            `? ${callee}(${phrase}, { ...__lsA, ...__lsV }) : ${callee}(${phrase}, __lsA, { ...__lsR[0], ...__lsV }))(${withParams(undefined)}, ${args})`
+            `((__lsT, __lsV, __lsA, ...__lsR) => typeof __lsA === 'object' ` +
+            `? __lsT(${phrase}, { ...__lsA, ...__lsV }) : __lsT(${phrase}, __lsA, { ...__lsR[0], ...__lsV }))(${callee}, ${withParams(undefined)}, ${args})`
         );
     }
 

@@ -29,7 +29,9 @@ cache is now keyed by project and locale; a block registers after mount once the
 has arrived, and a block on the core's DOM class once it has also been stable for 500 ms. With
 debug off, a `write` or `ip_write` key the server resolves read-only logs "this session cannot
 write" once per page load, and a phrase the message formatter cannot render logs that it was
-rendered by the SDK's own branch selection.
+rendered by the SDK's own branch selection. A key with discovery on that cannot send a hint logs
+"Discovery hint failed", and a catalog fetch that fails or returns a malformed catalog logs
+"Catalog fetch threw" or "Ignoring non-category member".
 
 ### Changed
 
@@ -57,14 +59,19 @@ rendered by the SDK's own branch selection.
   `svelte.config.js`: `preprocess: [vitePreprocess(), langsysPreprocess()]`. Each `{expression}`
   inside a `<Translate>` or `<Phrase>` becomes a named placeholder, with its value as a typed
   param, so `Hello {user.name}` registers `Hello {name}` once for every user, and a count stays a
-  number a plural form can select on. Names come from the core's `derivePlaceholderNames` and pass
+  number a plural form can select on. The content a block registers with holds `{name}` where the
+  value was, as its phrases do, and a nested `<Translate>` or `<Phrase>` as its element alone, so
+  no value reaches the Translation Manager. Names come from the core's `derivePlaceholderNames` and pass
   all 32 shared naming vectors: an expression that names itself is one placeholder wherever it
   repeats, and one that cannot be named is a placeholder of its own each time. `{#if}`/`{#key}` branches, event handlers, attributes, and nested
   `<Phrase>`, `<Translate>` and `<DontTranslate>` are read; ``$t(`…${x}`)`` template literals are
   rewritten to placeholders too, keeping the core's argument order (an object second argument,
   `null` included, is the params; one that is not a literal, a spread included, is decided when
   the call runs, as the core decides it, and the template's own values win over params of the
-  same name);
+  same name). The rewritten call reads `$t` before its arguments, as the call does, so in an async
+  template an `await` in an argument leaves the text following the locale; every key an object
+  literal argument writes is a taken name, so the registered phrase does not depend on the rest of
+  the call;
   anything else makes the block a fallback, named in a build warning, and a block inside a
   fallback that the build can read is transformed on its own. A block whose only dynamic parts are `{@html}` insertions is content, not a variable,
   and registers its HTML's text through the DOM path.
@@ -275,9 +282,11 @@ LangsysApp.t` was `false` while the core's own `t` was stable. That identity is 
       `undefined` means _not known yet_, and is what the store reports during SSR and throughout
       hydration. Treating it as `false` tells a write-enabled session it is read-only, which it
       cannot recover from without a reload. A one-shot read (`get(writeEnabled)`) is the live value
-      once a component has rendered the store, or once the first page has mounted in an app that
-      calls `syncNavigation()`, and stays `undefined` in an app with neither; in a universal `load`
-      it is `undefined`, as the server rendered it.
+      from the task after a component first renders the store, or after the first page mounts in
+      an app that calls `syncNavigation()` (the first page's `onMount` still reads `undefined`),
+      and stays `undefined` in an app with neither. The universal `load` that runs before
+      hydration reads `undefined`, as the server rendered it; one on a later navigation reads the
+      live value.
     - `writeGrant` on `init()` — for authenticated apps, whose backend mints a short-lived JWT at
       login that the SDK sends as `X-Write-Grant`. Accepts the base SDK's `string` or provider
       function, **plus a Svelte store**, which is this binding's only addition to the surface.

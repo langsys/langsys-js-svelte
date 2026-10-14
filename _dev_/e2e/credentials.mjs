@@ -20,10 +20,11 @@ const check = (c, n, d) => results.push({ ok: !!c, n, d });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const browser = await chromium.launch();
-async function visit(path) {
+async function visit(path, initScript) {
     const page = await browser.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(`${e.name}: ${e.message}`));
+    if (initScript) await page.addInitScript(initScript);
     await page.goto(`${BASE}${path}`, { timeout: 90_000 });
     await page.waitForFunction(() => document.querySelector('[data-testid=fx-status]')?.textContent !== 'idle', null, { timeout: 60_000 });
     await sleep(3000); // past the {#await} block's 1.5 s
@@ -54,15 +55,22 @@ async function visit(path) {
     await page.close();
 }
 {
-    const { page, errors } = await visit('/fixture/var-plain?key=&require=1&user=Ana');
+    // What init() had reported when the late block appeared: `error` once it has refused.
+    const { page, errors } = await visit('/fixture/var-plain?key=&require=1&user=Ana', () => {
+        new MutationObserver(() => {
+            if (document.querySelector('#plain-late') && !('lateMountedAt' in window))
+                window.lateMountedAt = document.querySelector('[data-testid=fx-status]')?.textContent;
+        }).observe(document, { subtree: true, childList: true });
+    });
     const shown = await page.evaluate(() => ({
         multi: document.querySelector('#plain-multi')?.textContent,
         late: document.querySelector('#plain-late')?.textContent,
+        initAtLateMount: window.lateMountedAt,
         phrase: [...document.querySelectorAll('[data-ls-phrase]')].map((e) => e.textContent).join(' | '),
     }));
     check(
-        shown.multi === 'First line' && shown.late === 'Mounted after init' && /Signed in as Ana/.test(shown.phrase),
-        'premise: the read-only blocks rendered, the late one after init()',
+        shown.multi === 'First line' && shown.late === 'Mounted after init' && shown.initAtLateMount === 'error' && /Signed in as Ana/.test(shown.phrase),
+        'premise: the read-only blocks rendered, the late one after init() had refused',
         JSON.stringify(shown)
     );
     check(errors.length === 0, 'a register: false block never fails: one phrase, several, a <Phrase>, before and after init()', JSON.stringify(errors));

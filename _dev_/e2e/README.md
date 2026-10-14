@@ -189,8 +189,9 @@ node _dev_/e2e/svelte-dom.mjs
 
 `_dev_/e2e/var.mjs` runs `/fixture/var` (compiled with the build-time transform) and
 `/fixture/var-plain` (without it) through `createLangsysHandle`, against the contract double:
-served translations and ids, plurals, one phrase for two users, handlers, the `{#await}` and
-`{@html}` cases, and that a hydrated client resends nothing the server collected.
+served translations and ids, plurals, one phrase for two users, a block's registered content
+holding placeholders and no values, handlers, the `{#await}` and `{@html}` cases, and that a
+hydrated client resends nothing the server collected.
 
 ```bash
 node _dev_/e2e/var.mjs --serve                                     # the double, :8787

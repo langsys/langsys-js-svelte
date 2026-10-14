@@ -37,7 +37,6 @@ const NEW_CORE = resolve(process.env.NEW_CORE);
 const FIXTURE = resolve(process.env.FIXTURE ?? resolve(HERE, '../../vectors/canonicalization-reference.json'));
 const OUT = resolve(process.env.OUT ?? mkdtempSync(resolve(tmpdir(), 'langsys-id-moves-')));
 mkdirSync(OUT, { recursive: true });
-const BUILD = mkdtempSync(resolve(tmpdir(), 'langsys-id-moves-build-'));
 
 // ---------------------------------------------------------------- helpers bundle
 function ensureHelpers() {
@@ -55,7 +54,6 @@ function ensureHelpers() {
         execFileSync(esbuild, [resolve(BUILD, entry), '--bundle', '--format=esm', '--platform=neutral', '--log-level=warning', `--outfile=${out}`]);
     }
 }
-ensureHelpers();
 
 // ---------------------------------------------------------------- DOM
 const requireFromNew = createRequire(resolve(NEW_CORE, 'package.json'));
@@ -69,9 +67,15 @@ globalThis.Node = window.Node;
 
 const OLD = await import(pathToFileURL(resolve(OLD_CORE, 'dist/index.mjs')).href);
 const NEW = await import(pathToFileURL(resolve(NEW_CORE, 'dist/index.mjs')).href);
-const OLD_H = await import(pathToFileURL(resolve(BUILD, 'helpers-old.mjs')).href);
-const NEW_H = await import(pathToFileURL(resolve(BUILD, 'helpers-new.mjs')).href);
-rmSync(BUILD, { recursive: true, force: true }); // loaded; the bundles are not needed again
+let OLD_H, NEW_H;
+const BUILD = mkdtempSync(resolve(tmpdir(), 'langsys-id-moves-build-'));
+try {
+    ensureHelpers();
+    OLD_H = await import(pathToFileURL(resolve(BUILD, 'helpers-old.mjs')).href);
+    NEW_H = await import(pathToFileURL(resolve(BUILD, 'helpers-new.mjs')).href);
+} finally {
+    rmSync(BUILD, { recursive: true, force: true }); // loaded, or failed to build: not needed again
+}
 
 const coreSha = (dir) => {
     try {

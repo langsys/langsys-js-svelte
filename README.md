@@ -197,9 +197,9 @@ It works the same under SvelteKit and plain Vite, and changes nothing outside `<
 
 The names follow the rules every Langsys SDK shares, so the same expression gives the same phrase whichever SDK renders it: a value that cannot be named — `{a + b}`, `{ok ? x : y}` — becomes `{value}` with a build warning, and is a placeholder of its own each time it appears (`{value}`, `{value_2}`), while one that names itself, like `{name}`, is the same placeholder wherever it repeats; a name you write yourself wins (`%name%` in the text with `params={{ name }}`). `{#if}` and `{#key}` blocks are read branch by branch. Event handlers, classes and other attributes stay on their elements. A `<Phrase>`, `<Translate>` or `<DontTranslate>` inside a block is part of it.
 
-The block is then rendered through the core's block renderer, so it is **translated in the served HTML** during SSR, not only after hydration, and its host carries its id (`data-ls-contentblock`).
+The block is then rendered through the core's block renderer, so it is **translated in the served HTML** during SSR, not only after hydration, and its host carries its id (`data-ls-contentblock`). What it registers holds the placeholder, never the value: its phrases, and the content translators see beside them, where a nested `<Translate>` or `<Phrase>` is its element alone.
 
-``$t(`Hello ${user.name}`)`` is rewritten the same way, to `$t('Hello {name}', undefined, { name: user.name })`.
+``$t(`Hello ${user.name}`)`` is rewritten the same way, to `$t('Hello {name}', undefined, { name: user.name })`. A key you write in an object literal argument is a name you chose, so ``$t(`Hello ${name}`, { name: nickname })`` registers `Hello {name_2}`.
 
 **What it cannot read** — an `{#each}`, an `{#await}`, a snippet, another component, a directive (`bind:`, `use:`, `class:`), a spread, or `{@html}` beside a variable — makes that block a **fallback**: the build names it in a warning, and the block renders as below.
 
@@ -480,11 +480,13 @@ store reports during SSR and throughout hydration, and treating it as `false` wo
 write-enabled session it is read-only — a state it cannot recover from without a reload.
 
 `$writeEnabled` in a component reads the live value from the first moment after hydration. A
-one-shot read, `get(writeEnabled)`, does too once a component has rendered the store, or once the
-first page has mounted in a SvelteKit app that calls `syncNavigation()`; in an app with neither,
-it stays `undefined`. Before then, as in a universal `load`, it is `undefined`, as the server
-rendered it. In a `load`, read it with `get()`: a subscription held there counts as a render and
-ends the guard before the page hydrates.
+one-shot read, `get(writeEnabled)`, reads it from the task after a component first renders the
+store, or after the first page mounts in a SvelteKit app that calls `syncNavigation()`; the first
+page's `onMount` runs before that and still reads `undefined`. In an app with neither, it stays
+`undefined`. The universal `load` that runs before hydration reads `undefined`, as the server
+rendered it, and a `load` on a later client-side navigation reads the live value. In a `load`,
+read it with `get()`: a subscription held there counts as a render and ends the guard before the
+page hydrates.
 
 For authenticated apps, your backend mints a short-lived JWT at login and the SDK sends it
 as `X-Write-Grant`, which lets the server treat the session as write-enabled:

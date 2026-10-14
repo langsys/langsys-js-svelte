@@ -19,7 +19,8 @@
     // The core's header for the app's own API calls, read again whenever the loaded locale changes.
     const acceptLanguage = $derived($currentlyLoadedLocale ? (LangsysApp.localeHeaders()['Accept-Language'] ?? '(none)') : '(no locale yet)');
     // Rendered only in the browser: what the client registers on its own (the control for "the
-    // client does not resend what the server collected").
+    // client does not resend what the server collected"), and a block of two sentences, mounted
+    // before the layout's init(), whose registered content the browser sends.
     let mounted = $state(false);
     onMount(() => (mounted = true));
 </script>
@@ -51,4 +52,8 @@
 <p id="locale-headers">Accept-Language: {acceptLanguage}</p>
 {#if mounted}
     <Translate category="VAR" tag="div"><p id="client-only">Rendered in the browser for {user.name}</p></Translate>
+    <Translate category="VAR" tag="div"
+        ><p id="client-block">Shown in the browser to {user.name}</p>
+        <p>Mounted before init</p></Translate
+    >
 {/if}
