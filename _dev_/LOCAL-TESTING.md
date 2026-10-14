@@ -29,7 +29,7 @@ link lines again after any install.
 Check it took:
 
 ```bash
-npm test -- --run        # 321 tests, no network
+npm test -- --run        # 327 tests, no network
 npm run check            # 0 errors
 ```
 
@@ -149,6 +149,6 @@ stores nothing under `de-de`; a slow Italian overtaken by a Portuguese that succ
 ## 9. Everything at once
 
 The full run, each suite on a freshly started server, is the command block in `CONFORMANCE.md`
-under _Evidence — and re-running it_. On the core above every suite passes: unit 321, VAR 28,
+under _Evidence — and re-running it_. On the core above every suite passes: unit 327, VAR 28,
 contract 22, live E2E 61, Svelte DOM 17, SRV concurrency 6, SRV-7 scope 9, SRV-3 flush 6 + 6,
 locale race 4, running without credentials 7.

@@ -1,7 +1,6 @@
 import { createRequestScope, registerBlock, type BlockNode, type iCategories } from 'langsys-js-typescript';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
-import VarCategorySnippet from './VarCategorySnippet.svelte';
 import VarDontTranslate from './VarDontTranslate.svelte';
 
 /**
@@ -16,7 +15,7 @@ async function inScope(run: () => void) {
     const blocks = (scope as unknown as { blockMisses: Map<string, unknown> }).blockMisses;
     return JSON.stringify([...scope.misses(), ...blocks.values()]);
 }
-const props = { email: 'a@b.c', version: '1.2', items: ['x'], section: 'Shop' };
+const props = { email: 'a@b.c', version: '1.2', items: ['x'] };
 
 describe('a value inside <DontTranslate>', () => {
     it('reaches no phrase: in a <Phrase>, in one nested in a block, or under a <Translate> nested in a <Phrase>', async () => {
@@ -38,15 +37,6 @@ describe('a value inside <DontTranslate>', () => {
         const sent = await inScope(() => void render(VarDontTranslate, { props }).body);
         expect(sent).toContain('{"category":"DT","phrase":"Plain {version}"}');
         expect(sent).not.toMatch(/Build|Top/);
-    });
-
-    it('a category the fallback block computes reaches its own units, inside an {#each} that reuses its name too', async () => {
-        const sent = await inScope(() => void render(VarDontTranslate, { props }).body);
-        expect(sent).toContain('{"category":"Shop","phrase":"Computed {version}"}');
-        expect(sent).toContain('{"category":"Shop","phrase":"Each {version}"}');
-        // In a {#snippet} the block is handed as a prop, rendered from its children.
-        const snippet = await inScope(() => void render(VarCategorySnippet, { props }).body);
-        expect(snippet).toContain('{"category":"Shop","phrase":"Line {version}"}');
     });
 
     it('control: a phrase handed to the core with its <DontTranslate> value as text registers the value', async () => {

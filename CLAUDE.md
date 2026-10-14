@@ -30,7 +30,7 @@ src/lib/
         Translate.svelte          # tree path (renderBlock/registerBlock) when the transform ran; else the vanilla DOM Translate, register: false
         Phrase.svelte             # the same two paths over the vanilla Phrase rich-text handler
         RenderedNodes.svelte      # writes a rendered block's nodes as Svelte-owned elements, handlers back by `source` index
-        transform.ts              # the `__ls` prop's type, and param normalisation
+        transform.ts              # the `__ls` prop's type, param normalisation, and the category a fallback block hands its units
         DontTranslate.svelte      # pure glue — emits translate="no"; no vanilla handler behind it
 ```
 

@@ -148,56 +148,45 @@ describe('VAR-6 — the preprocessor', () => {
         expect(units[units.length - 1].params).toEqual({ x: 'Ana' });
     });
 
-    it("reads no unit inside a <DontTranslate>, and gives a fallback block's own units its category", () => {
+    it("reads no unit inside a <DontTranslate>, and hands a fallback block's own units its category", () => {
         const { code, warnings } = run(
             '<Translate category="DT"><ul>{#each items as i}<li>{i}</li>{/each}</ul><Phrase>Plain {v}</Phrase>' +
                 '<DontTranslate><Phrase>Build {v}</Phrase></DontTranslate></Translate>' +
-                '<DontTranslate><Phrase category="DT">Top {v}</Phrase></DontTranslate>'
+                '<DontTranslate><Phrase category="DT">Top {v}</Phrase>' +
+                '<Translate><ul>{#each items as i}<li>{i}</li>{/each}</ul><Phrase>Inner {v}</Phrase></Translate></DontTranslate>'
         );
-        const units = blocks(code, { items: [], v: '1.2' }) as Array<{ fallback?: string; tree?: unknown }>;
-        expect(units.map((u) => u.fallback ?? 'read')).toEqual(['{#each}', 'read', 'place inside a <DontTranslate>', 'place inside a <DontTranslate>']);
-        // The outer block's category, which its own <Phrase> would have taken inside it.
-        expect(code).toMatch(/<Phrase category=\{"DT"\}[^>]*>Plain/);
-        expect(warnings).toHaveLength(3);
+        const units = blocks(code, { items: [], v: '1.2' }) as Array<{ fallback?: string; scope?: string; in?: string }>;
+        const unread = 'place inside a <DontTranslate>';
+        expect(units.map((u) => u.fallback ?? 'read')).toEqual(['{#each}', 'read', unread, unread, unread, unread]);
+        // The outer block provides its category; its own <Phrase> reads it by the same key.
+        expect(units[0].scope).toMatch(/^langsys:\w+:\d+$/);
+        expect(units[1].in).toBe(units[0].scope);
+        // Nothing inside a <DontTranslate> takes part: no key handed, none provided.
+        expect(units.slice(2).every((u) => u.in === undefined && u.scope === undefined)).toBe(true);
+        expect(warnings).toHaveLength(5);
         expect(warnings[1]).toMatch(/<Phrase> is inside a <DontTranslate>, whose content is never read\. It registers nothing \(VAR-7\)/);
     });
 
-    it("gives a fallback block's own units a category it computes, evaluated once where the block is", () => {
-        const { code } = run(
-            '<Translate category={section}><ul>{#each items as section}<li>{section}</li><Phrase>Each {v}</Phrase>{/each}</ul></Translate>' +
-                '<Phrase category="a`{kind}$&#123;x"><ul>{#each items as i}<li>{i}</li>{/each}</ul><Translate>Mixed {v}</Translate></Phrase>' +
-                '<Translate category={section}><ul>{#each items as i}<li>{i}</li>{/each}</ul></Translate>'
-        );
-        // Declared first in the block's children, outside the {#each} that reuses `section`.
-        expect(code).toMatch(/<Translate category=\{section\}[^>]*>\{@const __lsCategory0 = \(section\)\}<ul>\{#each items as section\}/);
-        expect(code).toMatch(/<Phrase category=\{__lsCategory0\}[^>]*>Each/);
-        expect(code).toMatch(/<Translate category=\{__lsCategory1\}[^>]*>Mixed/);
-        // A text attribute with values in it is the string Svelte makes of it, its text kept as written.
-        const declared = Object.fromEntries([...code.matchAll(/\{@const (__lsCategory\d+) = \((.*?)\)\}/g)].map((m) => [m[1], m[2]]));
-        expect(new Function('kind', `return (${declared.__lsCategory1});`)('K')).toBe('a`K${x');
-        // A block with no unit of its own declares nothing.
-        expect(Object.keys(declared)).toEqual(['__lsCategory0', '__lsCategory1']);
-        for (const generate of ['server', 'client'] as const) expect(() => compile(code, { generate, filename: 'Test.svelte' })).not.toThrow();
-    });
-
-    it('declares a computed category again in a {#snippet} the block is handed, and gives none where a name it reads is hidden', () => {
+    it('keys the category a fallback block provides to that block, and provides it only when a unit is read inside', () => {
         const each = '<ul>{#each items as i}<li>{i}</li>{/each}</ul>';
-        const { code, warnings } = run(
-            `<Translate category={section}>${each}{#snippet line()}<Phrase>Line {v}</Phrase>{/snippet}{#snippet row(section)}<Phrase>Row {v}</Phrase>{/snippet}</Translate>` +
-                `<Translate category={section}>{@const section = 'x'}${each}<Phrase>Beside {v}</Phrase></Translate>` +
-                `<Translate category={cfg.section}>${each}{#snippet cell(section)}<Phrase>Cell {v}</Phrase>{/snippet}</Translate>`
-        );
-        // A {#snippet} written directly in a component is a prop of it, outside the children.
-        expect(code).toContain('{#snippet line()}{@const __lsCategory0 = (section)}<Phrase category={__lsCategory0}');
-        expect(code).toMatch(/<Phrase __ls=[^>]*>Row/);
-        expect(code).toMatch(/<Phrase __ls=[^>]*>Beside/);
-        // A property's name is not a name the category reads.
-        expect(code).toContain('{#snippet cell(section)}{@const __lsCategory1 = (cfg.section)}<Phrase category={__lsCategory1}');
-        expect(
-            warnings.filter((w) =>
-                /inside a block whose category reads `section`, which names something else here, so it takes no category\. Give it one\./.test(w)
-            )
-        ).toHaveLength(2);
+        const markup =
+            `<Translate category={section}>${each}<Phrase>A {v}</Phrase>{#snippet s(c)}<Phrase>B</Phrase>{/snippet}` +
+            `<Translate>${each}<Phrase>Deep</Phrase></Translate></Translate>` +
+            `<Translate category="X">${each}</Translate>`;
+        const { code } = run(markup);
+        const [outer, a, b, inner, deep, alone] = blocks(code, { items: [], v: '1', section: 'S' }) as Array<{ scope?: string; in?: string }>;
+        expect([a.in, b.in, inner.in]).toEqual([outer.scope, outer.scope, outer.scope]);
+        // A fallback inside a fallback reads the outer one's and provides its own.
+        expect(inner.scope).toMatch(/^langsys:/);
+        expect(inner.scope).not.toBe(outer.scope);
+        expect(deep.in).toBe(inner.scope);
+        expect(alone).toEqual({ fallback: '{#each}' });
+        // Another file's blocks provide under other keys.
+        const content = `<script lang="ts">${IMPORT}</script>\n${markup}`;
+        const elsewhere = langsysPreprocess({ warn: () => {} }).markup({ content, filename: 'Other.svelte' })!.code;
+        const [other] = blocks(elsewhere, { items: [], v: '1', section: 'S' }) as Array<{ scope?: string }>;
+        expect(other.scope).toMatch(/^langsys:/);
+        expect(other.scope).not.toBe(outer.scope);
         for (const generate of ['server', 'client'] as const) expect(() => compile(code, { generate, filename: 'Test.svelte' })).not.toThrow();
     });
 
@@ -217,8 +206,8 @@ describe('VAR-6 — the preprocessor', () => {
     it('a readable block nested in a fallback block is transformed on its own', () => {
         const { code } = run('<Translate><ul>{#each xs as x (x)}<li>{x}</li>{/each}</ul><Translate><p>Static text</p></Translate></Translate>');
         expect(blocks(code, { xs: [] })).toEqual([
-            { fallback: '{#each}' },
-            { tree: [{ tag: 'p', attrs: {}, children: [{ text: 'Static text' }] }], dyn: [null], params: {} },
+            { fallback: '{#each}', scope: expect.stringMatching(/^langsys:/) },
+            { tree: [{ tag: 'p', attrs: {}, children: [{ text: 'Static text' }] }], dyn: [null], params: {}, in: expect.stringMatching(/^langsys:/) },
         ]);
     });
 

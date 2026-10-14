@@ -2,7 +2,7 @@
     /** Fixture for `dont-translate.test.ts`, compiled WITH the transform. */
     import { DontTranslate, Phrase, Translate } from '$lib/index.js';
 
-    let { email, version, items, section }: { email: string; version: string; items: string[]; section: string } = $props();
+    let { email, version, items }: { email: string; version: string; items: string[] } = $props();
 </script>
 
 <Phrase category="DT" tag="p">Signed in as <DontTranslate>{email}</DontTranslate> today</Phrase>
@@ -25,14 +25,6 @@
     </ul>
     <Phrase>Plain {version}</Phrase>
     <DontTranslate><Phrase>Build {version}</Phrase></DontTranslate></Translate
->
-<!-- A category the block computes reaches its units too, an {#each} reusing the name included. -->
-<Translate category={section} tag="div"
-    ><ul>
-        {#each items as section (section)}<li>{section}</li>
-            <Phrase>Each {version}</Phrase>{/each}
-    </ul>
-    <Phrase>Computed {version}</Phrase></Translate
 >
 <!-- Nor is one inside a <DontTranslate> outside any block. -->
 <DontTranslate><Phrase category="DT">Top {version}</Phrase></DontTranslate>

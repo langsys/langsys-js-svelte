@@ -33,7 +33,7 @@
     import type { Snippet } from 'svelte';
     import { onDestroy } from 'svelte';
     import RenderedNodes from './RenderedNodes.svelte';
-    import { NO_TRANSFORM, paramsOf, type TransformOutput } from './transform.js';
+    import { NO_TRANSFORM, blockCategory, paramsOf, type TransformOutput } from './transform.js';
 
     interface Props {
         class?: string;
@@ -45,7 +45,13 @@
         __ls?: TransformOutput;
     }
 
-    let { class: clazz = '', tag = 'span', category = '', params = {}, children, __ls = undefined }: Props = $props();
+    let { class: clazz = '', tag = 'span', category: named = '', params = {}, children, __ls = undefined }: Props = $props();
+
+    // Inside a block that falls back, the block's category unless this one names its own (VAR-6).
+    // A component's transform output never changes after it is created.
+    // svelte-ignore state_referenced_locally
+    const inBlock = blockCategory(__ls, () => named);
+    const category = $derived(inBlock());
 
     /**
      * The skip marker, spread so the attribute NAME comes from the core rather
