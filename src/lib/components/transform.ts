@@ -13,13 +13,13 @@ import { getContext, setContext } from 'svelte';
  *
  * A unit the build read on its own inside a fallback block is in that block, and takes its
  * category unless it names one: the block provides it as a context under `scope`, and the unit
- * reads it by the same key as `in`.
+ * reads it by the same key as `in`, an object of the component instance that wrote them.
  */
 export type TransformOutput = (
     | { tree: BlockNode[]; dyn: Array<Record<string, unknown> | null>; params: Record<string, unknown> }
-    | { fallback: string; scope?: string }
+    | { fallback: string; scope?: object }
     | { content: 'raw-html' }
-) & { in?: string };
+) & { in?: object };
 
 /**
  * The category a unit renders and registers under, given its own: for one the build read on its

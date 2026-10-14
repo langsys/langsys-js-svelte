@@ -3,13 +3,14 @@ import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import VarCategorySnippet from './VarCategorySnippet.svelte';
 import VarFallbackCategory from './VarFallbackCategory.svelte';
+import VarRecursive from './VarRecursive.svelte';
 
 /**
  * VAR-6 for a unit the build reads on its own inside a block that falls back: inside the core's
  * request scope, the category it registers under is the block's, as it would be were the block
  * read, unless the unit names its own.
  */
-async function sent(component: typeof VarFallbackCategory | typeof VarCategorySnippet, props: Record<string, unknown>) {
+async function sent(component: typeof VarFallbackCategory | typeof VarCategorySnippet | typeof VarRecursive, props: Record<string, unknown>) {
     const scope = await createRequestScope({ locale: 'en-us', catalog: {} as iCategories });
     // `.body` inside run(): Svelte renders when the body is read.
     scope.run(() => void render(component as typeof VarFallbackCategory, { props: props as never }).body);
@@ -25,6 +26,7 @@ const props = () => {
         section: 'Shop',
         own: { category: 'Mine' },
         block: { category: 'Sp', tag: 'div' },
+        after: { category: 'X' },
         unset: undefined,
         next: () => `C${++calls}`,
         calls: () => calls,
@@ -56,6 +58,17 @@ describe("a fallback block's own units", () => {
         const out = await sent(VarFallbackCategory, props());
         expect(out).toContain(phrase('Mine', 'Spread {version}'));
         expect(out).toContain(phrase('Sp', 'Block spread {version}'));
+    });
+
+    it("keep a category they name after a spread decides the block's, read or fallen back", async () => {
+        const out = await sent(VarFallbackCategory, props());
+        expect(out).toContain(phrase('Shop', 'Named, read {version}'));
+        expect(out).toContain(phrase('Shop', 'Named, fallen back {version}'));
+    });
+
+    it('take the instance of the block they are written in, when it renders another instance around them', async () => {
+        const out = await sent(VarRecursive, { c: 'Outer', items: ['x'] });
+        expect(out).toContain(phrase('Outer', 'Written in the outer one'));
     });
 
     it("take the block's for an empty category, as inside a block that is read", async () => {

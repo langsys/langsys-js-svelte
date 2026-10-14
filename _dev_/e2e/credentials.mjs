@@ -55,6 +55,13 @@ async function visit(path, initScript) {
     // option's, and nothing fails without it.
     const { page, errors } = await visit('/fixture/var?key=&user=Ana');
     check(errors.length === 0, 'control: without requireCredentials the same page surfaces nothing', JSON.stringify(errors));
+    // WIRE-4: with no credentials the app boots, init() resolves unconfigured, and the page renders
+    // source with its values filled.
+    check(
+        (await page.textContent('[data-testid=fx-status]')) === 'error' && (await page.textContent('#greet')) === 'Hello Ana, welcome back',
+        'without requireCredentials, init() resolves unconfigured and the page renders source with its values',
+        `${await page.textContent('[data-testid=fx-status]')} / ${await page.textContent('#greet')}`
+    );
     await page.close();
 }
 {

@@ -9,6 +9,7 @@
         section,
         own,
         block,
+        after,
         unset,
         next,
     }: {
@@ -17,6 +18,7 @@
         section: string;
         own: { category: string };
         block: { category: string; tag: string };
+        after: Record<string, string>;
         unset: string | undefined;
         next: () => string;
     } = $props();
@@ -62,6 +64,18 @@
         {#each items as item (item)}<li>{item}</li>{/each}
     </ul>
     <Phrase>Block spread {version}</Phrase></Translate
+>
+<!-- A spread after a category written as text decides it at runtime: a unit naming its own keeps
+     it, in a block that is read as in one that falls back. -->
+<Translate category="Shop" {...after} tag="div"
+    ><p>Read</p>
+    <Phrase category="Shop">Named, read {version}</Phrase></Translate
+>
+<Translate category="Shop" {...after} tag="div"
+    ><ul>
+        {#each items as item (item)}<li>{item}</li>{/each}
+    </ul>
+    <Phrase category="Shop">Named, fallen back {version}</Phrase></Translate
 >
 <!-- An empty category is the block's, as it is inside a block that is read. -->
 <Translate category="Out" tag="div"

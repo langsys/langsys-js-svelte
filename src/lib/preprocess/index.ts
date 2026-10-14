@@ -108,8 +108,8 @@ class Transform {
     private tStore: string | null = null;
     /** Every `$t(\`…${x}…\`)` call, by start offset. */
     private readonly tCalls = new Map<number, Node>();
-    /** Fallback blocks that hand their category to units read on their own inside them. */
-    private scopes = 0;
+    /** Fallback blocks that hand their category to units read on their own inside them, by key. */
+    private readonly scopes: Scope[] = [];
     private changed = false;
 
     constructor(
@@ -142,7 +142,22 @@ class Transform {
             this.changed = true;
         }
         this.visit(this.ast.fragment.nodes);
+        this.declareScopes();
         return this.changed;
+    }
+
+    /**
+     * Each key a fallback block provides its category under is an object of the component
+     * instance, so a unit reads the block it is written in, in the instance that wrote it, whatever
+     * renders around it: another component's block, or another instance of this one.
+     */
+    private declareScopes(): void {
+        const used = this.scopes.filter((scope) => scope.used);
+        if (!used.length) return;
+        const declaration = `const ${used.map((scope) => `${scope.key} = {}`).join(', ')};`;
+        const instance = this.ast.instance as (Node & { content: Node }) | undefined;
+        if (instance) this.s.appendLeft(instance.content.end, `\n${declaration}\n`);
+        else this.s.prepend(`<script>${declaration}</script>\n`);
     }
 
     // ------------------------------------------------------------------
@@ -194,12 +209,14 @@ class Transform {
         // block's category, as it would inside it, unless it names one (VAR-6). Here the category is
         // known only when it is written as text.
         const own = staticProp('category');
-        const computed = attributes.some((a) => a.type === 'SpreadAttribute' || (a.type === 'Attribute' && a.name === 'category' && own === undefined));
-        const category = own || (computed ? '' : (scope?.text ?? ''));
+        const at = attributes.findIndex((a) => a.type === 'Attribute' && a.name === 'category');
+        // A spread after it decides it at runtime, as an expression does.
+        const computed = attributes.some((a, i) => (a.type === 'SpreadAttribute' && i > at) || (i === at && own === undefined));
+        const category = computed ? '' : own || scope?.text || '';
         const explicitParams = attributes.find((a) => a.type === 'Attribute' && a.name === 'params');
 
         if (scope) scope.used = true;
-        const within = scope ? `, in: ${JSON.stringify(scope.key)}` : '';
+        const within = scope ? `, in: ${scope.key}` : '';
         const inject = (code: string) => this.attribute(node, `__ls={{ ${code}${within} }}`);
 
         const occurrences: Occurrence[] = [];
@@ -228,11 +245,11 @@ class Transform {
             this.warn(`${this.where(node)}: <${node.name}> keeps a ${e.message}, ${e.why}. It renders from the catalog and registers nothing (VAR-7).`);
             // A block inside it that the build can read is a block of its own: the core's walk of
             // this one leaves a marked host to that block (MARK-4). The units read so take this
-            // block's category from a context it provides under a key of its own, so a unit is in
-            // the block it is written in whatever wraps it at runtime.
-            const inner: Scope = { key: `langsys:${hash(this.filename)}:${this.scopes++}`, text: category, used: false };
+            // block's category from a context it provides under a key of its own.
+            const inner: Scope = { key: `__lsScope${this.scopes.length}`, text: category, used: false };
+            this.scopes.push(inner);
             this.visit((node.fragment as Fragment).nodes, inner);
-            inject(`fallback: ${JSON.stringify(e.message)}${inner.used ? `, scope: ${JSON.stringify(inner.key)}` : ''}`);
+            inject(`fallback: ${JSON.stringify(e.message)}${inner.used ? `, scope: ${inner.key}` : ''}`);
             return;
         }
         trimEdges(ir);
@@ -502,7 +519,7 @@ class Transform {
     }
 }
 
-/** A block whose fallback is being walked: its context key, and its category when written as text. */
+/** A block whose fallback is being walked: its context key's name, and its category when written as text. */
 interface Scope {
     key: string;
     text: string;
@@ -618,13 +635,6 @@ function rawHtmlOnly(nodes: readonly Node[]): boolean {
             return staticAttrs && ok((n.fragment as Fragment).nodes);
         });
     return ok(nodes) && html;
-}
-
-/** A short, stable name for a file, so the context keys of two components do not meet. */
-function hash(text: string): string {
-    let h = 0x811c9dc5;
-    for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
-    return (h >>> 0).toString(36);
 }
 
 /** Svelte drops the whitespace a block or an element opens and closes with; the tree does too. */

@@ -32,6 +32,7 @@ if (process.argv.includes('--serve')) {
     const PLAIN_ANA = 'Hello Ana, welcome back'; // what the plain route's DOM reads
     const cartBlock = generateCustomId('VAR', [CART, 'Add one']);
     const PHOTO = 'Photo of {name}'; // a readable block inside a fallback block, its only text an attribute
+    const PICTURE = 'Picture of {name}'; // the same, naming no category: it takes the fallback block's
     const SEED = {
         projects: [
             {
@@ -42,6 +43,8 @@ if (process.argv.includes('--serve')) {
                     { category: 'VAR', phrase: GREET, translations: { 'it-it': 'Ciao {name}, bentornato' } },
                     { category: 'VAR', phrase: PLAIN_ANA, translations: { 'it-it': 'Ciao Ana, bentornato' } },
                     { category: 'VAR', phrase: PHOTO, translations: { 'it-it': 'Foto di {name}' } },
+                    { category: 'VAR', phrase: PICTURE, translations: { 'it-it': 'Immagine di {name}' } },
+                    { category: 'VAR2', phrase: PICTURE, translations: { 'it-it': 'Figura di {name}' } },
                 ],
                 blocks: [
                     {
@@ -59,10 +62,22 @@ if (process.argv.includes('--serve')) {
                         content: '<img alt="Photo of {name}">',
                         phrases: [{ phrase: PHOTO, translations: { 'it-it': 'Foto di {name}' } }],
                     },
+                    ...[
+                        ['VAR', 'Immagine di {name}'],
+                        ['VAR2', 'Figura di {name}'],
+                    ].map(([category, translation]) => ({
+                        category,
+                        custom_id: generateCustomId(category, [PICTURE]),
+                        content: '<img alt="Picture of {name}">',
+                        phrases: [{ phrase: PICTURE, translations: { 'it-it': translation } }],
+                    })),
                 ],
             },
         ],
-        keys: [{ key: 'k-write', project: 'p1', type: 'write' }],
+        keys: [
+            { key: 'k-write', project: 'p1', type: 'write' },
+            { key: 'k-read', project: 'p1', type: 'read' },
+        ],
     };
 
     const results = [];
@@ -125,9 +140,15 @@ if (process.argv.includes('--serve')) {
 
     const browser = await chromium.launch();
     const notices = [];
+    // ICU-5: the capability header on every catalog request the browser makes through the binding.
+    const catalogHeaders = [];
     const visit = async (path) => {
         const page = await browser.newPage();
         page.on('console', (m) => notices.push(m.text()));
+        page.on('request', (r) => {
+            if (r.method() === 'GET' && /\/api\/translations(\/data)?(\?|$)/.test(r.url()))
+                catalogHeaders.push(r.allHeaders().then((h) => h['x-langsys-capabilities'] ?? ''));
+        });
         await page.goto(`${BASE}${path}`);
         await page.waitForFunction(() => document.querySelector('[data-testid=fx-status]')?.textContent === 'ready', null, { timeout: 60_000 });
         return page;
@@ -268,6 +289,47 @@ if (process.argv.includes('--serve')) {
         (await nested.getAttribute('#photo', 'alt')) === 'Foto di Ana',
         'MARK-4: after hydration, a readable block inside a fallback block keeps its value',
         await nested.getAttribute('#photo', 'alt')
+    );
+
+    // VAR-6 in the browser: a block read on its own inside a fallback block takes the category the
+    // block renders with. A client that read no category would render it as a miss, in English.
+    const picture = async (path) => {
+        const p = await visit(path);
+        const alt = () => p.getAttribute('#picture', 'alt');
+        const until = (value) =>
+            p.waitForFunction((v) => document.querySelector('#picture')?.getAttribute('alt') === v, value, { timeout: 15_000 }).catch(() => {});
+        return { p, alt, until };
+    };
+    const served = await picture(`/fixture/var/category?user=Ana&key=k-write&locale=it-it`);
+    await served.until('Immagine di Ana');
+    await sleep(1500);
+    check(
+        (await served.alt()) === 'Immagine di Ana',
+        "VAR-6: served in Italian and hydrated, a unit inside a fallback block keeps the block's category",
+        await served.alt()
+    );
+    // The same page in the base locale, switched to Italian in the browser: rendered by the client
+    // alone, after a catalog request of its own.
+    // A read-only session. A write session that showed these blocks in the base locale keeps
+    // rendering them as source after the switch, although the catalog it fetches holds them: the
+    // core's to answer (CONFORMANCE.md, Gaps), and not what this check measures.
+    const client = await picture(`/fixture/var/category?user=Ana&key=k-read`);
+    await client.p.evaluate(() => window.__fxSetLocale('it-it'));
+    await client.until('Immagine di Ana');
+    check(
+        (await client.p.getAttribute('#alone', 'alt')) === 'Immagine di Ana',
+        'control: rendered by the client, the same block in no fallback, naming the category, is translated',
+        await client.p.getAttribute('#alone', 'alt')
+    );
+    check((await client.alt()) === 'Immagine di Ana', "VAR-6: rendered by the client, the unit takes the block's category", await client.alt());
+    await client.p.click('#switch');
+    await client.until('Figura di Ana');
+    check((await client.alt()) === 'Figura di Ana', "VAR-6: … and follows the block's category when it changes", await client.alt());
+    const capabilities = await Promise.all(catalogHeaders);
+    check(
+        capabilities.length >= 1 && capabilities.every((h) => h === 'icu'),
+        'ICU-5: every catalog request the browser makes carries X-Langsys-Capabilities: icu',
+        JSON.stringify(capabilities)
     );
 
     await browser.close();

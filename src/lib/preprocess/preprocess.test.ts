@@ -12,8 +12,13 @@ function run(markup: string, script = '') {
     return { code: out?.code ?? content, warnings };
 }
 
-/** Evaluates the `__ls` each block was given, with `scope` as the component's variables. */
-function blocks(code: string, scope: Record<string, unknown> = {}): unknown[] {
+/**
+ * Evaluates the `__ls` each block was given, with `scope` as the component's variables and each
+ * context key the component declares as an object of its own.
+ */
+function blocks(code: string, variables: Record<string, unknown> = {}): unknown[] {
+    const keys = Object.fromEntries([...new Set(code.match(/__lsScope\d+/g) ?? [])].map((name) => [name, { key: name }]));
+    const scope = { ...keys, ...variables };
     const ast = parse(code, { modern: true }) as unknown as { fragment: { nodes: unknown[] } };
     const found: unknown[] = [];
     const walk = (nodes: unknown[]) => {
@@ -159,7 +164,7 @@ describe('VAR-6 — the preprocessor', () => {
         const unread = 'place inside a <DontTranslate>';
         expect(units.map((u) => u.fallback ?? 'read')).toEqual(['{#each}', 'read', unread, unread, unread, unread]);
         // The outer block provides its category; its own <Phrase> reads it by the same key.
-        expect(units[0].scope).toMatch(/^langsys:\w+:\d+$/);
+        expect(units[0].scope).toBeDefined();
         expect(units[1].in).toBe(units[0].scope);
         // Nothing inside a <DontTranslate> takes part: no key handed, none provided.
         expect(units.slice(2).every((u) => u.in === undefined && u.scope === undefined)).toBe(true);
@@ -167,27 +172,29 @@ describe('VAR-6 — the preprocessor', () => {
         expect(warnings[1]).toMatch(/<Phrase> is inside a <DontTranslate>, whose content is never read\. It registers nothing \(VAR-7\)/);
     });
 
-    it('keys the category a fallback block provides to that block, and provides it only when a unit is read inside', () => {
+    it('keys the category a fallback block provides by an object of the component instance, and provides it only when a unit is read inside', () => {
         const each = '<ul>{#each items as i}<li>{i}</li>{/each}</ul>';
         const markup =
             `<Translate category={section}>${each}<Phrase>A {v}</Phrase>{#snippet s(c)}<Phrase>B</Phrase>{/snippet}` +
             `<Translate>${each}<Phrase>Deep</Phrase></Translate></Translate>` +
             `<Translate category="X">${each}</Translate>`;
         const { code } = run(markup);
-        const [outer, a, b, inner, deep, alone] = blocks(code, { items: [], v: '1', section: 'S' }) as Array<{ scope?: string; in?: string }>;
-        expect([a.in, b.in, inner.in]).toEqual([outer.scope, outer.scope, outer.scope]);
+        const [outer, a, b, inner, deep, alone] = blocks(code, { items: [], v: '1', section: 'S' }) as Array<{ scope?: object; in?: object }>;
+        for (const unit of [a, b, inner]) expect(unit.in).toBe(outer.scope);
         // A fallback inside a fallback reads the outer one's and provides its own.
-        expect(inner.scope).toMatch(/^langsys:/);
+        expect(inner.scope).toBeDefined();
         expect(inner.scope).not.toBe(outer.scope);
         expect(deep.in).toBe(inner.scope);
         expect(alone).toEqual({ fallback: '{#each}' });
-        // Another file's blocks provide under other keys.
-        const content = `<script lang="ts">${IMPORT}</script>\n${markup}`;
-        const elsewhere = langsysPreprocess({ warn: () => {} }).markup({ content, filename: 'Other.svelte' })!.code;
-        const [other] = blocks(elsewhere, { items: [], v: '1', section: 'S' }) as Array<{ scope?: string }>;
-        expect(other.scope).toMatch(/^langsys:/);
-        expect(other.scope).not.toBe(outer.scope);
-        for (const generate of ['server', 'client'] as const) expect(() => compile(code, { generate, filename: 'Test.svelte' })).not.toThrow();
+        // Declared in the instance script, an object each, so every instance has its own.
+        expect(code).toMatch(/\nconst __lsScope0 = \{\}, __lsScope1 = \{\};\n<\/script>/);
+        // A component without an instance script gets one.
+        const bare = langsysPreprocess({ warn: () => {} }).markup({ content: `<script module>${IMPORT}</script>\n${markup}`, filename: 'Bare.svelte' })!.code;
+        expect(bare).toMatch(/^<script>const __lsScope0 = \{\}, __lsScope1 = \{\};<\/script>\n<script module>/);
+        for (const generate of ['server', 'client'] as const) {
+            expect(() => compile(code, { generate, filename: 'Test.svelte' })).not.toThrow();
+            expect(() => compile(bare, { generate, filename: 'Bare.svelte' })).not.toThrow();
+        }
     });
 
     it('marks what it cannot read as a fallback, and says so at build time', () => {
@@ -206,8 +213,8 @@ describe('VAR-6 — the preprocessor', () => {
     it('a readable block nested in a fallback block is transformed on its own', () => {
         const { code } = run('<Translate><ul>{#each xs as x (x)}<li>{x}</li>{/each}</ul><Translate><p>Static text</p></Translate></Translate>');
         expect(blocks(code, { xs: [] })).toEqual([
-            { fallback: '{#each}', scope: expect.stringMatching(/^langsys:/) },
-            { tree: [{ tag: 'p', attrs: {}, children: [{ text: 'Static text' }] }], dyn: [null], params: {}, in: expect.stringMatching(/^langsys:/) },
+            { fallback: '{#each}', scope: { key: '__lsScope0' } },
+            { tree: [{ tag: 'p', attrs: {}, children: [{ text: 'Static text' }] }], dyn: [null], params: {}, in: { key: '__lsScope0' } },
         ]);
     });
 
