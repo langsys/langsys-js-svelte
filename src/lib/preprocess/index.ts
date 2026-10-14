@@ -108,6 +108,8 @@ class Transform {
     private tStore: string | null = null;
     /** Every `$t(\`…${x}…\`)` call, by start offset. */
     private readonly tCalls = new Map<number, Node>();
+    /** `{@const}` names declared for the categories fallback blocks compute. */
+    private consts = 0;
     private changed = false;
 
     constructor(
@@ -147,20 +149,40 @@ class Transform {
     // Blocks
     // ------------------------------------------------------------------
 
-    private visit(nodes: readonly Node[] | undefined): void {
+    /**
+     * Finds the units to transform. `category` is that of the block whose fallback is being walked,
+     * which its own units take unless they name one. Nothing inside a `<DontTranslate>` is read.
+     */
+    private visit(nodes: readonly Node[] | undefined, category?: Inherited, unread = false): void {
         for (const node of nodes ?? []) {
             const kind = node.type === 'Component' ? this.locals.get(node.name as string) : undefined;
             if (kind === 'Translate' || kind === 'Phrase') {
-                this.block(node, kind);
+                if (unread) this.unread(node);
+                else this.block(node, kind, category);
                 continue; // a nested block is part of this one, or of its fallback
             }
             for (const key of ['fragment', 'consequent', 'alternate', 'body', 'fallback', 'pending', 'then', 'catch']) {
-                this.visit((node[key] as Fragment | null | undefined)?.nodes);
+                this.visit((node[key] as Fragment | null | undefined)?.nodes, category, unread || kind === 'DontTranslate');
             }
         }
     }
 
-    private block(node: Node, kind: 'Translate' | 'Phrase'): void {
+    /** Adds an attribute to a component's opening tag. */
+    private attribute(node: Node, code: string): void {
+        const attributes = node.attributes as Node[];
+        const at = attributes.length ? attributes[attributes.length - 1].end : node.start + 1 + (node.name as string).length;
+        this.s.appendLeft(at, ` ${code}`);
+        this.changed = true;
+    }
+
+    /** A unit inside a `<DontTranslate>`: its content is never read, so it registers nothing (VAR-7). */
+    private unread(node: Node): void {
+        if ((node.attributes as Node[]).some((a) => a.name === '__ls')) return;
+        this.warn(`${this.where(node)}: <${node.name}> is inside a <DontTranslate>, whose content is never read. It registers nothing (VAR-7).`);
+        this.attribute(node, `__ls={{ fallback: ${JSON.stringify('place inside a <DontTranslate>')} }}`);
+    }
+
+    private block(node: Node, kind: 'Translate' | 'Phrase', inherited?: Inherited): void {
         const attributes = node.attributes as Node[];
         if (attributes.some((a) => a.name === '__ls')) return;
         const staticProp = (name: string) => {
@@ -168,14 +190,15 @@ class Transform {
             const v = a?.value;
             return Array.isArray(v) && v.every((p: Node) => p.type === 'Text') ? v.map((p: Node) => p.data as string).join('') : undefined;
         };
-        const category = staticProp('category') ?? '';
+        // A unit read on its own inside a block's fallback is in that block: it takes its category,
+        // as it would inside it, unless it names its own.
+        const own = attributes.find((a) => a.type === 'Attribute' && a.name === 'category');
+        const given = own ? undefined : inherited?.code(node);
+        if (given) this.attribute(node, `category={${given}}`);
+        const category = staticProp('category') ?? (given ? (inherited?.text ?? '') : '');
         const explicitParams = attributes.find((a) => a.type === 'Attribute' && a.name === 'params');
 
-        const at = attributes.length ? attributes[attributes.length - 1].end : node.start + 1 + (node.name as string).length;
-        const inject = (code: string) => {
-            this.s.appendLeft(at, ` __ls={${code}}`);
-            this.changed = true;
-        };
+        const inject = (code: string) => this.attribute(node, `__ls={${code}}`);
 
         const occurrences: Occurrence[] = [];
         const explicit = new Set<string>();
@@ -204,7 +227,15 @@ class Transform {
             inject(`{ fallback: ${JSON.stringify(e.message)} }`);
             // A block inside it that the build can read is a block of its own: the core's walk of
             // this one leaves a marked host to that block (MARK-4).
-            this.visit((node.fragment as Fragment).nodes);
+            const fragment = node.fragment as Fragment;
+            const handed = own && this.categoryOf(own);
+            const children = own ? handed && this.inherit(handed, fragment) : inherited;
+            for (const child of fragment.nodes) {
+                // A {#snippet} written directly in a component is a prop of it, outside the
+                // children: what the block computes is declared again at the start of the snippet.
+                const snippet = handed && 'expression' in handed && child.type === 'SnippetBlock';
+                this.visit([child], snippet ? this.inherit(handed, child.body as Fragment, child.parameters as Node[]) : children);
+            }
             return;
         }
         trimEdges(ir);
@@ -219,6 +250,50 @@ class Transform {
         const g = new Gen(this, names);
         const params = `{ ${[g.params(ir), ...spreads.map((e) => `...(${this.code(e)})`)].filter(Boolean).join(', ')} }`;
         inject(`{ tree: ${g.tree(ir)}, dyn: ${g.dyn(ir)}, params: ${params} }`);
+    }
+
+    /** A block's `category` attribute: its text, or the code that computes it and the names that code reads. */
+    private categoryOf(attribute: Node): Category | undefined {
+        const value = attribute.value as true | Node | Node[];
+        if (value === true) return undefined;
+        const parts = Array.isArray(value) ? value : [value];
+        if (parts.every((p) => p.type === 'Text')) {
+            const text = parts.map((p) => p.data as string).join('');
+            return text ? { text } : undefined;
+        }
+        const expression = Array.isArray(value)
+            ? `\`${parts.map((p) => (p.type === 'Text' ? (p.data as string).replace(/[\\`]|\$\{/g, '\\$&') : `\${${this.code(p.expression as Node)}}`)).join('')}\``
+            : this.code(value.expression as Node);
+        return { expression, reads: identifiers(parts.map((p) => p.expression)) };
+    }
+
+    /**
+     * The category a fallback block hands its own units. One it computes is evaluated once, in a
+     * `{@const}` at the start of `fragment`, where nothing deeper (an `{#each}` reusing a name, say)
+     * changes what it reads. A `{#snippet}`'s parameters, and a `{@const}` beside it, are in scope
+     * there: one that hides a name the category reads leaves the units without it, with a warning.
+     */
+    private inherit(category: Category, fragment: Fragment, parameters: readonly Node[] = []): Inherited {
+        if ('text' in category) return { text: category.text, code: () => JSON.stringify(category.text) };
+        const declared = fragment.nodes.flatMap((n) => (n.type === 'ConstTag' ? [(n.declaration as { declarations: Node[] }).declarations[0].id] : []));
+        const hidden = [...identifiers([...parameters, ...declared])].filter((name) => category.reads.has(name));
+        let name = '';
+        return {
+            text: '',
+            code: (unit) => {
+                if (hidden.length) {
+                    this.warn(
+                        `${this.where(unit)}: <${unit.name}> is inside a block whose category reads \`${hidden.join('`, `')}\`, which names something else here, so it takes no category. Give it one.`
+                    );
+                    return undefined;
+                }
+                if (!name) {
+                    name = `__lsCategory${this.consts++}`;
+                    this.s.appendLeft(fragment.nodes[0].start, `{@const ${name} = (${category.expression})}`);
+                }
+                return name;
+            },
+        };
     }
 
     private explicitKeys(attribute: Node | undefined, into: Set<string>): void {
@@ -474,6 +549,14 @@ class Transform {
     }
 }
 
+type Category = { text: string } | { expression: string; reads: Set<string> };
+
+/** The category of the block whose fallback is being walked: its text when written, and its code for a unit. */
+interface Inherited {
+    text: string;
+    code: (unit: Node) => string | undefined;
+}
+
 interface Ctx {
     occurrences: Occurrence[];
     explicit: Set<string>;
@@ -568,6 +651,21 @@ class Gen {
  * True when a block's only dynamic parts are `{@html}` insertions: static text and elements with
  * static attributes around them, and nothing Svelte interpolates.
  */
+/** The names an expression or a pattern reads or binds; a property's name is not one. */
+function identifiers(node: unknown, into = new Set<string>()): Set<string> {
+    if (Array.isArray(node)) for (const n of node) identifiers(n, into);
+    else if (node && typeof node === 'object') {
+        const n = node as Node;
+        if (n.type === 'Identifier') into.add(n.name as string);
+        for (const [key, value] of Object.entries(n)) {
+            if (key === 'metadata' || ((n.type === 'MemberExpression' || n.type === 'Property') && !n.computed && (key === 'property' || key === 'key')))
+                continue;
+            identifiers(value, into);
+        }
+    }
+    return into;
+}
+
 function rawHtmlOnly(nodes: readonly Node[]): boolean {
     let html = false;
     const ok = (list: readonly Node[]): boolean =>

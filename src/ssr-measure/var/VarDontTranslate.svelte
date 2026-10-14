@@ -2,7 +2,7 @@
     /** Fixture for `dont-translate.test.ts`, compiled WITH the transform. */
     import { DontTranslate, Phrase, Translate } from '$lib/index.js';
 
-    let { email, version }: { email: string; version: string } = $props();
+    let { email, version, items, section }: { email: string; version: string; items: string[]; section: string } = $props();
 </script>
 
 <Phrase category="DT" tag="p">Signed in as <DontTranslate>{email}</DontTranslate> today</Phrase>
@@ -17,3 +17,22 @@
     ><p>Hello {email}</p>
     <DontTranslate><Phrase>Version {version}</Phrase></DontTranslate></Translate
 >
+<!-- A block that falls back (the {#each}): its own <Phrase> is read on its own, under the block's
+     category; the one inside its <DontTranslate> is not read. -->
+<Translate category="DT" tag="div"
+    ><ul>
+        {#each items as item (item)}<li>{item}</li>{/each}
+    </ul>
+    <Phrase>Plain {version}</Phrase>
+    <DontTranslate><Phrase>Build {version}</Phrase></DontTranslate></Translate
+>
+<!-- A category the block computes reaches its units too, an {#each} reusing the name included. -->
+<Translate category={section} tag="div"
+    ><ul>
+        {#each items as section (section)}<li>{section}</li>
+            <Phrase>Each {version}</Phrase>{/each}
+    </ul>
+    <Phrase>Computed {version}</Phrase></Translate
+>
+<!-- Nor is one inside a <DontTranslate> outside any block. -->
+<DontTranslate><Phrase category="DT">Top {version}</Phrase></DontTranslate>

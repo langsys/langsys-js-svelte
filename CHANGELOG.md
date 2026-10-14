@@ -75,7 +75,9 @@ a malformed catalog logs "Ignoring non-category member".
   literal argument writes is a taken name, so the registered phrase does not depend on the rest of
   the call;
   anything else makes the block a fallback, named in a build warning, and a block inside a
-  fallback that the build can read is transformed on its own. A block whose only dynamic parts are `{@html}` insertions is content, not a variable,
+  fallback that the build can read is transformed on its own, under the fallback block's category
+  unless it names one (a computed category is evaluated once, where the block is). A `<Translate>` or `<Phrase>` inside a `<DontTranslate>` is never read and
+  registers nothing. A block whose only dynamic parts are `{@html}` insertions is content, not a variable,
   and registers its HTML's text through the DOM path.
 
 - **Transformed blocks render on the server (SRV-1, MARK-1, SRV-5).** A transformed block is

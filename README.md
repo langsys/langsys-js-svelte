@@ -201,7 +201,7 @@ The block is then rendered through the core's block renderer, so it is **transla
 
 ``$t(`Hello ${user.name}`)`` is rewritten the same way, to `$t('Hello {name}', undefined, { name: user.name })`. A key you write in an object literal argument is a name you chose, so ``$t(`Hello ${name}`, { name: nickname })`` registers `Hello {name_2}`.
 
-**What it cannot read** — an `{#each}`, an `{#await}`, a snippet, another component, a directive (`bind:`, `use:`, `class:`), a spread, `{@html}` beside a variable, or a `{value}` inside a `<DontTranslate>` anywhere under a `<Phrase>`, which the phrase would hold as written — makes that block a **fallback**: the build names it in a warning, and the block renders as below.
+**What it cannot read** — an `{#each}`, an `{#await}`, a snippet, another component, a directive (`bind:`, `use:`, `class:`), a spread, `{@html}` beside a variable, or a `{value}` inside a `<DontTranslate>` anywhere under a `<Phrase>`, which the phrase would hold as written — makes that block a **fallback**: the build names it in a warning, and the block renders as below. A `<Translate>` or `<Phrase>` inside a fallback block that the build can read is read on its own, under the block's category unless it names one; where a name the block's category is computed from means something else, such as a `{#snippet}` parameter, the build warns and the unit takes no category. One inside a `<DontTranslate>` is never read, and registers nothing.
 
 **Raw HTML is content.** A block whose only dynamic parts are `{@html}` insertions — a CMS field, say — holds text to translate, not a variable, so it registers the HTML's text as the page shows it:
 
@@ -392,7 +392,7 @@ Marks a region as never-translated. Brand names, product names, domains, identif
 </p>
 ```
 
-The host carries the standard [`translate="no"`](https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/translate) attribute, which the base SDK's tokenizer and renderer both honor — so the content is never translated. A block reads no phrase from it; a `<Phrase>` keeps it as written, as a markup pair the translation must keep (`Built with {m0o}Kangen®{m0c} on`). It's presentational glue with no vanilla handler behind it. As a bonus, `translate="no"` is the same signal browser-level translators (Chrome, Safari) respect, so the content is protected from those too.
+The host carries the standard [`translate="no"`](https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/translate) attribute, which the base SDK's tokenizer and renderer both honor. In a block it is in no phrase, so nothing translates it. In a `<Phrase>` it is part of the phrase, written inside a markup pair — the example as `<Phrase tag="p">` registers `Built with {m0o}Kangen®{m0c} on {m1o}langsys.dev{m1c}` — and the translation is rendered as the translator wrote it, the pair's text included. It's presentational glue with no vanilla handler behind it. As a bonus, `translate="no"` is the same signal browser-level translators (Chrome, Safari) respect, so the content is protected from those too.
 
 `<DontTranslate>` props: `tag?` (defaults to `span`), `class?`, `children`.
 

@@ -148,6 +148,59 @@ describe('VAR-6 — the preprocessor', () => {
         expect(units[units.length - 1].params).toEqual({ x: 'Ana' });
     });
 
+    it("reads no unit inside a <DontTranslate>, and gives a fallback block's own units its category", () => {
+        const { code, warnings } = run(
+            '<Translate category="DT"><ul>{#each items as i}<li>{i}</li>{/each}</ul><Phrase>Plain {v}</Phrase>' +
+                '<DontTranslate><Phrase>Build {v}</Phrase></DontTranslate></Translate>' +
+                '<DontTranslate><Phrase category="DT">Top {v}</Phrase></DontTranslate>'
+        );
+        const units = blocks(code, { items: [], v: '1.2' }) as Array<{ fallback?: string; tree?: unknown }>;
+        expect(units.map((u) => u.fallback ?? 'read')).toEqual(['{#each}', 'read', 'place inside a <DontTranslate>', 'place inside a <DontTranslate>']);
+        // The outer block's category, which its own <Phrase> would have taken inside it.
+        expect(code).toMatch(/<Phrase category=\{"DT"\}[^>]*>Plain/);
+        expect(warnings).toHaveLength(3);
+        expect(warnings[1]).toMatch(/<Phrase> is inside a <DontTranslate>, whose content is never read\. It registers nothing \(VAR-7\)/);
+    });
+
+    it("gives a fallback block's own units a category it computes, evaluated once where the block is", () => {
+        const { code } = run(
+            '<Translate category={section}><ul>{#each items as section}<li>{section}</li><Phrase>Each {v}</Phrase>{/each}</ul></Translate>' +
+                '<Phrase category="a`{kind}$&#123;x"><ul>{#each items as i}<li>{i}</li>{/each}</ul><Translate>Mixed {v}</Translate></Phrase>' +
+                '<Translate category={section}><ul>{#each items as i}<li>{i}</li>{/each}</ul></Translate>'
+        );
+        // Declared first in the block's children, outside the {#each} that reuses `section`.
+        expect(code).toMatch(/<Translate category=\{section\}[^>]*>\{@const __lsCategory0 = \(section\)\}<ul>\{#each items as section\}/);
+        expect(code).toMatch(/<Phrase category=\{__lsCategory0\}[^>]*>Each/);
+        expect(code).toMatch(/<Translate category=\{__lsCategory1\}[^>]*>Mixed/);
+        // A text attribute with values in it is the string Svelte makes of it, its text kept as written.
+        const declared = Object.fromEntries([...code.matchAll(/\{@const (__lsCategory\d+) = \((.*?)\)\}/g)].map((m) => [m[1], m[2]]));
+        expect(new Function('kind', `return (${declared.__lsCategory1});`)('K')).toBe('a`K${x');
+        // A block with no unit of its own declares nothing.
+        expect(Object.keys(declared)).toEqual(['__lsCategory0', '__lsCategory1']);
+        for (const generate of ['server', 'client'] as const) expect(() => compile(code, { generate, filename: 'Test.svelte' })).not.toThrow();
+    });
+
+    it('declares a computed category again in a {#snippet} the block is handed, and gives none where a name it reads is hidden', () => {
+        const each = '<ul>{#each items as i}<li>{i}</li>{/each}</ul>';
+        const { code, warnings } = run(
+            `<Translate category={section}>${each}{#snippet line()}<Phrase>Line {v}</Phrase>{/snippet}{#snippet row(section)}<Phrase>Row {v}</Phrase>{/snippet}</Translate>` +
+                `<Translate category={section}>{@const section = 'x'}${each}<Phrase>Beside {v}</Phrase></Translate>` +
+                `<Translate category={cfg.section}>${each}{#snippet cell(section)}<Phrase>Cell {v}</Phrase>{/snippet}</Translate>`
+        );
+        // A {#snippet} written directly in a component is a prop of it, outside the children.
+        expect(code).toContain('{#snippet line()}{@const __lsCategory0 = (section)}<Phrase category={__lsCategory0}');
+        expect(code).toMatch(/<Phrase __ls=[^>]*>Row/);
+        expect(code).toMatch(/<Phrase __ls=[^>]*>Beside/);
+        // A property's name is not a name the category reads.
+        expect(code).toContain('{#snippet cell(section)}{@const __lsCategory1 = (cfg.section)}<Phrase category={__lsCategory1}');
+        expect(
+            warnings.filter((w) =>
+                /inside a block whose category reads `section`, which names something else here, so it takes no category\. Give it one\./.test(w)
+            )
+        ).toHaveLength(2);
+        for (const generate of ['server', 'client'] as const) expect(() => compile(code, { generate, filename: 'Test.svelte' })).not.toThrow();
+    });
+
     it('marks what it cannot read as a fallback, and says so at build time', () => {
         const { code, warnings } = run('<Translate><ul>{#each items as i}<li>{i}</li>{/each}</ul></Translate><Translate><p>Hi <Other /></p></Translate>');
         expect(blocks(code)).toEqual([{ fallback: '{#each}' }, { fallback: 'component <Other>' }]);
