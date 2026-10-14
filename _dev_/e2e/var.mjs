@@ -154,7 +154,7 @@ if (process.argv.includes('--serve')) {
     check(got.includes(CART), 'VAR-2: the count registers under its derived name', JSON.stringify(got));
     check(!got.some((p) => /Ana|Luis/.test(p)), 'VAR-1: no per-user phrase is registered', JSON.stringify(got));
     // The content a block registers with: the count's block from the server's flush, and a block
-    // only the browser renders, mounted before init(). Each marked value is its {NAME}.
+    // only the browser renders, mounted before init() has answered. Each marked value is its {NAME}.
     let stored = [];
     const holds = (phrase) => stored.some((b) => b.phrases.some((p) => p.phrase === phrase) && /<!--ls:/.test(b.content ?? ''));
     for (let i = 0; i < 10 && !(holds(CART) && holds(CLIENT_BLOCK)); i++) {

@@ -30,8 +30,8 @@ has arrived, and a block on the core's DOM class once it has also been stable fo
 debug off, a `write` or `ip_write` key the server resolves read-only logs "this session cannot
 write" once per page load, and a phrase the message formatter cannot render logs that it was
 rendered by the SDK's own branch selection. A key with discovery on that cannot send a hint logs
-"Discovery hint failed", and a catalog fetch that fails or returns a malformed catalog logs
-"Catalog fetch threw" or "Ignoring non-category member".
+"Discovery hint failed", a catalog fetch whose HTTP client throws logs "Catalog fetch threw", and
+a malformed catalog logs "Ignoring non-category member".
 
 ### Changed
 
@@ -59,9 +59,9 @@ rendered by the SDK's own branch selection. A key with discovery on that cannot 
   `svelte.config.js`: `preprocess: [vitePreprocess(), langsysPreprocess()]`. Each `{expression}`
   inside a `<Translate>` or `<Phrase>` becomes a named placeholder, with its value as a typed
   param, so `Hello {user.name}` registers `Hello {name}` once for every user, and a count stays a
-  number a plural form can select on. The content a block registers with holds `{name}` where the
-  value was, as its phrases do, and a nested `<Translate>` or `<Phrase>` as its element alone, so
-  no value reaches the Translation Manager. Names come from the core's `derivePlaceholderNames` and pass
+  number a plural form can select on. The content a block registers with holds `{name}` where a
+  marked value was, as its phrases do, and a nested `<Translate>` or `<Phrase>` as its element
+  alone; text inside a `<DontTranslate>` holds no placeholder and is stored as rendered. Names come from the core's `derivePlaceholderNames` and pass
   all 32 shared naming vectors: an expression that names itself is one placeholder wherever it
   repeats, and one that cannot be named is a placeholder of its own each time. `{#if}`/`{#key}` branches, event handlers, attributes, and nested
   `<Phrase>`, `<Translate>` and `<DontTranslate>` are read; ``$t(`…${x}`)`` template literals are

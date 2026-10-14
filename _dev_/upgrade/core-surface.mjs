@@ -14,6 +14,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import ts from 'typescript';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
@@ -51,55 +52,59 @@ for (const [tag, dir] of [
 const published = execFileSync('git', ['-C', REPO, 'show', 'v3.6.17:src/lib/index.ts']).toString();
 const tip = readFileSync(resolve(REPO, 'src/lib/index.ts'), 'utf8');
 /**
- * The names a module's export statements publish: `export { a, type b, c as d }` lists, with or
- * without `from`, and named declarations. Comments are removed first. `export *` and an anonymous
- * `export default` publish names this cannot list, so either one stops the run.
+ * The names a module's export statements publish, read with the TypeScript compiler: export lists,
+ * with or without `from` and `type`, `export * as ns`, every exported declaration (each name a
+ * variable statement binds, destructuring included), and `default`. An `export *` publishes names
+ * this cannot list, so it stops the run.
  */
 const exported = (source) => {
-    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"\\])\/\/[^\n]*/g, '$1');
-    const unread = code.match(/export\s+\*|export\s+default\s+(?!(?:async\s+)?(?:function|class)\s+\w)/);
-    if (unread) throw new Error(`core-surface: cannot list the names of \`${unread[0]}\``);
-    const fromLists = [...code.matchAll(/export\s+(?:type\s+)?\{([^}]*)\}/g)].flatMap((b) =>
-        b[1]
-            .split(',')
-            .map((s) =>
-                s
-                    .trim()
-                    .replace(/^type\s+/, '')
-                    .split(/\s+as\s+/)
-                    .pop()
-            )
-            .filter(Boolean)
-    );
-    const declared = [
-        ...code.matchAll(
-            /export\s+(?:declare\s+)?(?:default\s+)?(?:async\s+)?(?:const|let|var|interface|type|enum|abstract\s+class|class|function\*?)\s+(\w+)/g
-        ),
-    ].map((m) => m[1]);
-    return new Set([...fromLists, ...declared]);
+    const file = ts.createSourceFile('index.ts', source, ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
+    const names = new Set();
+    const has = (node, kind) => (ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined)?.some((m) => m.kind === kind);
+    const bind = (name) => {
+        if (ts.isIdentifier(name)) names.add(name.text);
+        else for (const element of name.elements) if (!ts.isOmittedExpression(element)) bind(element.name);
+    };
+    for (const statement of file.statements) {
+        if (ts.isExportDeclaration(statement)) {
+            const clause = statement.exportClause;
+            if (!clause) throw new Error('core-surface: cannot list the names of `export *`');
+            if (ts.isNamespaceExport(clause)) names.add(clause.name.text);
+            else for (const element of clause.elements) names.add(element.name.text);
+        } else if (ts.isExportAssignment(statement)) names.add('default');
+        else if (has(statement, ts.SyntaxKind.ExportKeyword)) {
+            if (has(statement, ts.SyntaxKind.DefaultKeyword)) names.add('default');
+            else if (ts.isVariableStatement(statement)) for (const declaration of statement.declarationList.declarations) bind(declaration.name);
+            else if (statement.name) names.add(statement.name.text);
+        }
+    }
+    return names;
 };
-// Control for the reader itself: every form above, and a name that appears only in comments.
+// Control for the reader itself: every statement form, names written only in comments or strings,
+// and an `export *`, which it refuses.
 const readerControl = [
     ...exported(`// export { commentedOut }
 /* export { alsoCommented } */
+const glob = 'src/*.ts', url = 'a//b', re = /\\/*x/; // see dist/*
 export { a, type B, c as d,
     e } from './x.js';
 export type { F } from './y.js';
-export const g = 1; export let h = 2; export enum I {} export async function j() {} export abstract class K {}
-export default function l() {}`),
+export * as ns from './z.js';
+export const g = 1, g2 = 2; export const { h, i: h2 } = o; export let [k1, , k2] = list;
+export enum I {} export async function j() {} export function* gen() {} export abstract class K {}
+export interface L {} export type M = 1; export declare const n: number;
+/** a doc comment */
+export default class extends Base {}`),
 ].sort();
-const readerExpected = ['B', 'F', 'I', 'K', 'a', 'd', 'e', 'g', 'h', 'j', 'l'];
+const readerExpected = ['B', 'F', 'I', 'K', 'L', 'M', 'a', 'd', 'default', 'e', 'g', 'g2', 'gen', 'h', 'h2', 'j', 'k1', 'k2', 'n', 'ns'];
 if (JSON.stringify(readerControl) !== JSON.stringify(readerExpected)) throw new Error(`core-surface: the export reader read ${JSON.stringify(readerControl)}`);
-const refuses = (source) => {
-    try {
-        exported(source);
-        return false;
-    } catch {
-        return true;
-    }
-};
-if (!refuses(`export * from './x.js';`) || !refuses('export default {};'))
-    throw new Error('core-surface: the export reader listed an `export *` or an anonymous default');
+let refused = false;
+try {
+    exported(`export * from './x.js';`);
+} catch {
+    refused = true;
+}
+if (!refused) throw new Error('core-surface: the export reader listed an `export *`');
 const names = [...exported(published)];
 const tipNames = exported(tip);
 const members = [...published.matchAll(/public\s+(?:get\s+)?(\w+)\s*\(/g)].map((m) => m[1]);

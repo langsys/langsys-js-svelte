@@ -20,7 +20,7 @@
     const acceptLanguage = $derived($currentlyLoadedLocale ? (LangsysApp.localeHeaders()['Accept-Language'] ?? '(none)') : '(no locale yet)');
     // Rendered only in the browser: what the client registers on its own (the control for "the
     // client does not resend what the server collected"), and a block of two sentences, mounted
-    // before the layout's init(), whose registered content the browser sends.
+    // before the layout's init() has answered, whose registered content the browser sends.
     let mounted = $state(false);
     onMount(() => (mounted = true));
 </script>
@@ -54,6 +54,6 @@
     <Translate category="VAR" tag="div"><p id="client-only">Rendered in the browser for {user.name}</p></Translate>
     <Translate category="VAR" tag="div"
         ><p id="client-block">Shown in the browser to {user.name}</p>
-        <p>Mounted before init</p></Translate
+        <p>Mounted while init runs</p></Translate
     >
 {/if}

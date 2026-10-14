@@ -52,6 +52,9 @@ interface Node {
 type Fragment = { nodes: Node[] };
 
 const TRANSLATABLE = new Set<string>(TRANSLATABLE_ATTRIBUTES);
+/** TypeScript wrappers around an expression that leave its value as written. */
+const TS_WRAPPERS = new Set(['TSAsExpression', 'TSSatisfiesExpression', 'TSNonNullExpression', 'TSTypeAssertion']);
+
 /** Elements the tree renderer cannot reproduce faithfully: another namespace, or raw text. */
 const OPAQUE_ELEMENTS = new Set(['svg', 'math', 'script', 'style', 'textarea', 'template']);
 
@@ -217,8 +220,9 @@ class Transform {
         this.writtenKeys(value && !Array.isArray(value) && value.type === 'ExpressionTag' ? (value.expression as Node) : undefined, into);
     }
 
-    /** The keys an object literal writes out: each is a name the developer chose. */
+    /** The keys an object literal writes out, through any TypeScript cast: each is a name the developer chose. */
     private writtenKeys(expr: Node | undefined, into: Set<string>): void {
+        while (expr && TS_WRAPPERS.has(expr.type)) expr = expr.expression as Node;
         if (expr?.type !== 'ObjectExpression') return;
         for (const p of expr.properties as Node[]) {
             const k = p.type === 'Property' && !p.computed ? (p.key as Node) : undefined;

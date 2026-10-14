@@ -44,7 +44,10 @@ async function visit(path, initScript) {
         'every surfaced error is a LangsysConfigurationError',
         JSON.stringify(errors)
     );
-    check(errors.length >= 5, "the page's blocks, mounted before init(), surface the failure", `${errors.length} surfaced`);
+    // One each from the page's seven registering blocks: the greeting, the cart, the <Phrase>, the
+    // photo block inside the fallback, the {@html}-only block and the two only the browser renders.
+    // The fallback blocks only read, and raise nothing.
+    check(errors.length === 7, "each of the page's registering blocks surfaces the failure once", `${errors.length} surfaced`);
     await page.close();
 }
 {

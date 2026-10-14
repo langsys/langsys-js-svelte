@@ -276,6 +276,10 @@ describe('VAR-6 — the preprocessor', () => {
         expect(received('$t(`Hello ${name}`, { name: "Zed" })', {})).toEqual(['Hello {name_2}', { name_2: 'Ana', name: 'Zed' }]);
         expect(received('$t(`Hello ${name}`, { [k]: 1, name: "Zed" })', { k: 'other' })).toEqual(['Hello {name_2}', { name_2: 'Ana', name: 'Zed', other: 1 }]);
         expect(received('$t(`Hello ${name}`, { name: "Zed" }, "ignored")', {})[0]).toBe('Hello {name_2}');
+        // A TypeScript cast or `satisfies` around the literal leaves its keys written.
+        expect(rewrite('$t(`Hello ${name}`, { name: "Zed" } as Record<string, string>)')).toContain('"Hello {name_2}"');
+        expect(rewrite('$t(`Hello ${name}`, { name: "Zed" } satisfies Record<string, string>)')).toContain('"Hello {name_2}"');
+        expect(rewrite('$t(`Hello ${name}`, "UI", { name: "Zed" }!)')).toContain('"Hello {name_2}"');
     });
 
     it("a $t template literal's own values win over params of the same name, and are read first", () => {

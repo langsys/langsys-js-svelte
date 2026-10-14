@@ -68,20 +68,26 @@ Open **`http://127.0.0.1:5173/fixture/var?locale=it-it&key=k-write&user=Ana`**:
 | `{#await}` is a fallback  | The source shows `Loading…`, and its host has no `data-ls-resolved`; after hydration it reads `Loaded after a moment`. |
 | Accept-Language helper    | The last line reads `Accept-Language: it-it`; without `locale=` it reads `en-us`.                                      |
 
-Then what registered. Open the same page **without** `locale=` (base language, so misses
-register) as two users, wait about 30 s for the browser's flush, and read the double's state:
+Then what registered. Empty the double's catalog, keeping the key, so that everything it holds
+afterwards was registered by the page:
+
+```bash
+curl -s -X POST http://127.0.0.1:8787/__fixture/seed -H 'content-type: application/json' -d '{"projects":[{"id":"p1","base_locale":"en-us","target_locales":["it-it"],"phrases":[],"blocks":[]}],"keys":[{"key":"k-write","project":"p1","type":"write"}]}'
+```
+
+Open the same page **without** `locale=` (base language, so misses register) as two users, wait
+about 30 s for the browser's flush, and read the double's state:
 
 ```bash
 curl -s http://127.0.0.1:8787/__fixture/state | jq '.projects.p1 | [.phrases[].phrase, (.blocks[].phrases[].phrase)]'
 ```
 
-- `Hello {name}, welcome back` appears once, and no other phrase carries a user's name. (The seed
-  itself holds `Hello Ana, welcome back`: the catalogued translation section 4 renders. `Layout
-phrase 0` is the fixture layout's own `$t`.)
+- `Hello {name}, welcome back` appears once, and no other phrase carries a user's name.
+  (`Layout phrase 0` is the fixture layout's own `$t`.)
 - `You have {items_count} items` is the count's derived placeholder.
-- Each block's `content` (`jq '.projects.p1.blocks[].content'`) holds `{name}` and
-  `{items_count}` where the values were, both in the block the server sends and in the one only
-  the browser renders.
+- Each block's `content` (`jq '.projects.p1.blocks[].content'`) holds a placeholder where its value
+  was: `{items_count}` in the cart block the server sends, and `{name}` in the block only the
+  browser renders (`Shown in the browser to {name}`).
 - `From the CMS, section one` registers: a block whose only dynamic part is `{@html}` is content.
 - Nothing from the `{#each}` list, the `{#await}` block, or the block mixing `{@html}` with a name.
 
@@ -90,8 +96,8 @@ the placeholder phrase is there within a few seconds, with no browser involved.
 
 ## 4. Without the transform
 
-Same servers. Open **`http://127.0.0.1:5173/fixture/var-plain?key=k-write&debug=1`** and the
-browser console:
+Same servers, with the catalog seeded again (`node _dev_/e2e/var.mjs --seed`). Open
+**`http://127.0.0.1:5173/fixture/var-plain?key=k-write&debug=1`** and the browser console:
 
 - The notice: _A `<Translate>` or `<Phrase>` registers nothing (svelte-transform-missing: add
   langsysPreprocess() from langsys-js-svelte/preprocess to svelte.config.js)…_
