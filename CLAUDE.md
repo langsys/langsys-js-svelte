@@ -22,7 +22,7 @@ src/lib/
     adapters.ts                   # writable<T> → Signal<T> adapter (svelte/store get → .get())
     messages.ts                   # `serverMessage` — a store derived from `t` over the core's renderServerMessage
     kit.ts                        # `langsys-js-svelte/kit` entry — syncNavigation() (afterNavigate), hydrateFromServer()
-    kit/server.ts                 # `langsys-js-svelte/kit/server` — createLangsysHandle(): the core's request scope per request
+    kit/server.ts                 # `langsys-js-svelte/kit/server` — createLangsysHandle(): the core's request scope per request, with the request's own credentials when given
     preprocess/
         index.ts                  # `langsys-js-svelte/preprocess` — langsysPreprocess(), the build-time transform (VAR-6)
         naming.ts                 # Svelte AST → the core's expression shape; names come from the core's derivePlaceholderNames
@@ -46,7 +46,7 @@ That's the entire surface. Every other concern — HTTP, missing-token registrat
     - Reactivity comes from the store re-emitting → the template re-runs `$t(...)`
 
 3. **`<Translate>` / `<Phrase>`** — two paths.
-    - **With the transform** (`langsysPreprocess()` in svelte.config.js), the build hands the component its content as a `BlockNode` tree in the `__ls` prop: every `{expression}` a VAR-3 marker pair (`{comment:'ls:NAME'}`, value, `{comment:'/ls'}`) with the typed value in `params`; handlers and non-text attributes beside it in `dyn`, by pre-order element index. The component calls the core's `renderBlock` (server and browser) and renders the result through `RenderedNodes.svelte`; it calls `registerBlock` on the server inside the request scope, and after mount in the browser.
+    - **With the transform** (`langsysPreprocess()` in svelte.config.js), the build hands the component its content as a `BlockNode` tree in the `__ls` prop: every `{expression}` a VAR-3 marker pair (`{comment:'ls:NAME'}`, value, `{comment:'/ls'}`) with the typed value in `params`; a `<Phrase>` or `<Translate>` nested in a block names its own values and carries its own `params` on its host's node; handlers and non-text attributes beside it in `dyn`, by pre-order element index. The component calls the core's `renderBlock` (server and browser) and renders the result through `RenderedNodes.svelte`; it calls `registerBlock` on the server inside the request scope, and after mount in the browser.
     - **Without it, or for a block the transform marks as a fallback** (`__ls = { fallback }`), the vanilla `Translate`/`Phrase` class is constructed in an `$effect` with `register: false`: it translates from the catalog and registers nothing (VAR-7), because Svelte's compiled output interleaves variables with text the runtime cannot separate. `warnUnregistered` gives a debug notice naming the transform, beside the core's own for `register: false`.
 
 ## Public API

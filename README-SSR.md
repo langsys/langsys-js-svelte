@@ -211,6 +211,23 @@ the wrong locale.
   most once per locale per request); `match` limits which requests get a scope; `seed: false`
   skips the inline script — under a CSP that forbids inline scripts — and you pass
   `scope.seed()` to the client yourself; `storage` supplies your own `AsyncLocalStorage`.
+- **More than one project.** `credentials` gives a request its own project id and API key, for
+  an app that serves several projects from one server:
+
+    ```typescript
+    export const handle = createLangsysHandle({
+        locale: (event) => event.locals.locale,
+        credentials: (event) => event.locals.tenant?.langsys, // { projectid, key } or undefined
+    });
+    ```
+
+    The request's catalog, every request its render makes and the misses sent after the response
+    go out under them, never under another request's, however renders interleave. A request given
+    none sends under the credentials `init()` set. A read key is allowed: whether a request may
+    write is its own key's. With `catalog` as well, nothing tells the scope what its key may write,
+    so it sends nothing after the response and the browser registers what the page missed. The key
+    is never written into the page.
+
 - **Components.** With the build-time transform, `<Translate>` and `<Phrase>` are rendered
   translated in the served HTML, their hosts stamped with the block's id, and the misses of a
   server render are registered through the scope after the response. A block the transform

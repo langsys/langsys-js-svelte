@@ -64,12 +64,17 @@ under the key 3.6.17 registered for the text written inside it is still found an
   param, so `Hello {user.name}` registers `Hello {name}` once for every user, and a count stays a
   number a plural form can select on. The content a block registers with holds `{name}` where a
   marked value was, as its phrases do, and a nested `<Translate>` or `<Phrase>` as its element
-  alone. Nothing inside a `<DontTranslate>`, or an element its author marks `translate="no"` or
+  alone. A `<Translate>` or `<Phrase>` nested in a block names its own values and renders with its
+  own params, so `<Phrase>By {owner.name}</Phrase>` registers `By {name}` inside a block as it does
+  standing alone. Nothing inside a `<DontTranslate>`, or an element its author marks `translate="no"` or
   `data-notrans`, is read, a nested `<Phrase>` included: in a block it is left out of the text, an
   attribute's text there is rendered with its values, and a value inside it is stored as its
   `{name}`, named without changing any other; in a `<Phrase>` it is one empty markup pair, rendered
   as written. A `translate` or `data-notrans` attribute whose value is an expression makes the
-  block a fallback, and no unit inside such an element is read. Names come from the core's `derivePlaceholderNames` and pass
+  block a fallback, and no unit inside such an element is read, unless the element sits inside an
+  exclusion or its other attribute excludes it as written, which keeps it excluded. The build
+  reads an exclusion written on the element itself: one a spread or another component applies is
+  decided at runtime, and a unit inside it registers. Names come from the core's `derivePlaceholderNames` and pass
   all 32 shared naming vectors: an expression that names itself is one placeholder wherever it
   repeats, and one that cannot be named is a placeholder of its own each time. `{#if}`/`{#key}` branches, event handlers, attributes, and nested
   `<Phrase>`, `<Translate>` and `<DontTranslate>` are read; ``$t(`…${x}`)`` template literals are
@@ -136,8 +141,8 @@ under the key 3.6.17 registered for the text written inside it is still found an
   client's value, and a state change reaches a node written in place but not one that was replaced.
 
 - **`createLangsysHandle` and `hydrateFromServer`: a request scope per SvelteKit request.** A new
-  entry, `langsys-js-svelte/kit/server`, exports `createLangsysHandle({ locale, catalog?, match?,
-seed?, storage? })` for `hooks.server.ts`: it opens the core's request scope for each request,
+  entry, `langsys-js-svelte/kit/server`, exports `createLangsysHandle({ locale, catalog?, credentials?,
+match?, seed?, storage? })` for `hooks.server.ts`: it opens the core's request scope for each request,
   renders the whole response inside it — `load`, its awaits, every component — writes the scope's
   catalog into the page and closes the scope after the response, sending the request's missed
   phrases then when the key may write. `langsys-js-svelte/kit` gains `hydrateFromServer()` for
@@ -147,7 +152,10 @@ seed?, storage? })` for `hooks.server.ts`: it opens the core's request scope for
   Measured: 800 concurrent Italian and German renders that await before they read serve none in
   the wrong locale (400 without a scope); a hydrated page keeps the served text; with a 3 s flush,
   the page still arrives in about 50 ms and the phrase registers afterwards, and a read-only key
-  sends nothing. README-SSR documents the pattern.
+  sends nothing. `credentials` gives a request its own project id and API key, for an app that
+  serves several projects from one server (SRV-2): the request's catalog, its render's requests and
+  its misses go out under them, never under another request's, and a request given none sends under
+  the ones `init()` set. The key is never written into the page. README-SSR documents the pattern.
 
 - **`<Translate custom_id>` carries its id in the served HTML.** When the app supplies the id, the
   host is stamped with it from the first render, server included, under the core's own attribute.

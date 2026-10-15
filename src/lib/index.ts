@@ -97,7 +97,7 @@ export { default as DontTranslate } from './components/DontTranslate.svelte';
 // Type re-exports — these are all framework-agnostic so consumers can rely on
 // them directly without reaching into langsys-js-typescript.
 export type { WriteGrantSource } from './adapters.js';
-export type { ResolveServerMessagesOptions, ServerMessage } from 'langsys-js-typescript';
+export type { ApiCredentials, ResolveServerMessagesOptions, ServerMessage } from 'langsys-js-typescript';
 
 export type {
     ExtractParamKeys,

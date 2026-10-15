@@ -23,9 +23,7 @@
  */
 import { parse } from 'svelte/compiler';
 import MagicString from 'magic-string';
-import { CONTENT_BLOCK_MARKER_ATTR, PHRASE_MARKER_ATTR, TRANSLATABLE_ATTRIBUTES } from 'langsys-js-typescript/pure';
-// Not on the `/pure` entry: the core's own reading of an author's exclusion (TOK-1).
-import { isTranslationExcluded } from 'langsys-js-typescript';
+import { CONTENT_BLOCK_MARKER_ATTR, PHRASE_MARKER_ATTR, TRANSLATABLE_ATTRIBUTES, isTranslationExcluded } from 'langsys-js-typescript/pure';
 import { assignNames, type Expr, type Occurrence } from './naming.js';
 
 export interface LangsysPreprocessOptions {
@@ -80,6 +78,8 @@ type IR =
           attrs: Array<{ name: string; value: true | AttrPart[] }>;
           dyn: Array<{ name: string; parts: Array<string | Expr> }>;
           children: IR[];
+          /** A nested `<Phrase>` or `<Translate>` that names its values on its own and renders with its own params. */
+          unit?: Unit;
       }
     | { k: 'if'; branches: Array<{ test: Expr | null; body: IR[] }> };
 
@@ -275,6 +275,8 @@ class Transform {
                 occurrences,
                 explicit,
                 spreads,
+                ids: { next: 0 },
+                phrase: kind === 'Phrase',
                 category,
                 raw: false,
                 pre: false,
@@ -299,15 +301,21 @@ class Transform {
         }
         trimEdges(ir);
 
-        const { names, unnameable } = assignNames(occurrences, explicit);
-        for (const id of unnameable) {
-            const { expr } = occurrences[id];
-            this.warn(
-                `${this.where(expr as unknown as Node)}: {${this.source(expr)}} has no name to derive, so it registers as {${names.get(id)}}. Name it: write %name% and pass it in params.`
-            );
+        // Each unit names its values among themselves (VAR-2): the block's own, and each unit nested in
+        // it, which renders with its own params, so it keys as it does standing alone.
+        const names = new Map<number, string>();
+        for (const unit of [{ occurrences, explicit, spreads }, ...unitsIn(ir)]) {
+            const named = assignNames(unit.occurrences, unit.explicit);
+            for (const [id, name] of named.names) names.set(id, name);
+            for (const id of named.unnameable) {
+                const { expr } = unit.occurrences.find((o) => o.id === id)!;
+                this.warn(
+                    `${this.where(expr as unknown as Node)}: {${this.source(expr)}} has no name to derive, so it registers as {${names.get(id)}}. Name it: write %name% and pass it in params.`
+                );
+            }
         }
         const g = new Gen(this, names);
-        const params = `{ ${[g.params(ir), ...spreads.map((e) => `...(${this.code(e)})`)].filter(Boolean).join(', ')} }`;
+        const params = g.ownParams(ir, spreads);
         inject(`tree: ${g.tree(ir)}, dyn: ${g.dyn(ir)}, params: ${params}`);
     }
 
@@ -428,6 +436,11 @@ class Transform {
         const dyn: Array<{ name: string; parts: Array<string | Expr> }> = [];
         let tag = kind === 'Translate' ? 'translate' : 'span';
         let customId = '';
+        // Inside a block, a nested <Phrase> or <Translate> is a unit of its own: it names its values
+        // on its own and renders with its own params (VAR-2). Inside a phrase it is part of the
+        // phrase, which reads everything under its host; inside an exclusion it is never read.
+        const unit: Unit | undefined = kind !== 'DontTranslate' && !ctx.phrase && !ctx.raw ? { occurrences: [], explicit: new Set(), spreads: [] } : undefined;
+        const own: Ctx = unit ? { ...ctx, ...unit, phrase: kind === 'Phrase' } : ctx;
         for (const a of n.attributes as Node[]) {
             if (a.type !== 'Attribute') throw new Fallback(`${describe(a)} on <${n.name}>`);
             const value = a.value as true | Node | Node[];
@@ -441,8 +454,8 @@ class Transform {
             } else if (a.name === 'category' && isStatic && (text === '' || text === ctx.category)) continue;
             else if (a.name === 'custom_id' && kind === 'Translate' && isStatic) customId = text;
             else if (a.name === 'params' && kind !== 'DontTranslate' && !Array.isArray(value) && value !== true) {
-                this.explicitKeys(a, ctx.explicit);
-                ctx.spreads.push(value.expression as Expr);
+                this.explicitKeys(a, own.explicit);
+                own.spreads.push(value.expression as Expr);
             } else throw new Fallback(`${a.name} on <${n.name}>`);
         }
         if (kind === 'DontTranslate') {
@@ -453,9 +466,9 @@ class Transform {
         attrs.unshift(kind === 'Translate' ? { name: CONTENT_BLOCK_MARKER_ATTR, value: [customId] } : { name: PHRASE_MARKER_ATTR, value: [''] });
         // The core reads the host by its marker: a phrase reads everything under it, a nested block
         // too, and nothing inside a <DontTranslate> is read, a nested <Phrase> included.
-        const children = this.children((n.fragment as Fragment).nodes, ctx);
+        const children = this.children((n.fragment as Fragment).nodes, own);
         trimEdges(children);
-        return { k: 'el', tag, attrs, dyn, children };
+        return { k: 'el', tag, attrs, dyn, children, unit };
     }
 
     // ------------------------------------------------------------------
@@ -559,7 +572,9 @@ class Transform {
 
     /** Records an expression as the block's next occurrence; the core names it (VAR-2). */
     private occur(ctx: Ctx, expr: Expr): number {
-        return ctx.occurrences.push({ id: ctx.occurrences.length, expr, excluded: ctx.raw }) - 1;
+        const id = ctx.ids.next++;
+        ctx.occurrences.push({ id, expr, excluded: ctx.raw });
+        return id;
     }
 
     private where(node: Node): string {
@@ -579,10 +594,18 @@ interface Scope {
     module: boolean;
 }
 
-interface Ctx {
+/** The values one unit names among themselves: a block's own, or those of a unit nested in it. */
+interface Unit {
     occurrences: Occurrence[];
     explicit: Set<string>;
     spreads: Expr[];
+}
+
+interface Ctx extends Unit {
+    /** One id space for every value in the block, nested units included. */
+    ids: { next: number };
+    /** The unit being read is a phrase: it reads everything under its host, a nested block too. */
+    phrase: boolean;
     category: string;
     /** Inside an exclusion: its text makes no token, its attributes are carried as values, and no unit is read. */
     raw: boolean;
@@ -616,7 +639,8 @@ class Gen {
                     ({ name, value }) =>
                         `${JSON.stringify(name)}: ${value === true ? 'true' : JSON.stringify(value.map((p) => (typeof p === 'string' ? p : `{${this.names.get(p.id)}}`)).join(''))}`
                 );
-                return [`{ tag: ${JSON.stringify(n.tag)}, attrs: { ${attrs.join(', ')} }, children: ${this.tree(n.children)} }`];
+                const own = n.unit ? `, params: ${this.ownParams(n.children, n.unit.spreads)}` : '';
+                return [`{ tag: ${JSON.stringify(n.tag)}, attrs: { ${attrs.join(', ')} }, children: ${this.tree(n.children)}${own} }`];
             }
             case 'if':
                 return [`...(${this.conditional(n.branches, (body) => this.tree(body), '[]')})`];
@@ -643,9 +667,16 @@ class Gen {
         return list.flatMap((n) => this.paramsOf(n)).join(', ');
     }
 
+    /** A unit's params: its own values, then a `params` it is handed, which win. */
+    ownParams(list: IR[], spreads: Expr[]): string {
+        return `{ ${[this.params(list), ...spreads.map((e) => `...(${this.t.code(e)})`)].filter(Boolean).join(', ')} }`;
+    }
+
     private paramsOf(n: IR): string[] {
         const entry = (id: number, expr: Expr) => `${JSON.stringify(this.names.get(id))}: (${this.t.code(expr)})`;
         if (n.k === 'var') return [entry(n.id, n.expr)];
+        // A nested unit's values are its own params, not the enclosing unit's.
+        if (n.k === 'el' && n.unit) return [];
         if (n.k === 'el')
             return [
                 ...n.attrs.flatMap((a) => (a.value === true ? [] : a.value.flatMap((p) => (typeof p === 'string' ? [] : [entry(p.id, p.expr)])))),
@@ -663,6 +694,13 @@ class Gen {
         }
         return out + none;
     }
+}
+
+/** The units nested in a block's tree, at any depth. */
+function unitsIn(list: IR[]): Unit[] {
+    return list.flatMap((n) =>
+        n.k === 'el' ? [...(n.unit ? [n.unit] : []), ...unitsIn(n.children)] : n.k === 'if' ? n.branches.flatMap((b) => unitsIn(b.body)) : []
+    );
 }
 
 /**
@@ -742,6 +780,9 @@ function parameters(patterns: unknown, bound = new Set<string>(), defaults: Node
     return { bound, defaults };
 }
 
+/** The TypeScript nodes that hold a value. Every other one is a type, wherever it sits: an annotation, a return type, type arguments. */
+const TS_VALUES = new Set(['TSAsExpression', 'TSSatisfiesExpression', 'TSTypeAssertion', 'TSNonNullExpression', 'TSInstantiationExpression']);
+
 /** Every name a subtree refers to, for finding the snippets it renders: a property's name or a type is not one. */
 function identifiers(root: unknown, into = new Set<string>()): Set<string> {
     if (!root || typeof root !== 'object') return into;
@@ -750,9 +791,10 @@ function identifiers(root: unknown, into = new Set<string>()): Set<string> {
         return into;
     }
     const node = root as Node;
+    if (typeof node.type === 'string' && node.type.startsWith('TS') && !TS_VALUES.has(node.type)) return into;
     if (node.type === 'Identifier') into.add(node.name as string);
     for (const [key, value] of Object.entries(node)) {
-        if (key === 'parent' || key === 'metadata' || key === 'typeAnnotation') continue;
+        if (key === 'parent' || key === 'metadata') continue;
         if (!node.computed && ((node.type === 'MemberExpression' && key === 'property') || (node.type === 'Property' && key === 'key'))) continue;
         identifiers(value, into);
     }

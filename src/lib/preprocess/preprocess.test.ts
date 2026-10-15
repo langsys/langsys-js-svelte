@@ -92,11 +92,37 @@ describe('VAR-6 — the preprocessor', () => {
                 tag: 'span',
                 attrs: { 'data-ls-phrase': '' },
                 children: [{ text: 'Based on ' }, ...v('n', '4'), { text: ' ' }, { tag: 'b', attrs: {}, children: [{ text: 'reviews' }] }],
+                params: { n: 4 },
             },
             { text: ' ' },
             { tag: 'code', attrs: { translate: 'no', 'data-ls-dont-translate': '' }, children: v('sku', 'X-1') },
         ]);
-        expect(block.params).toEqual({ n: 4, sku: 'X-1' });
+        expect(block.params).toEqual({ sku: 'X-1' });
+    });
+
+    it('names a nested unit inside a block on its own and hands it its own params; inside a phrase it is part of the phrase', () => {
+        const { code } = run(
+            '<Translate><p>Hi {user.name}</p><Phrase params={extra}>By {owner.name}</Phrase><Translate><p>For {owner.name}</p></Translate></Translate>' +
+                '<Phrase>By <Translate>{owner.name}</Translate> now</Phrase>'
+        );
+        const vars = { user: { name: 'Ana' }, owner: { name: 'Bo' }, extra: { tag: 'x' } };
+        const [block, phrase] = blocks(code, vars) as Array<{ tree: Array<Record<string, unknown>>; params: unknown }>;
+        expect(block.params).toEqual({ name: 'Ana' });
+        expect(block.tree[1]).toEqual({
+            tag: 'span',
+            attrs: { 'data-ls-phrase': '' },
+            children: [{ text: 'By ' }, ...v('name', 'Bo')],
+            params: { name: 'Bo', tag: 'x' },
+        });
+        expect(block.tree[2]).toEqual({
+            tag: 'translate',
+            attrs: { 'data-ls-contentblock': '' },
+            children: [{ tag: 'p', attrs: {}, children: [{ text: 'For ' }, ...v('name', 'Bo')] }],
+            params: { name: 'Bo' },
+        });
+        // A phrase reads everything under its host: the nested block's value is the phrase's.
+        expect(phrase.params).toEqual({ name: 'Bo' });
+        expect(phrase.tree[1]).toEqual({ tag: 'translate', attrs: { 'data-ls-contentblock': '' }, children: v('name', 'Bo') });
     });
 
     it('inlines a nested <Translate> as a block of its own: declared, or identified by its custom_id', () => {
@@ -106,8 +132,13 @@ describe('VAR-6 — the preprocessor', () => {
         const [block] = blocks(code, { n: 2 }) as Array<{ tree: unknown[] }>;
         expect(block.tree).toEqual([
             { tag: 'p', attrs: {}, children: [{ text: 'Outer' }] },
-            { tag: 'div', attrs: { 'data-ls-contentblock': '' }, children: [{ tag: 'p', attrs: {}, children: [{ text: 'Inner ' }, ...v('n', '2')] }] },
-            { tag: 'translate', attrs: { 'data-ls-contentblock': 'app-id' }, children: [{ tag: 'p', attrs: {}, children: [{ text: 'Mine' }] }] },
+            {
+                tag: 'div',
+                attrs: { 'data-ls-contentblock': '' },
+                children: [{ tag: 'p', attrs: {}, children: [{ text: 'Inner ' }, ...v('n', '2')] }],
+                params: { n: 2 },
+            },
+            { tag: 'translate', attrs: { 'data-ls-contentblock': 'app-id' }, children: [{ tag: 'p', attrs: {}, children: [{ text: 'Mine' }] }], params: {} },
         ]);
     });
 
@@ -225,19 +256,25 @@ describe('VAR-6 — the preprocessor', () => {
         for (const generate of ['server', 'client'] as const) expect(() => compile(code, { generate, filename: 'Helper.svelte' })).not.toThrow();
     });
 
-    it('declares in the module script the keys of a snippet an exported one reaches through a default value, a computed member, or beside a typed parameter', () => {
+    it('declares in the module script the keys of a snippet an exported one reaches through a default value however deep in a pattern, a computed key or member, or beside a typed parameter', () => {
         const each = '<ul>{#each items as i}<li>{i}</li>{/each}</ul>';
         const helper = (name: string) => `{#snippet ${name}(items)}<Translate category="${name}">${each}<Phrase>${name}</Phrase></Translate>{/snippet}`;
         const content =
-            `<script module lang="ts">${IMPORT} const lookup: Record<string, string> = {}; export { a, b, c, d };</script>\n` +
-            ['ha', 'hb', 'Row', 'hd'].map(helper).join('') +
+            `<script module lang="ts">${IMPORT} const lookup: Record<string, string> = {}; export { a, b, c, d, e, f, g, h };</script>\n` +
+            ['ha', 'hb', 'Row', 'hd', 'he', 'hf', 'hg', 'hh'].map(helper).join('') +
             '{#snippet a(row = ha)}{@render row([])}{/snippet}' +
             '{#snippet b({ row = hb })}{@render row([])}{/snippet}' +
             '{#snippet c(r: Row)}{@render Row([])}{/snippet}' +
-            '{#snippet d(items)}<p>{lookup[hd as unknown as string]}</p>{/snippet}';
+            '{#snippet d(items)}<p>{lookup[hd as unknown as string]}</p>{/snippet}' +
+            // A computed key in a pattern, and defaults inside array patterns: nested, after a hole, under a rest.
+            '{#snippet e({ [he as unknown as string]: row })}{@render row([])}{/snippet}' +
+            '{#snippet f([[row = hf]])}{@render row([])}{/snippet}' +
+            '{#snippet g([, row = hg])}{@render row([])}{/snippet}' +
+            '{#snippet h([...[row = hh]])}{@render row([])}{/snippet}';
         for (const generate of ['server', 'client'] as const) expect(() => compile(content, { generate, filename: 'Reach.svelte' })).not.toThrow();
         const code = langsysPreprocess({ warn: () => {} }).markup({ content, filename: 'Reach.svelte' })!.code;
-        expect(code).toMatch(/<script module lang="ts">[^]*?\nconst __lsScope0 = \{\}, __lsScope1 = \{\}, __lsScope2 = \{\}, __lsScope3 = \{\};\n<\/script>/);
+        const keys = Array.from({ length: 8 }, (_, i) => `__lsScope${i} = \\{\\}`).join(', ');
+        expect(code).toMatch(new RegExp(`<script module lang="ts">[^]*?\\nconst ${keys};\\n<\\/script>`));
         expect(code).not.toMatch(/^<script>/);
         for (const generate of ['server', 'client'] as const) expect(() => compile(code, { generate, filename: 'Reach.svelte' })).not.toThrow();
     });
@@ -245,15 +282,16 @@ describe('VAR-6 — the preprocessor', () => {
     it('keeps in the instance script the keys of a top-level snippet no exported snippet renders', () => {
         const each = '<ul>{#each items as i}<li>{i}</li>{/each}</ul>';
         const content =
-            `<script module>${IMPORT} const cfg = { lone: 'x' }; export { outer };</script>\n` +
+            `<script module lang="ts">${IMPORT} const cfg = { lone: 'x' }; function id<T>(a: unknown) { return a; } export { outer };</script>\n` +
             `{#snippet helper(items)}<Translate category="H">${each}<Phrase>H</Phrase></Translate>{/snippet}` +
             `{#snippet lone(items)}<Translate category="L">${each}<Phrase>L</Phrase></Translate>{/snippet}` +
-            // Its own parameter hides the top-level helper, and `cfg.lone` is a property: it renders neither.
-            `{#snippet outer(helper)}<p>{@render helper([])} {cfg.lone}</p>{/snippet}`;
+            // Its own parameter hides the top-level helper, `cfg.lone` is a property, and a type is no
+            // render, wherever it is written: it renders neither.
+            `{#snippet outer(helper)}<p>{@render helper([])} {cfg.lone} {cfg as unknown as typeof lone} {id<typeof lone>(cfg)} {((a: typeof lone): typeof lone => a)(cfg)}</p>{/snippet}`;
         for (const generate of ['server', 'client'] as const) expect(() => compile(content, { generate, filename: 'Lone.svelte' })).not.toThrow();
         const code = langsysPreprocess({ warn: () => {} }).markup({ content, filename: 'Lone.svelte' })!.code;
-        expect(code).toMatch(/^<script>const __lsScope0 = \{\}, __lsScope1 = \{\};<\/script>\n<script module>/);
-        expect(code).not.toMatch(/<script module>[^<]*__lsScope/);
+        expect(code).toMatch(/^<script>const __lsScope0 = \{\}, __lsScope1 = \{\};<\/script>\n<script module lang="ts">/);
+        expect(code).not.toMatch(/<script module lang="ts">[^<]*__lsScope/);
         for (const generate of ['server', 'client'] as const) expect(() => compile(code, { generate, filename: 'Lone.svelte' })).not.toThrow();
     });
 
@@ -334,8 +372,8 @@ describe('VAR-6 — the preprocessor', () => {
                 '<svelte:element this={tag} translate="no"><Phrase>Svel {v}</Phrase></svelte:element>' +
                 '<Translate><ul>{#each items as i}<li>{i}</li>{/each}</ul><span data-notrans={flag}><Phrase>Deep {v}</Phrase></span></Translate>' +
                 '<Translate><p>Hi <DontTranslate><span translate={mode}>{x}</span></DontTranslate> z</p></Translate>' +
-                '<Translate><p>Hi <span translate="no" data-notrans={flag}>{x}</span> z</p></Translate>' +
-                '<Translate><p>Hi <span translate={mode} data-notrans>{x}</span> z</p></Translate>'
+                '<Translate><p>Hi <span translate="no" data-notrans={flag}><img alt="By {y}" src="x" /></span> z</p></Translate>' +
+                '<Translate><p>Hi <span translate={mode} data-notrans><img alt="By {y}" src="x" /></span> z</p></Translate>'
         );
         const [top, svel, outer, deep, inside, notransRuntime, translateRuntime] = blocks(code, {
             mode: 'no',
@@ -344,8 +382,10 @@ describe('VAR-6 — the preprocessor', () => {
             flag: true,
             v: '1',
             x: 'X',
+            y: 'Bob',
         }) as Array<{
             fallback?: string;
+            dyn?: unknown[];
             params?: unknown;
         }>;
         expect(top.fallback).toBe('place inside a <span translate={…}>');
@@ -356,11 +396,13 @@ describe('VAR-6 — the preprocessor', () => {
         // Inside an exclusion the element is excluded whatever its own attribute says: no fallback.
         expect(inside.fallback).toBeUndefined();
         expect(inside.params).toEqual({ x: 'X' });
-        // Nor where the other attribute excludes it as written.
+        // Nor where the other attribute excludes it as written: it is excluded, its attribute's text a value.
         for (const unit of [notransRuntime, translateRuntime]) {
             expect(unit.fallback).toBeUndefined();
-            expect(unit.params).toEqual({ x: 'X' });
+            expect(unit.params).toEqual({});
         }
+        expect(notransRuntime.dyn).toEqual([null, { 'data-notrans': true }, { alt: 'By Bob' }]);
+        expect(translateRuntime.dyn).toEqual([null, { translate: 'no' }, { alt: 'By Bob' }]);
     });
 
     it('marks what it cannot read as a fallback, and says so at build time', () => {

@@ -15,7 +15,7 @@
  * key may write and `ssrTokenStrategy` allows it.
  */
 import type { Handle, RequestEvent } from '@sveltejs/kit';
-import { createRequestScope, setRequestScopeStorage, type iCategories, type ScopeStorage } from 'langsys-js-typescript';
+import { createRequestScope, setRequestScopeStorage, type ApiCredentials, type iCategories, type ScopeStorage } from 'langsys-js-typescript';
 import { SEED_GLOBAL } from './seed.js';
 
 export interface LangsysHandleOptions {
@@ -23,6 +23,15 @@ export interface LangsysHandleOptions {
     locale: (event: RequestEvent) => string | Promise<string>;
     /** A catalog already in hand for this request. Omit it and the core fetches it, at most once per locale per request. */
     catalog?: (event: RequestEvent, locale: string) => iCategories | undefined | Promise<iCategories | undefined>;
+    /**
+     * The request's own project id and API key, for an app that serves more than one project
+     * (SRV-2). Its catalog, every request its render makes and the misses sent after the response
+     * go out under them, never under another request's. Return `undefined`, or omit the option, and
+     * the request sends under the credentials `init()` set. A read key is allowed: the scope's write
+     * capability is its own key's. With `catalog` as well, nothing tells the scope what its key may
+     * write, so it sends nothing after the response and the browser registers what the page missed.
+     */
+    credentials?: (event: RequestEvent) => ApiCredentials | undefined | Promise<ApiCredentials | undefined>;
     /** Which requests get a scope. Default: every request. */
     match?: (event: RequestEvent) => boolean;
     /** Write the scope's hydration seed into the page (an inline script). Default `true`; turn it off under a CSP that forbids inline scripts, and hand `scope.seed()` over yourself. */
@@ -55,7 +64,8 @@ export function createLangsysHandle(options: LangsysHandleOptions): Handle {
         await ensureStorage(options.storage);
         const locale = await options.locale(event);
         const catalog = options.catalog ? await options.catalog(event, locale) : undefined;
-        const scope = await createRequestScope({ locale, catalog, url: event.url.href });
+        const credentials = options.credentials ? await options.credentials(event) : undefined;
+        const scope = await createRequestScope({ locale, catalog, url: event.url.href, ...(credentials ? { credentials } : {}) });
 
         const response = await scope.run(() =>
             resolve(event, {

@@ -24,6 +24,10 @@ describe("a block's registered content", () => {
         expect(blocks.map((b) => b.content).join('')).not.toMatch(/Ana|<!--ls:/);
     });
 
+    it('holds a name written by hand as its placeholder too, in the text and in an attribute', async () => {
+        expect(byToken(await blocksSent('Ana'), 'Written by hand')).toBe('<p title="To {name}">Hello {name}, again</p> <p>Written by hand</p>');
+    });
+
     it("keeps a nested block or phrase host's element and none of its content", async () => {
         const outer = byToken(await blocksSent('Ana'), 'Welcome back, {name}');
         expect(outer).toMatch(/<section data-ls-contentblock[^>]*><\/section>/);
@@ -33,5 +37,30 @@ describe("a block's registered content", () => {
 
     it('control: an opted-out element is the outer block’s content, and the content shows it', async () => {
         expect(byToken(await blocksSent('Ana'), 'Opted out below')).toContain('Kept with the outer block');
+    });
+});
+
+describe('a nested unit inside a block (VAR-2)', () => {
+    async function rendered(locale: string, catalog = {} as iCategories) {
+        const scope = await createRequestScope({ locale, catalog });
+        let body = '';
+        scope.run(() => (body = render(VarContent, { props: { name: 'Ana' } }).body));
+        const blocks = [...(scope as unknown as { blockMisses: Map<string, iContentBlock> }).blockMisses.values()];
+        return { body: body.replace(/<!--[^]*?-->/g, ''), phrases: scope.misses().map((m) => m.phrase), blocks };
+    }
+
+    it('names its values on its own, so it keys as it does standing alone', async () => {
+        const { phrases } = await rendered('en-us');
+        expect(phrases).toContain('By {name}');
+        expect(phrases).not.toContain('By {owner_name}');
+        // The block's own one token, beside the nested host, registers as a phrase.
+        expect(phrases).toContain('Hi {name}');
+        expect(phrases).not.toContain('Hi {user_name}');
+    });
+
+    it('renders with its own values, translated or not', async () => {
+        expect((await rendered('en-us')).body).toMatch(/Hi Ana<\/p>\s*<p data-ls-phrase[^>]*>By Bo<\/p>/);
+        const catalog = { NAMES: { 'By {name}': 'Di {name}', 'Hi {name}': 'Ciao {name}' } } as unknown as iCategories;
+        expect((await rendered('it-it', catalog)).body).toMatch(/Ciao Ana<\/p>\s*<p data-ls-phrase[^>]*>Di Bo<\/p>/);
     });
 });
