@@ -69,7 +69,7 @@ under the key 3.6.17 registered for the text written inside it is still found an
   attribute's text there is rendered with its values, and a value inside it is stored as its
   `{name}`, named without changing any other; in a `<Phrase>` it is one empty markup pair, rendered
   as written. A `translate` or `data-notrans` attribute whose value is an expression makes the
-  block a fallback. Names come from the core's `derivePlaceholderNames` and pass
+  block a fallback, and no unit inside such an element is read. Names come from the core's `derivePlaceholderNames` and pass
   all 32 shared naming vectors: an expression that names itself is one placeholder wherever it
   repeats, and one that cannot be named is a placeholder of its own each time. `{#if}`/`{#key}` branches, event handlers, attributes, and nested
   `<Phrase>`, `<Translate>` and `<DontTranslate>` are read; ``$t(`…${x}`)`` template literals are

@@ -152,7 +152,10 @@ class Transform {
         // nothing of the instance.
         const snippets = new Map(this.ast.fragment.nodes.filter((n) => n.type === 'SnippetBlock').map((n) => [(n.expression as Node).name as string, n]));
         for (const name of this.exported) {
-            for (const ref of identifiers(snippets.get(name)?.body)) if (snippets.has(ref)) this.exported.add(ref);
+            const snippet = snippets.get(name);
+            // Its own parameters hide a top-level snippet of the same name.
+            const hidden = identifiers(snippet?.parameters);
+            for (const ref of identifiers(snippet?.body)) if (snippets.has(ref) && !hidden.has(ref)) this.exported.add(ref);
         }
 
         if (this.tStore) this.collectTCalls(this.ast as unknown as Node);
@@ -202,12 +205,7 @@ class Transform {
                 continue; // a nested block is part of this one, or of its fallback
             }
             if (kind === 'Translate' || kind === 'Phrase') this.unread(node, inside!);
-            const exclusion =
-                kind === 'DontTranslate'
-                    ? 'a <DontTranslate>'
-                    : node.type === 'RegularElement' && excludes(node) === true
-                      ? `an excluded <${node.name}>`
-                      : undefined;
+            const exclusion = kind === 'DontTranslate' ? 'a <DontTranslate>' : this.exclusion(node);
             const exported = node.type === 'SnippetBlock' && this.exported.has((node.expression as Node).name as string);
             if (exported) this.inModule++;
             for (const key of ['fragment', 'consequent', 'alternate', 'body', 'fallback', 'pending', 'then', 'catch']) {
@@ -223,6 +221,17 @@ class Transform {
         const at = attributes.length ? attributes[attributes.length - 1].end : node.start + 1 + (node.name as string).length;
         this.s.appendLeft(at, ` ${code}`);
         this.changed = true;
+    }
+
+    /**
+     * An element its author excludes, named for the warning. One whose exclusion an expression
+     * decides is taken as one: whatever it holds may be excluded at runtime, so nothing in it is read.
+     */
+    private exclusion(node: Node): string | undefined {
+        if (node.type !== 'RegularElement' && node.type !== 'SvelteElement') return undefined;
+        const excluded = excludes(node);
+        if (typeof excluded === 'string') return `a <${node.name} ${excluded}={…}>`;
+        return excluded ? `an excluded <${node.name}>` : undefined;
     }
 
     /** A unit inside an exclusion: its content is never read, so it registers nothing (VAR-7). */
@@ -366,7 +375,8 @@ class Transform {
     private element(n: Node, outer: Ctx): IR {
         const tag = n.name as string;
         if (OPAQUE_ELEMENTS.has(tag)) throw new Fallback(`<${tag}>`);
-        const excluded = excludes(n);
+        // Inside an exclusion the element is excluded whatever its own attribute says.
+        const excluded = outer.raw || excludes(n);
         if (typeof excluded === 'string') throw new Fallback(`${excluded}={…}`, 'which decides at runtime whether the element is translated');
         // An author's exclusion is read as a <DontTranslate>: the element and all it holds.
         const ctx = excluded ? { ...outer, raw: true } : outer;
@@ -704,7 +714,7 @@ function excludes(n: Node): boolean | string {
     return isTranslationExcluded({ tagName: n.name as string, getAttribute: text, hasAttribute: (name) => attributes.has(name.toLowerCase()) });
 }
 
-/** Every identifier a subtree names, for finding the snippets it renders. */
+/** Every name a subtree refers to, for finding the snippets it renders: a property's name is not one. */
 function identifiers(root: unknown, into = new Set<string>()): Set<string> {
     if (!root || typeof root !== 'object') return into;
     if (Array.isArray(root)) {
@@ -713,7 +723,11 @@ function identifiers(root: unknown, into = new Set<string>()): Set<string> {
     }
     const node = root as Node;
     if (node.type === 'Identifier') into.add(node.name as string);
-    for (const [key, value] of Object.entries(node)) if (key !== 'parent' && key !== 'metadata') identifiers(value, into);
+    for (const [key, value] of Object.entries(node)) {
+        if (key === 'parent' || key === 'metadata') continue;
+        if (!node.computed && ((node.type === 'MemberExpression' && key === 'property') || (node.type === 'Property' && key === 'key'))) continue;
+        identifiers(value, into);
+    }
     return into;
 }
 

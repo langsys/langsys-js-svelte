@@ -5,6 +5,7 @@
     let { email, version, items, ok = true }: { email: string; version: string; items: string[]; ok?: boolean } = $props();
     const user = { name: 'Ana' };
     const owner = { name: 'Bo' };
+    const nick = { name: 'NICK' };
 </script>
 
 <Phrase category="DT" tag="p">Signed in as <DontTranslate>{email}</DontTranslate> today</Phrase>
@@ -53,3 +54,7 @@
         > shown
     </p></Translate
 >
+<!-- A name written inside an exclusion: on the phrase path the caller's params fill it, in a block it
+     stays as written. -->
+<Phrase category="DT" tag="p" params={nick}>Hey {user.name}, write to <b translate="no">%name%</b></Phrase>
+<Translate category="DT" tag="div"><p>Mail {user.name} at <span translate="no">%name%</span></p></Translate>

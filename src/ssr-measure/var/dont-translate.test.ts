@@ -81,6 +81,21 @@ describe('a value inside <DontTranslate>', () => {
         expect(sent).not.toMatch(/a@b\.c|By \{email\}/);
     });
 
+    it("takes a name written inside an exclusion as the caller's: the phrase's own value is named around it", async () => {
+        const strip = (body: string) => body.replace(/<!--[^]*?-->/g, '');
+        let source = '';
+        const sent = await inScope(() => (source = render(VarDontTranslate, { props }).body));
+        expect(sent).toContain('"Hey {user_name}, write to {m0o}{m0c}"');
+        expect(sent).toContain('"Mail {user_name} at"');
+        // In a block the name stays as written inside the exclusion.
+        expect(strip(source)).toMatch(/<p>Mail Ana at <span translate="no">%name%<\/span><\/p>/);
+        // On the phrase path the caller's params fill it, and the user's name stays the user's.
+        const catalog = { DT: { 'Hey {user_name}, write to {m0o}{m0c}': 'Ciao {user_name}, scrivi a {m0o}{m0c}' } } as unknown as iCategories;
+        let translated = '';
+        await inScope(() => (translated = render(VarDontTranslate, { props }).body), catalog, 'it-it');
+        expect(strip(translated)).toMatch(/Ciao Ana, scrivi a <b translate="no">NICK<\/b>/);
+    });
+
     it('is one block whichever branch its <DontTranslate> shows: one id, the content differing only inside the element', async () => {
         const shown = async (ok: boolean) => {
             const sent = JSON.parse(await inScope(() => void render(VarDontTranslate, { props: { ...props, ok } }).body)) as Array<{

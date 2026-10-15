@@ -225,6 +225,21 @@ describe('VAR-6 — the preprocessor', () => {
         for (const generate of ['server', 'client'] as const) expect(() => compile(code, { generate, filename: 'Helper.svelte' })).not.toThrow();
     });
 
+    it('keeps in the instance script the keys of a top-level snippet no exported snippet renders', () => {
+        const each = '<ul>{#each items as i}<li>{i}</li>{/each}</ul>';
+        const content =
+            `<script module>${IMPORT} const cfg = { lone: 'x' }; export { outer };</script>\n` +
+            `{#snippet helper(items)}<Translate category="H">${each}<Phrase>H</Phrase></Translate>{/snippet}` +
+            `{#snippet lone(items)}<Translate category="L">${each}<Phrase>L</Phrase></Translate>{/snippet}` +
+            // Its own parameter hides the top-level helper, and `cfg.lone` is a property: it renders neither.
+            `{#snippet outer(helper)}<p>{@render helper([])} {cfg.lone}</p>{/snippet}`;
+        for (const generate of ['server', 'client'] as const) expect(() => compile(content, { generate, filename: 'Lone.svelte' })).not.toThrow();
+        const code = langsysPreprocess({ warn: () => {} }).markup({ content, filename: 'Lone.svelte' })!.code;
+        expect(code).toMatch(/^<script>const __lsScope0 = \{\}, __lsScope1 = \{\};<\/script>\n<script module>/);
+        expect(code).not.toMatch(/<script module>[^<]*__lsScope/);
+        for (const generate of ['server', 'client'] as const) expect(() => compile(code, { generate, filename: 'Lone.svelte' })).not.toThrow();
+    });
+
     it("names the unit's own values without a value inside a <DontTranslate>, which takes a name they leave free or the same expression's", () => {
         const { code } = run(
             '<Phrase>Hi {user.name}, as <DontTranslate>{owner.name}</DontTranslate></Phrase>' +
@@ -239,6 +254,16 @@ describe('VAR-6 — the preprocessor', () => {
         // The same expression is one placeholder, inside the exclusion or not.
         expect(same.tree).toEqual([{ text: 'Hi ' }, ...v('name', 'Ana'), { text: ', ' }, excluded(v('name', 'Ana'))]);
         expect(same.params).toEqual({ name: 'Ana' });
+    });
+
+    it('gives distinct values distinct names beside an exclusion, however their names would meet', () => {
+        const { code } = run(
+            '<Translate><p>Hi {user.name} <DontTranslate>{name}</DontTranslate></p></Translate>' +
+                '<Phrase>A <DontTranslate>{a.name}</DontTranslate> B <DontTranslate>{b.name}</DontTranslate></Phrase>'
+        );
+        const [block, phrase] = blocks(code, { user: { name: 'Ana' }, name: 'Bo', a: { name: 'X' }, b: { name: 'Y' } }) as Array<{ params: unknown }>;
+        expect(block.params).toEqual({ name: 'Ana', name_2: 'Bo' });
+        expect(phrase.params).toEqual({ a_name: 'X', b_name: 'Y' });
     });
 
     it('names an unnameable value inside a <DontTranslate> with no warning: it is in no key', () => {
@@ -257,9 +282,10 @@ describe('VAR-6 — the preprocessor', () => {
                 `<Translate><p>Hi <span data-notrans="false">${img}</span></p></Translate>` +
                 '<span translate="NO"><Phrase>Top {v}</Phrase></span>' +
                 '<Translate><ul>{#each items as i}<li>{i}</li>{/each}</ul><span data-notrans><Phrase>Deep {v}</Phrase></span></Translate>' +
-                '<Translate><p>Hi <span translate={mode}>{v}</span></p></Translate>'
+                '<Translate><p>Hi <span translate={mode}>{v}</span></p></Translate>' +
+                `<Translate><p>Hi <span TRANSLATE="no">${img}</span></p></Translate>`
         );
-        const [block, phrase, control, top, outer, deep, runtime] = blocks(code, { y: 'Bob', v: '1', items: [], mode: 'no' }) as Array<{
+        const [block, phrase, control, top, outer, deep, runtime, upper] = blocks(code, { y: 'Bob', v: '1', items: [], mode: 'no' }) as Array<{
             tree?: unknown[];
             dyn?: unknown[];
             params?: unknown;
@@ -275,12 +301,35 @@ describe('VAR-6 — the preprocessor', () => {
         // Control: data-notrans="false" opts out of the opt-out.
         expect(control.params).toEqual({ y: 'Bob' });
         // No unit inside one is read, outside any block or in a block that falls back.
-        expect(top.fallback).toMatch(/^place inside /);
+        expect(top.fallback).toBe('place inside an excluded <span>');
         expect(outer.fallback).toBe('{#each}');
-        expect(deep.fallback).toMatch(/^place inside /);
+        expect(deep.fallback).toBe('place inside an excluded <span>');
         expect(warnings.filter((w) => /whose content is never read/.test(w))).toHaveLength(2);
         // An exclusion decided at runtime is not known at build time: the block falls back.
         expect(runtime.fallback).toBe('translate={…}');
+        // Attribute names are matched whatever their case, as HTML's are.
+        expect(upper.params).toEqual({});
+    });
+
+    it('reads no unit inside an element whose exclusion is decided at runtime, or a <svelte:element> excluding itself', () => {
+        const { code, warnings } = run(
+            '<span translate={mode}><Phrase>Top {v}</Phrase></span>' +
+                '<svelte:element this={tag} translate="no"><Phrase>Svel {v}</Phrase></svelte:element>' +
+                '<Translate><ul>{#each items as i}<li>{i}</li>{/each}</ul><span data-notrans={flag}><Phrase>Deep {v}</Phrase></span></Translate>' +
+                '<Translate><p>Hi <DontTranslate><span translate={mode}>{x}</span></DontTranslate> z</p></Translate>'
+        );
+        const [top, svel, outer, deep, inside] = blocks(code, { mode: 'no', tag: 'span', items: [], flag: true, v: '1', x: 'X' }) as Array<{
+            fallback?: string;
+            params?: unknown;
+        }>;
+        expect(top.fallback).toBe('place inside a <span translate={…}>');
+        expect(svel.fallback).toBe('place inside an excluded <svelte:element>');
+        expect(outer.fallback).toBe('{#each}');
+        expect(deep.fallback).toBe('place inside a <span data-notrans={…}>');
+        expect(warnings.filter((w) => /whose content is never read/.test(w))).toHaveLength(3);
+        // Inside an exclusion the element is excluded whatever its own attribute says: no fallback.
+        expect(inside.fallback).toBeUndefined();
+        expect(inside.params).toEqual({ x: 'X' });
     });
 
     it('marks what it cannot read as a fallback, and says so at build time', () => {
