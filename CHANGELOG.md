@@ -31,7 +31,10 @@ debug off, a `write` or `ip_write` key the server resolves read-only logs "this 
 write" once per page load, and a phrase the message formatter cannot render logs that it was
 rendered by the SDK's own branch selection. A key with discovery on that cannot send a hint logs
 "Discovery hint failed", a catalog fetch whose HTTP client throws logs "Catalog fetch threw", and
-a malformed catalog logs "Ignoring non-category member".
+a malformed catalog logs "Ignoring non-category member". A `<Phrase>` holding a
+`<DontTranslate>`, a `translate="no"` or `data-notrans` element, or `<code>` registers a new key,
+the excluded element one empty markup pair (`Built with {m0o}{m0c} on`); its translation under
+the key 3.6.17 registered is still found and rendered.
 
 ### Changed
 
@@ -61,9 +64,9 @@ a malformed catalog logs "Ignoring non-category member".
   param, so `Hello {user.name}` registers `Hello {name}` once for every user, and a count stays a
   number a plural form can select on. The content a block registers with holds `{name}` where a
   marked value was, as its phrases do, and a nested `<Translate>` or `<Phrase>` as its element
-  alone. In a block nothing inside a `<DontTranslate>` is read, a nested `<Phrase>` included, and
-  its text is stored in the content as rendered; under a `<Phrase>`, which would hold it as
-  written, a value there makes the phrase, and any block holding it, a fallback. Names come from the core's `derivePlaceholderNames` and pass
+  alone. Nothing inside a `<DontTranslate>` is read, a nested `<Phrase>` included: in a block it is
+  left out of the text and a value inside it is stored as its `{name}`, and in a `<Phrase>` it is
+  one empty markup pair, rendered as written. Names come from the core's `derivePlaceholderNames` and pass
   all 32 shared naming vectors: an expression that names itself is one placeholder wherever it
   repeats, and one that cannot be named is a placeholder of its own each time. `{#if}`/`{#key}` branches, event handlers, attributes, and nested
   `<Phrase>`, `<Translate>` and `<DontTranslate>` are read; ``$t(`…${x}`)`` template literals are

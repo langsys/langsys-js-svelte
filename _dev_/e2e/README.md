@@ -188,10 +188,16 @@ node _dev_/e2e/svelte-dom.mjs
 ## VAR — variables in registered text
 
 `_dev_/e2e/var.mjs` runs `/fixture/var` (compiled with the build-time transform) and
-`/fixture/var-plain` (without it) through `createLangsysHandle`, against the contract double:
-served translations and ids, plurals, one phrase for two users, a block's registered content
-holding placeholders and no values, handlers, the `{#await}` and `{@html}` cases, and that a
-hydrated client resends nothing the server collected.
+`/fixture/var-plain` (without it) through `createLangsysHandle`, against the contract double: served
+translations and ids, plurals, one phrase for two users, a block's registered content holding
+placeholders and no values, handlers, the `{#await}` and `{@html}` cases, and that a hydrated client
+resends nothing the server collected. A unit whose one token sits beside a `<DontTranslate>` at a
+paragraph's edge keeps the space between them: served in Italian, after hydration, rendered by the
+client after a locale switch, and on `/fixture/var-plain`, through the core's DOM class. On
+`/fixture/var/category` a unit inside a fallback block takes the block's category: served in Italian
+and hydrated, and rendered by the client after a locale switch, in a read session (`k-read`) and a
+write session (`k-write`), then following the block's category when it changes. The catalog requests
+the browser makes carry `X-Langsys-Capabilities: icu`.
 
 ```bash
 node _dev_/e2e/var.mjs --serve                                     # the double, :8787
@@ -206,7 +212,8 @@ Each needs only a freshly started `npm run dev`; the last two start the double t
 - `_dev_/e2e/credentials.mjs` — `requireCredentials` with no key: the page's blocks surface
   `LangsysConfigurationError`s, mounted before `init()` or not, and the page shows the text as
   written, while `/fixture/var-plain`, whose blocks only read (`register: false`), surfaces nothing.
-  Control: the same page without `requireCredentials` surfaces nothing.
+  Control: the same page without `requireCredentials` surfaces nothing, and renders source through
+  `$t` and through a block.
 - `_dev_/e2e/locale-race.mjs` — a locale switch overtaken by another: a slow French overtaken by a
   failing German leaves source and stores nothing under `de-de`; a slow Italian overtaken by a
   succeeding Portuguese shows Portuguese.

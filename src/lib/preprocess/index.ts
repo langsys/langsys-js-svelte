@@ -72,7 +72,6 @@ type AttrPart = string | { id: number; expr: Expr };
 type IR =
     | { k: 'text'; data: string }
     | { k: 'var'; id: number; expr: Expr }
-    | { k: 'raw'; expr: Expr }
     | {
           k: 'el';
           tag: string;
@@ -110,6 +109,12 @@ class Transform {
     private readonly tCalls = new Map<number, Node>();
     /** Fallback blocks that hand their category to units read on their own inside them, by key. */
     private readonly scopes: Scope[] = [];
+    /** Their keys' names start with this, which no name in the file does. */
+    private readonly keyPrefix: string;
+    /** Snippets the module script exports, which reach only what it declares. */
+    private readonly exported = new Set<string>();
+    /** Inside an exported snippet. */
+    private inModule = 0;
     private changed = false;
 
     constructor(
@@ -120,6 +125,9 @@ class Transform {
         private readonly warn: (message: string) => void
     ) {
         this.s = new MagicString(content);
+        let prefix = '__lsScope';
+        while (content.includes(prefix)) prefix += '_';
+        this.keyPrefix = prefix;
     }
 
     run(): boolean {
@@ -134,6 +142,10 @@ class Transform {
             }
         }
         if (this.locals.size === 0 && !this.tStore) return false;
+        for (const statement of ((this.ast.module?.content as { body?: Node[] })?.body ?? []) as Node[]) {
+            if (statement.type !== 'ExportNamedDeclaration' || statement.declaration) continue;
+            for (const spec of statement.specifiers as Array<{ local: { name: string } }>) this.exported.add(spec.local.name);
+        }
 
         if (this.tStore) this.collectTCalls(this.ast as unknown as Node);
         // Outermost calls only: a nested one is rewritten inside its parent's code.
@@ -149,15 +161,20 @@ class Transform {
     /**
      * Each key a fallback block provides its category under is an object of the component
      * instance, so a unit reads the block it is written in, in the instance that wrote it, whatever
-     * renders around it: another component's block, or another instance of this one.
+     * renders around it: another component's block, or another instance of this one. A snippet the
+     * module script exports has no instance, and reaches only what that script declares: its keys
+     * are declared there.
      */
     private declareScopes(): void {
+        const declare = (scopes: Scope[]) => `const ${scopes.map((scope) => `${scope.key} = {}`).join(', ')};`;
         const used = this.scopes.filter((scope) => scope.used);
-        if (!used.length) return;
-        const declaration = `const ${used.map((scope) => `${scope.key} = {}`).join(', ')};`;
+        const inModule = used.filter((scope) => scope.module);
+        const inInstance = used.filter((scope) => !scope.module);
+        if (inModule.length) this.s.appendLeft((this.ast.module as Node & { content: Node }).content.end, `\n${declare(inModule)}\n`);
+        if (!inInstance.length) return;
         const instance = this.ast.instance as (Node & { content: Node }) | undefined;
-        if (instance) this.s.appendLeft(instance.content.end, `\n${declaration}\n`);
-        else this.s.prepend(`<script>${declaration}</script>\n`);
+        if (instance) this.s.appendLeft(instance.content.end, `\n${declare(inInstance)}\n`);
+        else this.s.prepend(`<script>${declare(inInstance)}</script>\n`);
     }
 
     // ------------------------------------------------------------------
@@ -176,9 +193,12 @@ class Transform {
                 continue; // a nested block is part of this one, or of its fallback
             }
             if (kind === 'Translate' || kind === 'Phrase') this.unread(node);
+            const exported = node.type === 'SnippetBlock' && this.exported.has((node.expression as Node).name as string);
+            if (exported) this.inModule++;
             for (const key of ['fragment', 'consequent', 'alternate', 'body', 'fallback', 'pending', 'then', 'catch']) {
                 this.visit((node[key] as Fragment | null | undefined)?.nodes, scope, unread || kind === 'DontTranslate');
             }
+            if (exported) this.inModule--;
         }
     }
 
@@ -232,7 +252,6 @@ class Transform {
                 category,
                 raw: false,
                 pre: false,
-                phrase: kind === 'Phrase',
             });
         } catch (e) {
             if (!(e instanceof Fallback)) throw e;
@@ -246,7 +265,7 @@ class Transform {
             // A block inside it that the build can read is a block of its own: the core's walk of
             // this one leaves a marked host to that block (MARK-4). The units read so take this
             // block's category from a context it provides under a key of its own.
-            const inner: Scope = { key: `__lsScope${this.scopes.length}`, text: category, used: false };
+            const inner: Scope = { key: `${this.keyPrefix}${this.scopes.length}`, text: category, used: false, module: this.inModule > 0 };
             this.scopes.push(inner);
             this.visit((node.fragment as Fragment).nodes, inner);
             inject(`fallback: ${JSON.stringify(e.message)}${inner.used ? `, scope: ${inner.key}` : ''}`);
@@ -295,11 +314,11 @@ class Transform {
                 case 'Comment':
                     break;
                 case 'ExpressionTag': {
+                    // Marked inside a <DontTranslate> too: the core leaves the element out of the
+                    // unit, a phrase keying it as one empty markup pair, renders its content as
+                    // given, and stores a block's value there as its {NAME} (TOK-1, VAR-3).
                     const expr = n.expression as Expr;
-                    // Text in a <DontTranslate> stays as written, and a phrase holds it whole.
-                    if (ctx.raw && ctx.phrase) throw new Fallback('value inside a <DontTranslate>', 'which a phrase would register as written, once per value');
-                    if (ctx.raw) out.push({ k: 'raw', expr });
-                    else out.push({ k: 'var', id: this.occur(ctx, expr), expr });
+                    out.push({ k: 'var', id: this.occur(ctx, expr), expr });
                     break;
                 }
                 case 'RegularElement':
@@ -401,9 +420,9 @@ class Transform {
         }
         // A nested block is declared (an empty marker) or, with an app-supplied id, identified by it.
         attrs.unshift(kind === 'Translate' ? { name: CONTENT_BLOCK_MARKER_ATTR, value: [customId] } : { name: PHRASE_MARKER_ATTR, value: [''] });
-        // A phrase reads everything under its host, a nested block too. Inside a block's <DontTranslate>
-        // nothing is read, a nested <Phrase> included.
-        const children = this.children((n.fragment as Fragment).nodes, { ...ctx, phrase: ctx.phrase || (kind === 'Phrase' && !ctx.raw) });
+        // The core reads the host by its marker: a phrase reads everything under it, a nested block
+        // too, and nothing inside a <DontTranslate> is read, a nested <Phrase> included.
+        const children = this.children((n.fragment as Fragment).nodes, ctx);
         trimEdges(children);
         return { k: 'el', tag, attrs, dyn, children };
     }
@@ -525,6 +544,8 @@ interface Scope {
     text: string;
     /** A unit was read inside it, so it provides the context. */
     used: boolean;
+    /** Declared in the module script: the block is in a snippet it exports. */
+    module: boolean;
 }
 
 interface Ctx {
@@ -532,11 +553,9 @@ interface Ctx {
     explicit: Set<string>;
     spreads: Expr[];
     category: string;
-    /** Inside `<DontTranslate>`: values are shown as they are, never placeholders. */
+    /** Inside `<DontTranslate>`: its text makes no token, its attributes are carried as values, and no unit is read. */
     raw: boolean;
     pre: boolean;
-    /** The unit being read is a phrase: a `<Phrase>`, or one nested in a block. */
-    phrase: boolean;
 }
 
 /** Code for the component: the tree, the values beside it, and the params. */
@@ -561,8 +580,6 @@ class Gen {
                     `{ text: String((${this.t.code(n.expr)}) ?? '') }`,
                     JSON.stringify({ comment: '/ls' }),
                 ];
-            case 'raw':
-                return [`{ text: String((${this.t.code(n.expr)}) ?? '') }`];
             case 'el': {
                 const attrs = n.attrs.map(
                     ({ name, value }) =>

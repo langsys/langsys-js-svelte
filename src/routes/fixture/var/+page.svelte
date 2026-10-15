@@ -5,7 +5,7 @@
      */
     import { onMount } from 'svelte';
     import { page } from '$app/state';
-    import { LangsysApp, Phrase, Translate, currentlyLoadedLocale } from '$lib/index.js';
+    import { DontTranslate, LangsysApp, Phrase, Translate, currentlyLoadedLocale } from '$lib/index.js';
 
     const params = page.url.searchParams;
     const user = $state({ name: params.get('user') ?? 'Ana' });
@@ -49,6 +49,8 @@
     >{#each items.slice(0, 1) as i (i)}<span>Gallery</span>{/each}
     <Translate category="VAR" tag="div"><img id="photo" alt="Photo of {user.name}" src="data:," /></Translate></Translate
 >
+<!-- A unit whose one token sits beside an excluded element, at the paragraph's edge (TOK-1). -->
+<Translate category="VAR" tag="div"><p id="built">Built with <DontTranslate>Kangen</DontTranslate></p></Translate>
 <p id="locale-headers">Accept-Language: {acceptLanguage}</p>
 {#if mounted}
     <Translate category="VAR" tag="div"><p id="client-only">Rendered in the browser for {user.name}</p></Translate>

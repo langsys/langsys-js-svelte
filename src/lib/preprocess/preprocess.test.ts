@@ -94,9 +94,9 @@ describe('VAR-6 — the preprocessor', () => {
                 children: [{ text: 'Based on ' }, ...v('n', '4'), { text: ' ' }, { tag: 'b', attrs: {}, children: [{ text: 'reviews' }] }],
             },
             { text: ' ' },
-            { tag: 'code', attrs: { translate: 'no', 'data-ls-dont-translate': '' }, children: [{ text: 'X-1' }] },
+            { tag: 'code', attrs: { translate: 'no', 'data-ls-dont-translate': '' }, children: v('sku', 'X-1') },
         ]);
-        expect(block.params).toEqual({ n: 4 });
+        expect(block.params).toEqual({ n: 4, sku: 'X-1' });
     });
 
     it('inlines a nested <Translate> as a block of its own: declared, or identified by its custom_id', () => {
@@ -125,32 +125,30 @@ describe('VAR-6 — the preprocessor', () => {
         }
     });
 
-    it('a value inside <DontTranslate> within a phrase makes it a fallback, since the phrase would hold the value', () => {
+    it('marks a value inside a <DontTranslate> as any other, in a phrase and in a block, and writes no %name% for it', () => {
         const { code, warnings } = run(
             '<Phrase>Signed in as <DontTranslate>{user.email}</DontTranslate> today</Phrase>' +
-                '<Translate><p>Intro</p><Phrase>By <DontTranslate>{author}</DontTranslate></Phrase></Translate>' +
                 '<Translate><p>Owner: <DontTranslate>{owner}</DontTranslate> here</p></Translate>' +
-                '<Phrase>Powered by <DontTranslate>Langsys</DontTranslate></Phrase>'
+                '<Phrase>By <Translate><DontTranslate>{email}</DontTranslate></Translate> now</Phrase>'
         );
-        const found = blocks(code, { user: { email: 'a@b.c' }, author: 'Ana', owner: 'Ana' }) as Array<{ fallback?: string; tree?: unknown }>;
-        expect(found[0].fallback).toMatch(/<DontTranslate>/);
-        expect(found[1].fallback).toMatch(/<DontTranslate>/);
-        expect(warnings[0]).toMatch(
-            /^Test\.svelte:2:\d+: <Phrase> keeps a value inside a <DontTranslate>, which a phrase would register as written, once per value\. It renders from the catalog and registers nothing \(VAR-7\)/
-        );
-        // In a block such a value is in no phrase: the block is read (its content shows the value).
-        // Text written in a <DontTranslate> is the same for everyone, so a phrase may hold it.
-        expect(found.slice(-2).map((b) => b.tree !== undefined)).toEqual([true, true]);
-        // A phrase reads everything under its host, a nested <Translate> too; a block reads nothing
-        // inside its <DontTranslate>, a nested <Phrase> included.
-        const deeper = run(
-            '<Phrase>By <Translate><DontTranslate>{email}</DontTranslate></Translate> now</Phrase>' +
-                '<Translate><p>Hi {x}</p><DontTranslate><Phrase>Version {ver}</Phrase></DontTranslate></Translate>'
-        );
-        // The fallback phrase's nested <Translate> is a block of its own, so the outer block is last.
-        const units = blocks(deeper.code, { email: 'a@b.c', x: 'Ana', ver: '1.2' }) as Array<{ fallback?: string; params?: unknown }>;
-        expect(units[0].fallback).toMatch(/<DontTranslate>/);
-        expect(units[units.length - 1].params).toEqual({ x: 'Ana' });
+        expect(warnings).toEqual([]);
+        expect(code).not.toMatch(/%(email|owner)%/);
+        const excluded = (children: unknown[]) => ({ tag: 'span', attrs: { translate: 'no', 'data-ls-dont-translate': '' }, children });
+        const [phrase, block, nested] = blocks(code, { user: { email: 'a@b.c' }, owner: 'Ana', email: 'a@b.c' }) as Array<{ tree: unknown[]; params: unknown }>;
+        expect(phrase.tree).toEqual([{ text: 'Signed in as ' }, excluded(v('email', 'a@b.c')), { text: ' today' }]);
+        expect(phrase.params).toEqual({ email: 'a@b.c' });
+        expect(block.tree).toEqual([{ tag: 'p', attrs: {}, children: [{ text: 'Owner: ' }, excluded(v('owner', 'Ana')), { text: ' here' }] }]);
+        expect(nested.tree).toEqual([
+            { text: 'By ' },
+            { tag: 'translate', attrs: { 'data-ls-contentblock': '' }, children: [excluded(v('email', 'a@b.c'))] },
+            { text: ' now' },
+        ]);
+        // A block reads nothing inside its <DontTranslate> as a unit, a nested <Phrase> included:
+        // the phrase is part of the block's tree, its value marked there too.
+        const deeper = run('<Translate><p>Hi {x}</p><DontTranslate><Phrase>Version {ver}</Phrase></DontTranslate></Translate>');
+        const units = blocks(deeper.code, { x: 'Ana', ver: '1.2' }) as Array<{ fallback?: string; params?: unknown }>;
+        expect(units).toHaveLength(1);
+        expect(units[0].params).toEqual({ x: 'Ana', ver: '1.2' });
     });
 
     it("reads no unit inside a <DontTranslate>, and hands a fallback block's own units its category", () => {
@@ -195,6 +193,19 @@ describe('VAR-6 — the preprocessor', () => {
             expect(() => compile(code, { generate, filename: 'Test.svelte' })).not.toThrow();
             expect(() => compile(bare, { generate, filename: 'Bare.svelte' })).not.toThrow();
         }
+    });
+
+    it('declares the key of a block in an exported snippet in the module script, under a name the file does not use', () => {
+        const each = '<ul>{#each items as i}<li>{i}</li>{/each}</ul>';
+        const content =
+            `<script module>${IMPORT} export { row };</script>\n<script>let __lsScope0 = 'mine';</script>\n` +
+            `{#snippet row(items)}<Translate category="Rows">${each}<Phrase>Row</Phrase></Translate>{/snippet}` +
+            `<Translate category="Page">${each}<Phrase>Page {__lsScope0}</Phrase></Translate>`;
+        const code = langsysPreprocess({ warn: () => {} }).markup({ content, filename: 'Rows.svelte' })!.code;
+        // A snippet the module script exports reaches only what that script declares.
+        expect(code).toMatch(/<script module>[^<]*\nconst __lsScope_0 = \{\};\n<\/script>/);
+        expect(code).toContain("<script>let __lsScope0 = 'mine';\nconst __lsScope_1 = {};\n</script>");
+        for (const generate of ['server', 'client'] as const) expect(() => compile(code, { generate, filename: 'Rows.svelte' })).not.toThrow();
     });
 
     it('marks what it cannot read as a fallback, and says so at build time', () => {

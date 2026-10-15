@@ -44,10 +44,11 @@ async function visit(path, initScript) {
         'every surfaced error is a LangsysConfigurationError',
         JSON.stringify(errors)
     );
-    // One each from the page's seven registering blocks: the greeting, the cart, the <Phrase>, the
-    // photo block inside the fallback, the {@html}-only block and the two only the browser renders.
-    // The fallback blocks only read, and raise nothing.
-    check(errors.length === 7, "each of the page's registering blocks surfaces the failure once", `${errors.length} surfaced`);
+    // One each from the page's eight registering blocks: the greeting, the cart, the <Phrase>, the
+    // photo block inside the fallback, the {@html}-only block, the one-token unit beside a
+    // <DontTranslate>, and the two only the browser renders. The fallback blocks only read, and
+    // raise nothing.
+    check(errors.length === 8, "each of the page's registering blocks surfaces the failure once", `${errors.length} surfaced`);
     await page.close();
 }
 {
@@ -56,11 +57,12 @@ async function visit(path, initScript) {
     const { page, errors } = await visit('/fixture/var?key=&user=Ana');
     check(errors.length === 0, 'control: without requireCredentials the same page surfaces nothing', JSON.stringify(errors));
     // WIRE-4: with no credentials the app boots, init() resolves unconfigured, and the page renders
-    // source with its values filled.
+    // source with its values filled, through $t (the layout's line) and through a block.
+    const shown = [await page.textContent('[data-testid=fx-status]'), await page.textContent('[data-testid=fx-layout]'), await page.textContent('#greet')];
     check(
-        (await page.textContent('[data-testid=fx-status]')) === 'error' && (await page.textContent('#greet')) === 'Hello Ana, welcome back',
-        'without requireCredentials, init() resolves unconfigured and the page renders source with its values',
-        `${await page.textContent('[data-testid=fx-status]')} / ${await page.textContent('#greet')}`
+        shown[0] === 'error' && shown[1] === 'Layout phrase 0' && shown[2] === 'Hello Ana, welcome back',
+        'without requireCredentials, init() resolves unconfigured and the page renders source with its values, through $t and a block',
+        shown.join(' / ')
     );
     await page.close();
 }

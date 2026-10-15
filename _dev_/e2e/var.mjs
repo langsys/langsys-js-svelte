@@ -33,6 +33,7 @@ if (process.argv.includes('--serve')) {
     const cartBlock = generateCustomId('VAR', [CART, 'Add one']);
     const PHOTO = 'Photo of {name}'; // a readable block inside a fallback block, its only text an attribute
     const PICTURE = 'Picture of {name}'; // the same, naming no category: it takes the fallback block's
+    const BUILT = 'Built with'; // a unit's one token, beside an excluded element at the paragraph's edge
     const SEED = {
         projects: [
             {
@@ -45,6 +46,7 @@ if (process.argv.includes('--serve')) {
                     { category: 'VAR', phrase: PHOTO, translations: { 'it-it': 'Foto di {name}' } },
                     { category: 'VAR', phrase: PICTURE, translations: { 'it-it': 'Immagine di {name}' } },
                     { category: 'VAR2', phrase: PICTURE, translations: { 'it-it': 'Figura di {name}' } },
+                    { category: 'VAR', phrase: BUILT, translations: { 'it-it': 'Costruito con' } },
                 ],
                 blocks: [
                     {
@@ -95,7 +97,7 @@ if (process.argv.includes('--serve')) {
     if (process.argv.includes('--seed')) {
         // For looking by hand (_dev_/LOCAL-TESTING.md): the catalog this harness runs against, nothing else.
         await seed(SEED);
-        console.log('seeded: project p1 (en-us → it-it), key k-write, the VAR phrases and block');
+        console.log('seeded: project p1 (en-us → it-it), keys k-write and k-read, the VAR phrases and blocks');
         process.exit(0);
     }
 
@@ -117,6 +119,7 @@ if (process.argv.includes('--serve')) {
     check(photoAlt === 'Foto di Ana', 'premise: a readable block inside a fallback block is served translated', photoAlt);
     const five = await (await fetch(`${BASE}/fixture/var?locale=it-it&user=Ana&n=5&key=k-write`)).text();
     check(text(five, 'cart') === 'Hai 5 articoli', 'served: … and for 5', text(five, 'cart'));
+    check(text(html, 'built') === 'Costruito con Kangen', "TOK-1: served, a unit's one token keeps its space beside an excluded element", text(html, 'built'));
     // The page, not the hydration seed: the seed carries the catalog's source keys by design.
     const page = html.replace(/<script[^]*?<\/script>/g, '');
     check(!/Hello Ana/.test(page) && !/You have/.test(page), 'served: no source text left in the transformed blocks');
@@ -156,6 +159,11 @@ if (process.argv.includes('--serve')) {
     const ana = await visit(`/fixture/var?user=Ana&key=k-write&run=${RUN}`);
     await visit(`/fixture/var?user=Luis&key=k-write&run=${RUN}`);
     check((await ana.textContent('#greet')) === 'Hello Ana, welcome back', 'browser: the value renders in the base locale', await ana.textContent('#greet'));
+    check(
+        (await ana.textContent('#built')) === 'Built with Kangen',
+        '… and a one-token unit keeps its space beside an excluded element',
+        await ana.textContent('#built')
+    );
 
     // Handlers survive: the button is rendered from the tree, and still does its job.
     await ana.click('#add');
@@ -175,19 +183,22 @@ if (process.argv.includes('--serve')) {
     check(got.includes(CART), 'VAR-2: the count registers under its derived name', JSON.stringify(got));
     check(!got.some((p) => /Ana|Luis/.test(p)), 'VAR-1: no per-user phrase is registered', JSON.stringify(got));
     // The content a block registers with: the count's block from the server's flush, and a block
-    // only the browser renders, mounted before init() has answered. Each marked value is its {NAME}.
+    // only the browser renders, mounted before init() has answered. Each marked value is its {NAME}
+    // as text, the marker removed (VAR-3).
     let stored = [];
-    const holds = (phrase) => stored.some((b) => b.phrases.some((p) => p.phrase === phrase) && /<!--ls:/.test(b.content ?? ''));
+    const contentOf = (phrase) => stored.find((b) => b.phrases.some((p) => p.phrase === phrase))?.content ?? '';
+    const holds = (phrase) => contentOf(phrase) !== '';
     for (let i = 0; i < 10 && !(holds(CART) && holds(CLIENT_BLOCK)); i++) {
         if (i) await sleep(1000);
         stored = (await state()).blocks;
     }
     const contents = stored.map((b) => b.content ?? '');
-    const pairs = contents.flatMap((c) => [...c.matchAll(/<!--ls:([^>]*?)-->([^]*?)<!--\/ls-->/g)]);
-    check(holds(CART) && holds(CLIENT_BLOCK), 'premise: both blocks registered marked content, from the server and from the browser', JSON.stringify(contents));
+    check(holds(CART) && holds(CLIENT_BLOCK), 'premise: both blocks registered content, from the server and from the browser', JSON.stringify(contents));
     check(
-        pairs.length >= 2 && pairs.every(([, name, value]) => value === `{${name}}`) && !contents.some((c) => /Ana|Luis|Zoe/.test(c)),
-        "VAR-1: a block's registered content holds each value as its placeholder",
+        contentOf(CART).includes('You have {items_count} items') &&
+            contentOf(CLIENT_BLOCK).includes('Shown in the browser to {name}') &&
+            !contents.some((c) => /Ana|Luis|Zoe|<!--ls:/.test(c)),
+        "VAR-1, VAR-3: a block's registered content holds each value as its placeholder, the marker removed",
         JSON.stringify(contents)
     );
     check(!got.some((p) => /^Item\b/.test(p)), 'VAR-7: the {#each} block (a fallback) registers nothing', JSON.stringify(got));
@@ -281,6 +292,12 @@ if (process.argv.includes('--serve')) {
         'VAR-7: a catalogued translation still renders without the transform',
         await it.textContent('#greet')
     );
+    await it.waitForFunction(() => document.querySelector('#built')?.textContent?.startsWith('Costruito'), null, { timeout: 15_000 }).catch(() => {});
+    check(
+        (await it.textContent('#built')) === 'Costruito con Kangen',
+        "TOK-1: on the core's DOM class, a unit's one token keeps its space beside an excluded element",
+        await it.textContent('#built')
+    );
 
     // The binding renders the nested block itself; the fallback around it must leave it alone.
     const nested = await visit(`/fixture/var?user=Ana&key=k-write&locale=it-it&run=${RUN}-nested`);
@@ -290,6 +307,21 @@ if (process.argv.includes('--serve')) {
         'MARK-4: after hydration, a readable block inside a fallback block keeps its value',
         await nested.getAttribute('#photo', 'alt')
     );
+    check(
+        (await nested.textContent('#built')) === 'Costruito con Kangen',
+        "TOK-1: after hydration, a unit's one token keeps its space beside an excluded element",
+        await nested.textContent('#built')
+    );
+    // The same unit rendered by the client alone, switched from the base locale.
+    const built = await visit(`/fixture/var?user=Ana&key=k-read&run=${RUN}-built`);
+    await built.evaluate(() => window.__fxSetLocale('it-it'));
+    await built.waitForFunction(() => document.querySelector('#built')?.textContent?.startsWith('Costruito'), null, { timeout: 15_000 }).catch(() => {});
+    check(
+        (await built.textContent('#built')) === 'Costruito con Kangen',
+        "TOK-1: rendered by the client, a unit's one token keeps its space beside an excluded element",
+        await built.textContent('#built')
+    );
+    await built.close();
 
     // VAR-6 in the browser: a block read on its own inside a fallback block takes the category the
     // block renders with. A client that read no category would render it as a miss, in English.
@@ -309,22 +341,24 @@ if (process.argv.includes('--serve')) {
         await served.alt()
     );
     // The same page in the base locale, switched to Italian in the browser: rendered by the client
-    // alone, after a catalog request of its own.
-    // A read-only session. A write session that showed these blocks in the base locale keeps
-    // rendering them as source after the switch, although the catalog it fetches holds them: the
-    // core's to answer (CONFORMANCE.md, Gaps), and not what this check measures.
-    const client = await picture(`/fixture/var/category?user=Ana&key=k-read`);
-    await client.p.evaluate(() => window.__fxSetLocale('it-it'));
-    await client.until('Immagine di Ana');
-    check(
-        (await client.p.getAttribute('#alone', 'alt')) === 'Immagine di Ana',
-        'control: rendered by the client, the same block in no fallback, naming the category, is translated',
-        await client.p.getAttribute('#alone', 'alt')
-    );
-    check((await client.alt()) === 'Immagine di Ana', "VAR-6: rendered by the client, the unit takes the block's category", await client.alt());
-    await client.p.click('#switch');
-    await client.until('Figura di Ana');
-    check((await client.alt()) === 'Figura di Ana', "VAR-6: … and follows the block's category when it changes", await client.alt());
+    // alone. A read-only session, and a write session, whose registration of what it showed in the
+    // base locale answers around the switch and must not undo the catalog it switched to.
+    for (const key of ['k-read', 'k-write']) {
+        await seed(SEED);
+        const client = await picture(`/fixture/var/category?user=Ana&key=${key}`);
+        await client.p.evaluate(() => window.__fxSetLocale('it-it'));
+        await client.until('Immagine di Ana');
+        check(
+            (await client.p.getAttribute('#alone', 'alt')) === 'Immagine di Ana',
+            `control (${key}): rendered by the client, the same block in no fallback, naming the category, is translated`,
+            await client.p.getAttribute('#alone', 'alt')
+        );
+        check((await client.alt()) === 'Immagine di Ana', `VAR-6 (${key}): rendered by the client, the unit takes the block's category`, await client.alt());
+        await client.p.click('#switch');
+        await client.until('Figura di Ana');
+        check((await client.alt()) === 'Figura di Ana', `VAR-6 (${key}): … and follows the block's category when it changes`, await client.alt());
+        await client.p.close();
+    }
     const capabilities = await Promise.all(catalogHeaders);
     check(
         capabilities.length >= 1 && capabilities.every((h) => h === 'icu'),
