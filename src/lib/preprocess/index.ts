@@ -153,9 +153,11 @@ class Transform {
         const snippets = new Map(this.ast.fragment.nodes.filter((n) => n.type === 'SnippetBlock').map((n) => [(n.expression as Node).name as string, n]));
         for (const name of this.exported) {
             const snippet = snippets.get(name);
-            // Its own parameters hide a top-level snippet of the same name.
-            const hidden = identifiers(snippet?.parameters);
-            for (const ref of identifiers(snippet?.body)) if (snippets.has(ref) && !hidden.has(ref)) this.exported.add(ref);
+            // A name its parameters bind hides a top-level snippet of the same name; their default
+            // values are read where the snippet is called, outside it.
+            const { bound, defaults } = parameters(snippet?.parameters);
+            const refs = [...[...identifiers(snippet?.body)].filter((ref) => !bound.has(ref)), ...identifiers(defaults)];
+            for (const ref of refs) if (snippets.has(ref)) this.exported.add(ref);
         }
 
         if (this.tStore) this.collectTCalls(this.ast as unknown as Node);
@@ -703,18 +705,44 @@ function excludes(n: Node): boolean | string {
         const value = a.value as true | Node | Node[];
         attributes.set((a.name as string).toLowerCase(), value === true ? true : Array.isArray(value) ? value : [value]);
     }
-    for (const name of ['translate', 'data-notrans']) {
+    const dynamic = ['translate', 'data-notrans'].filter((name) => {
         const value = attributes.get(name);
-        if (value !== undefined && value !== true && !value.every((p) => p.type === 'Text')) return name;
-    }
+        return value !== undefined && value !== true && !value.every((p) => p.type === 'Text');
+    });
+    // Read with the attributes written as text: one of them may exclude it whatever the other holds.
+    const written = (name: string) => attributes.has(name) && !dynamic.includes(name);
     const text = (name: string) => {
-        const value = attributes.get(name);
-        return value === undefined ? null : value === true ? '' : value.map((p) => p.data as string).join('');
+        const value = attributes.get(name.toLowerCase());
+        return !written(name.toLowerCase()) ? null : value === true ? '' : (value as Node[]).map((p) => p.data as string).join('');
     };
-    return isTranslationExcluded({ tagName: n.name as string, getAttribute: text, hasAttribute: (name) => attributes.has(name.toLowerCase()) });
+    if (isTranslationExcluded({ tagName: n.name as string, getAttribute: text, hasAttribute: (name) => written(name.toLowerCase()) })) return true;
+    return dynamic[0] ?? false;
 }
 
-/** Every name a subtree refers to, for finding the snippets it renders: a property's name is not one. */
+/** The names a snippet's parameters bind, and their default values. */
+function parameters(patterns: unknown, bound = new Set<string>(), defaults: Node[] = []): { bound: Set<string>; defaults: Node[] } {
+    for (const pattern of (Array.isArray(patterns) ? patterns : [patterns]) as Array<Node | null | undefined>) {
+        if (!pattern) continue;
+        if (pattern.type === 'Identifier') bound.add(pattern.name as string);
+        else if (pattern.type === 'AssignmentPattern') {
+            parameters(pattern.left, bound, defaults);
+            defaults.push(pattern.right as Node);
+        } else if (pattern.type === 'RestElement') parameters(pattern.argument, bound, defaults);
+        else if (pattern.type === 'ArrayPattern') parameters(pattern.elements, bound, defaults);
+        else if (pattern.type === 'ObjectPattern') {
+            for (const p of pattern.properties as Node[]) {
+                if (p.type === 'RestElement') parameters(p.argument, bound, defaults);
+                else {
+                    parameters(p.value, bound, defaults);
+                    if (p.computed) defaults.push(p.key as Node);
+                }
+            }
+        }
+    }
+    return { bound, defaults };
+}
+
+/** Every name a subtree refers to, for finding the snippets it renders: a property's name or a type is not one. */
 function identifiers(root: unknown, into = new Set<string>()): Set<string> {
     if (!root || typeof root !== 'object') return into;
     if (Array.isArray(root)) {
@@ -724,7 +752,7 @@ function identifiers(root: unknown, into = new Set<string>()): Set<string> {
     const node = root as Node;
     if (node.type === 'Identifier') into.add(node.name as string);
     for (const [key, value] of Object.entries(node)) {
-        if (key === 'parent' || key === 'metadata') continue;
+        if (key === 'parent' || key === 'metadata' || key === 'typeAnnotation') continue;
         if (!node.computed && ((node.type === 'MemberExpression' && key === 'property') || (node.type === 'Property' && key === 'key'))) continue;
         identifiers(value, into);
     }

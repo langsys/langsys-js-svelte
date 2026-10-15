@@ -225,6 +225,23 @@ describe('VAR-6 — the preprocessor', () => {
         for (const generate of ['server', 'client'] as const) expect(() => compile(code, { generate, filename: 'Helper.svelte' })).not.toThrow();
     });
 
+    it('declares in the module script the keys of a snippet an exported one reaches through a default value, a computed member, or beside a typed parameter', () => {
+        const each = '<ul>{#each items as i}<li>{i}</li>{/each}</ul>';
+        const helper = (name: string) => `{#snippet ${name}(items)}<Translate category="${name}">${each}<Phrase>${name}</Phrase></Translate>{/snippet}`;
+        const content =
+            `<script module lang="ts">${IMPORT} const lookup: Record<string, string> = {}; export { a, b, c, d };</script>\n` +
+            ['ha', 'hb', 'Row', 'hd'].map(helper).join('') +
+            '{#snippet a(row = ha)}{@render row([])}{/snippet}' +
+            '{#snippet b({ row = hb })}{@render row([])}{/snippet}' +
+            '{#snippet c(r: Row)}{@render Row([])}{/snippet}' +
+            '{#snippet d(items)}<p>{lookup[hd as unknown as string]}</p>{/snippet}';
+        for (const generate of ['server', 'client'] as const) expect(() => compile(content, { generate, filename: 'Reach.svelte' })).not.toThrow();
+        const code = langsysPreprocess({ warn: () => {} }).markup({ content, filename: 'Reach.svelte' })!.code;
+        expect(code).toMatch(/<script module lang="ts">[^]*?\nconst __lsScope0 = \{\}, __lsScope1 = \{\}, __lsScope2 = \{\}, __lsScope3 = \{\};\n<\/script>/);
+        expect(code).not.toMatch(/^<script>/);
+        for (const generate of ['server', 'client'] as const) expect(() => compile(code, { generate, filename: 'Reach.svelte' })).not.toThrow();
+    });
+
     it('keeps in the instance script the keys of a top-level snippet no exported snippet renders', () => {
         const each = '<ul>{#each items as i}<li>{i}</li>{/each}</ul>';
         const content =
@@ -316,9 +333,18 @@ describe('VAR-6 — the preprocessor', () => {
             '<span translate={mode}><Phrase>Top {v}</Phrase></span>' +
                 '<svelte:element this={tag} translate="no"><Phrase>Svel {v}</Phrase></svelte:element>' +
                 '<Translate><ul>{#each items as i}<li>{i}</li>{/each}</ul><span data-notrans={flag}><Phrase>Deep {v}</Phrase></span></Translate>' +
-                '<Translate><p>Hi <DontTranslate><span translate={mode}>{x}</span></DontTranslate> z</p></Translate>'
+                '<Translate><p>Hi <DontTranslate><span translate={mode}>{x}</span></DontTranslate> z</p></Translate>' +
+                '<Translate><p>Hi <span translate="no" data-notrans={flag}>{x}</span> z</p></Translate>' +
+                '<Translate><p>Hi <span translate={mode} data-notrans>{x}</span> z</p></Translate>'
         );
-        const [top, svel, outer, deep, inside] = blocks(code, { mode: 'no', tag: 'span', items: [], flag: true, v: '1', x: 'X' }) as Array<{
+        const [top, svel, outer, deep, inside, notransRuntime, translateRuntime] = blocks(code, {
+            mode: 'no',
+            tag: 'span',
+            items: [],
+            flag: true,
+            v: '1',
+            x: 'X',
+        }) as Array<{
             fallback?: string;
             params?: unknown;
         }>;
@@ -330,6 +356,11 @@ describe('VAR-6 — the preprocessor', () => {
         // Inside an exclusion the element is excluded whatever its own attribute says: no fallback.
         expect(inside.fallback).toBeUndefined();
         expect(inside.params).toEqual({ x: 'X' });
+        // Nor where the other attribute excludes it as written.
+        for (const unit of [notransRuntime, translateRuntime]) {
+            expect(unit.fallback).toBeUndefined();
+            expect(unit.params).toEqual({ x: 'X' });
+        }
     });
 
     it('marks what it cannot read as a fallback, and says so at build time', () => {

@@ -87,6 +87,8 @@ describe('a value inside <DontTranslate>', () => {
         const sent = await inScope(() => (source = render(VarDontTranslate, { props }).body));
         expect(sent).toContain('"Hey {user_name}, write to {m0o}{m0c}"');
         expect(sent).toContain('"Mail {user_name} at"');
+        // The phrase's own value is the user's, whatever the caller's params hold.
+        expect(strip(source)).toMatch(/<p[^>]*>Hey Ana, write to <b translate="no">/);
         // In a block the name stays as written inside the exclusion.
         expect(strip(source)).toMatch(/<p>Mail Ana at <span translate="no">%name%<\/span><\/p>/);
         // On the phrase path the caller's params fill it, and the user's name stays the user's.
