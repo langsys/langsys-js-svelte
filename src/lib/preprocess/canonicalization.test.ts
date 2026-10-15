@@ -111,10 +111,13 @@ describe('the build derives the ids a DOM reader derives', () => {
 });
 
 describe('a <Phrase> keys an excluded element as the core does (TOK-1)', () => {
-    const phraseRows = fixture.phrase_cases.filter((c) => !PHRASE_NOT_TREES[c.id]);
-    it.each(phraseRows.map((c) => [c.id, c] as const))('%s', async (id, c) => {
+    it.each(fixture.phrase_cases.map((c) => [c.id, c] as const))('%s', async (id, c) => {
         const svelte = PHRASE_AS_SVELTE[id];
         const out = treeOf(svelte?.markup ?? c.html, c.category, svelte?.scope, 'Phrase');
+        if (PHRASE_NOT_TREES[id]) {
+            expect(out.fallback).toBeDefined();
+            return;
+        }
         expect(out.fallback).toBeUndefined();
         // The host as <Phrase> renders it.
         const host: BlockNode[] = [{ tag: 'span', attrs: { [PHRASE_MARKER_ATTR]: '' }, children: out.tree! }];

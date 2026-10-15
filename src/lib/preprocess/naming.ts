@@ -75,12 +75,14 @@ export interface Occurrence {
     expr: Expr;
     /** A name the developer gave this expression; it is used as written. */
     explicit?: string;
+    /** Inside an author's exclusion (TOK-1): in no key, so it names nothing in the unit. */
+    excluded?: boolean;
 }
 
 export interface Naming {
     /** Each occurrence's placeholder name. */
     names: Map<number, string>;
-    /** The occurrences named `value…` because nothing could be derived — each one a build warning. */
+    /** The unit's values named `value…` because nothing could be derived — each one a build warning. */
     unnameable: number[];
 }
 
@@ -94,12 +96,31 @@ export interface Naming {
  * `explicit` holds the names the developer wrote without an expression — `%name%` in the text, keys
  * of a literal `params` — which always win: they are handed to the core as taken names, so a
  * derived name that meets one is a collision like any other.
+ *
+ * A value inside an author's exclusion is in no key (TOK-1), so the unit's own values are named
+ * without it, and what an exclusion holds never changes a key. It takes the name of the same
+ * expression among them, where the core finds one, or a name they leave free. It still needs a
+ * name of its own: a block stores it as `{NAME}`, and its value travels in the params.
  */
 export function assignNames(occurrences: readonly Occurrence[], explicit: ReadonlySet<string> = new Set()): Naming {
     const written = [...explicit].map((name) => ({ shape: { identifier: name }, explicit: name }));
-    const derived = derivePlaceholderNames([...written, ...occurrences.map((o) => ({ shape: shapeOf(o.expr), explicit: o.explicit }))]).slice(written.length);
-    return {
-        names: new Map(occurrences.map((o, i) => [o.id, derived[i]])),
-        unnameable: occurrences.filter((o) => !o.explicit && unnameable(shapeOf(o.expr))).map((o) => o.id),
-    };
+    const entry = (o: Occurrence) => ({ shape: shapeOf(o.expr), explicit: o.explicit });
+    const derive = (list: ReadonlyArray<{ shape: ExpressionShape; explicit?: string }>) => derivePlaceholderNames([...written, ...list]).slice(written.length);
+    const own = occurrences.filter((o) => !o.excluded);
+    const derived = derive(own.map(entry));
+    const names = new Map(own.map((o, i) => [o.id, derived[i]]));
+    const free: Occurrence[] = [];
+    for (const o of occurrences.filter((x) => x.excluded)) {
+        // The core's call: added after the unit's values, it is one of them when it changes none of
+        // their names and takes one.
+        const withIt = derive([...own, o].map(entry));
+        const name = withIt[own.length];
+        if (withIt.slice(0, own.length).every((n, i) => n === derived[i]) && derived.includes(name)) names.set(o.id, name);
+        else free.push(o);
+    }
+    const taken = own.map((o, i) => ({ shape: shapeOf(o.expr), explicit: derived[i] }));
+    derive([...taken, ...free.map(entry)])
+        .slice(taken.length)
+        .forEach((name, i) => names.set(free[i].id, name));
+    return { names, unnameable: own.filter((o) => !o.explicit && unnameable(shapeOf(o.expr))).map((o) => o.id) };
 }

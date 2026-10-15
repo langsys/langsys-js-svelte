@@ -24,6 +24,8 @@
 import { parse } from 'svelte/compiler';
 import MagicString from 'magic-string';
 import { CONTENT_BLOCK_MARKER_ATTR, PHRASE_MARKER_ATTR, TRANSLATABLE_ATTRIBUTES } from 'langsys-js-typescript/pure';
+// Not on the `/pure` entry: the core's own reading of an author's exclusion (TOK-1).
+import { isTranslationExcluded } from 'langsys-js-typescript';
 import { assignNames, type Expr, type Occurrence } from './naming.js';
 
 export interface LangsysPreprocessOptions {
@@ -111,7 +113,7 @@ class Transform {
     private readonly scopes: Scope[] = [];
     /** Their keys' names start with this, which no name in the file does. */
     private readonly keyPrefix: string;
-    /** Snippets the module script exports, which reach only what it declares. */
+    /** Snippets the module script exports, and those they render: they reach only what it declares. */
     private readonly exported = new Set<string>();
     /** Inside an exported snippet. */
     private inModule = 0;
@@ -145,6 +147,12 @@ class Transform {
         for (const statement of ((this.ast.module?.content as { body?: Node[] })?.body ?? []) as Node[]) {
             if (statement.type !== 'ExportNamedDeclaration' || statement.declaration) continue;
             for (const spec of statement.specifiers as Array<{ local: { name: string } }>) this.exported.add(spec.local.name);
+        }
+        // A top-level snippet an exported one renders is exportable only while it, too, reaches
+        // nothing of the instance.
+        const snippets = new Map(this.ast.fragment.nodes.filter((n) => n.type === 'SnippetBlock').map((n) => [(n.expression as Node).name as string, n]));
+        for (const name of this.exported) {
+            for (const ref of identifiers(snippets.get(name)?.body)) if (snippets.has(ref)) this.exported.add(ref);
         }
 
         if (this.tStore) this.collectTCalls(this.ast as unknown as Node);
@@ -183,20 +191,27 @@ class Transform {
 
     /**
      * Finds the units to transform. `scope` is the block whose fallback is being walked: its own
-     * units take its category. Nothing inside a `<DontTranslate>` is read, units included.
+     * units take its category. Nothing inside an exclusion — a `<DontTranslate>`, or an element its
+     * author excludes — is read, units included; `inside` names the one being walked.
      */
-    private visit(nodes: readonly Node[] | undefined, scope?: Scope, unread = false): void {
+    private visit(nodes: readonly Node[] | undefined, scope?: Scope, inside?: string): void {
         for (const node of nodes ?? []) {
             const kind = node.type === 'Component' ? this.locals.get(node.name as string) : undefined;
-            if ((kind === 'Translate' || kind === 'Phrase') && !unread) {
+            if ((kind === 'Translate' || kind === 'Phrase') && !inside) {
                 this.block(node, kind, scope);
                 continue; // a nested block is part of this one, or of its fallback
             }
-            if (kind === 'Translate' || kind === 'Phrase') this.unread(node);
+            if (kind === 'Translate' || kind === 'Phrase') this.unread(node, inside!);
+            const exclusion =
+                kind === 'DontTranslate'
+                    ? 'a <DontTranslate>'
+                    : node.type === 'RegularElement' && excludes(node) === true
+                      ? `an excluded <${node.name}>`
+                      : undefined;
             const exported = node.type === 'SnippetBlock' && this.exported.has((node.expression as Node).name as string);
             if (exported) this.inModule++;
             for (const key of ['fragment', 'consequent', 'alternate', 'body', 'fallback', 'pending', 'then', 'catch']) {
-                this.visit((node[key] as Fragment | null | undefined)?.nodes, scope, unread || kind === 'DontTranslate');
+                this.visit((node[key] as Fragment | null | undefined)?.nodes, scope, inside ?? exclusion);
             }
             if (exported) this.inModule--;
         }
@@ -210,11 +225,11 @@ class Transform {
         this.changed = true;
     }
 
-    /** A unit inside a `<DontTranslate>`: its content is never read, so it registers nothing (VAR-7). */
-    private unread(node: Node): void {
+    /** A unit inside an exclusion: its content is never read, so it registers nothing (VAR-7). */
+    private unread(node: Node, inside: string): void {
         if ((node.attributes as Node[]).some((a) => a.name === '__ls')) return;
-        this.warn(`${this.where(node)}: <${node.name}> is inside a <DontTranslate>, whose content is never read. It registers nothing (VAR-7).`);
-        this.attribute(node, `__ls={{ fallback: ${JSON.stringify('place inside a <DontTranslate>')} }}`);
+        this.warn(`${this.where(node)}: <${node.name}> is inside ${inside}, whose content is never read. It registers nothing (VAR-7).`);
+        this.attribute(node, `__ls={{ fallback: ${JSON.stringify(`place inside ${inside}`)} }}`);
     }
 
     private block(node: Node, kind: 'Translate' | 'Phrase', scope?: Scope): void {
@@ -348,9 +363,13 @@ class Transform {
         return out;
     }
 
-    private element(n: Node, ctx: Ctx): IR {
+    private element(n: Node, outer: Ctx): IR {
         const tag = n.name as string;
         if (OPAQUE_ELEMENTS.has(tag)) throw new Fallback(`<${tag}>`);
+        const excluded = excludes(n);
+        if (typeof excluded === 'string') throw new Fallback(`${excluded}={…}`, 'which decides at runtime whether the element is translated');
+        // An author's exclusion is read as a <DontTranslate>: the element and all it holds.
+        const ctx = excluded ? { ...outer, raw: true } : outer;
         const attrs: Array<{ name: string; value: true | AttrPart[] }> = [];
         const dyn: Array<{ name: string; parts: Array<string | Expr> }> = [];
         for (const a of n.attributes as Node[]) {
@@ -528,7 +547,7 @@ class Transform {
 
     /** Records an expression as the block's next occurrence; the core names it (VAR-2). */
     private occur(ctx: Ctx, expr: Expr): number {
-        return ctx.occurrences.push({ id: ctx.occurrences.length, expr }) - 1;
+        return ctx.occurrences.push({ id: ctx.occurrences.length, expr, excluded: ctx.raw }) - 1;
     }
 
     private where(node: Node): string {
@@ -553,7 +572,7 @@ interface Ctx {
     explicit: Set<string>;
     spreads: Expr[];
     category: string;
-    /** Inside `<DontTranslate>`: its text makes no token, its attributes are carried as values, and no unit is read. */
+    /** Inside an exclusion: its text makes no token, its attributes are carried as values, and no unit is read. */
     raw: boolean;
     pre: boolean;
 }
@@ -661,6 +680,41 @@ function trimEdges(ir: IR[]): void {
     const last = ir[ir.length - 1];
     if (last?.k === 'text') last.data = last.data.replace(/\s+$/, '');
     for (let i = ir.length - 1; i >= 0; i--) if (ir[i].k === 'text' && (ir[i] as { data: string }).data === '') ir.splice(i, 1);
+}
+
+/**
+ * Whether an element is its author's exclusion, as the core reads one (`translate="no"`,
+ * `data-notrans`), or the name of the attribute that decides it at runtime.
+ */
+function excludes(n: Node): boolean | string {
+    const attributes = new Map<string, true | Node[]>();
+    for (const a of n.attributes as Node[]) {
+        if (a.type !== 'Attribute') continue;
+        const value = a.value as true | Node | Node[];
+        attributes.set((a.name as string).toLowerCase(), value === true ? true : Array.isArray(value) ? value : [value]);
+    }
+    for (const name of ['translate', 'data-notrans']) {
+        const value = attributes.get(name);
+        if (value !== undefined && value !== true && !value.every((p) => p.type === 'Text')) return name;
+    }
+    const text = (name: string) => {
+        const value = attributes.get(name);
+        return value === undefined ? null : value === true ? '' : value.map((p) => p.data as string).join('');
+    };
+    return isTranslationExcluded({ tagName: n.name as string, getAttribute: text, hasAttribute: (name) => attributes.has(name.toLowerCase()) });
+}
+
+/** Every identifier a subtree names, for finding the snippets it renders. */
+function identifiers(root: unknown, into = new Set<string>()): Set<string> {
+    if (!root || typeof root !== 'object') return into;
+    if (Array.isArray(root)) {
+        for (const item of root) identifiers(item, into);
+        return into;
+    }
+    const node = root as Node;
+    if (node.type === 'Identifier') into.add(node.name as string);
+    for (const [key, value] of Object.entries(node)) if (key !== 'parent' && key !== 'metadata') identifiers(value, into);
+    return into;
 }
 
 function describe(n: Node): string {

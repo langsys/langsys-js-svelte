@@ -2,7 +2,9 @@
     /** Fixture for `dont-translate.test.ts`, compiled WITH the transform. */
     import { DontTranslate, Phrase, Translate } from '$lib/index.js';
 
-    let { email, version, items }: { email: string; version: string; items: string[] } = $props();
+    let { email, version, items, ok = true }: { email: string; version: string; items: string[]; ok?: boolean } = $props();
+    const user = { name: 'Ana' };
+    const owner = { name: 'Bo' };
 </script>
 
 <Phrase category="DT" tag="p">Signed in as <DontTranslate>{email}</DontTranslate> today</Phrase>
@@ -39,3 +41,15 @@
      between them is the text node's own. -->
 <Translate category="DT" tag="div"><p>Built with <DontTranslate>Kangen</DontTranslate></p></Translate>
 <Translate category="DT" tag="div"><p><DontTranslate>Kangen</DontTranslate> is ours</p></Translate>
+<!-- What an exclusion holds changes no name in the key. -->
+<Phrase category="DT" tag="p">Hi {user.name}, as <DontTranslate>{owner.name}</DontTranslate></Phrase>
+<!-- An author's own exclusion is read as a <DontTranslate>: an attribute's text there is a value. -->
+<Translate category="DT" tag="div"><p>Photo <span translate="no"><img alt="By {email}" src="data:," /></span> here</p></Translate>
+<!-- One block whichever branch its <DontTranslate> shows (VAR-3). -->
+<Translate category="DT" tag="div"
+    ><p>
+        Status <DontTranslate
+            >{#if ok}{email}{:else}none{/if}</DontTranslate
+        > shown
+    </p></Translate
+>

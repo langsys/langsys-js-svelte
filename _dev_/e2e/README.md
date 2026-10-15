@@ -192,12 +192,12 @@ node _dev_/e2e/svelte-dom.mjs
 translations and ids, plurals, one phrase for two users, a block's registered content holding
 placeholders and no values, handlers, the `{#await}` and `{@html}` cases, and that a hydrated client
 resends nothing the server collected. A unit whose one token sits beside a `<DontTranslate>` at a
-paragraph's edge keeps the space between them: served in Italian, after hydration, rendered by the
-client after a locale switch, and on `/fixture/var-plain`, through the core's DOM class. On
-`/fixture/var/category` a unit inside a fallback block takes the block's category: served in Italian
-and hydrated, and rendered by the client after a locale switch, in a read session (`k-read`) and a
-write session (`k-write`), then following the block's category when it changes. The catalog requests
-the browser makes carry `X-Langsys-Capabilities: icu`.
+paragraph's edge keeps the space between them: served in Italian, in the base locale in the browser,
+after hydration, rendered by the client after a locale switch, and on `/fixture/var-plain`, through
+the core's DOM class. On `/fixture/var/category` a unit inside a fallback block takes the block's
+category: served in Italian and hydrated, and rendered by the client after a locale switch, in a
+read session (`k-read`) and a write session (`k-write`), then following the block's category when it
+changes. The catalog requests the browser makes carry `X-Langsys-Capabilities: icu`.
 
 ```bash
 node _dev_/e2e/var.mjs --serve                                     # the double, :8787

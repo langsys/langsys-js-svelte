@@ -72,6 +72,32 @@ describe('a value inside <DontTranslate>', () => {
         expect(strip(translated)).toMatch(/<p><span translate="no"[^>]*>Kangen<\/span> è nostro<\/p>/);
     });
 
+    it("changes no name in a key for what the exclusion holds, and reads an author's own exclusion as a <DontTranslate>", async () => {
+        let body = '';
+        const sent = await inScope(() => (body = render(VarDontTranslate, { props }).body));
+        expect(sent).toContain('"Hi {name}, as {m0o}{m0c}"');
+        // The attribute is rendered with its value, and stored with none.
+        expect(body).toMatch(/<img [^>]*alt="By a@b\.c"/);
+        expect(sent).not.toMatch(/a@b\.c|By \{email\}/);
+    });
+
+    it('is one block whichever branch its <DontTranslate> shows: one id, the content differing only inside the element', async () => {
+        const shown = async (ok: boolean) => {
+            const sent = JSON.parse(await inScope(() => void render(VarDontTranslate, { props: { ...props, ok } }).body)) as Array<{
+                custom_id?: string;
+                tokens?: string[];
+                content?: string;
+            }>;
+            return sent.find((b) => b.tokens?.includes('Status'))!;
+        };
+        const [yes, no] = [await shown(true), await shown(false)];
+        expect(yes.tokens).toEqual(['Status', 'shown']);
+        expect(no.tokens).toEqual(yes.tokens);
+        expect(no.custom_id).toBe(yes.custom_id);
+        expect(yes.content).toMatch(/^<p>Status <span translate="no"[^>]*>\{email\}<\/span> shown<\/p>$/);
+        expect(no.content).toMatch(/^<p>Status <span translate="no"[^>]*>none<\/span> shown<\/p>$/);
+    });
+
     it('a block reads nothing inside its <DontTranslate>, a nested <Phrase> included, and registers the rest', async () => {
         const sent = await inScope(() => void render(VarDontTranslate, { props }).body);
         expect(sent).toContain('"Hello {email}"');

@@ -208,6 +208,81 @@ describe('VAR-6 — the preprocessor', () => {
         for (const generate of ['server', 'client'] as const) expect(() => compile(code, { generate, filename: 'Rows.svelte' })).not.toThrow();
     });
 
+    it('declares in the module script the key of a block in a snippet an exported snippet renders, however deep', () => {
+        const each = '<ul>{#each items as i}<li>{i}</li>{/each}</ul>';
+        const content =
+            `<script module>${IMPORT} export { outer };</script>\n` +
+            `{#snippet helper(items)}<Translate category="H">${each}<Phrase>H</Phrase></Translate>{/snippet}` +
+            `{#snippet middle(items)}<p>{@render helper(items)}</p>{/snippet}` +
+            `{#snippet outer(items)}<div>{@render middle(items)}</div>{/snippet}` +
+            `<Translate category="Page">${each}<Phrase>Page</Phrase></Translate>`;
+        // Premise: Svelte exports `outer` as written.
+        for (const generate of ['server', 'client'] as const) expect(() => compile(content, { generate, filename: 'Helper.svelte' })).not.toThrow();
+        const code = langsysPreprocess({ warn: () => {} }).markup({ content, filename: 'Helper.svelte' })!.code;
+        expect(code).toMatch(/<script module>[^<]*\nconst __lsScope0 = \{\};\n<\/script>/);
+        // The page's own block keeps a key of the instance.
+        expect(code).toMatch(/^<script>const __lsScope1 = \{\};<\/script>/);
+        for (const generate of ['server', 'client'] as const) expect(() => compile(code, { generate, filename: 'Helper.svelte' })).not.toThrow();
+    });
+
+    it("names the unit's own values without a value inside a <DontTranslate>, which takes a name they leave free or the same expression's", () => {
+        const { code } = run(
+            '<Phrase>Hi {user.name}, as <DontTranslate>{owner.name}</DontTranslate></Phrase>' +
+                '<Translate><p>Hi {user.name}</p><p>Owner: <DontTranslate>{owner.name}</DontTranslate></p></Translate>' +
+                '<Phrase>Hi {user.name}, <DontTranslate>{user.name}</DontTranslate></Phrase>'
+        );
+        const excluded = (children: unknown[]) => ({ tag: 'span', attrs: { translate: 'no', 'data-ls-dont-translate': '' }, children });
+        const [phrase, block, same] = blocks(code, { user: { name: 'Ana' }, owner: { name: 'Bo' } }) as Array<{ tree: unknown[]; params: unknown }>;
+        expect(phrase.tree).toEqual([{ text: 'Hi ' }, ...v('name', 'Ana'), { text: ', as ' }, excluded(v('owner_name', 'Bo'))]);
+        expect(phrase.params).toEqual({ name: 'Ana', owner_name: 'Bo' });
+        expect(block.params).toEqual({ name: 'Ana', owner_name: 'Bo' });
+        // The same expression is one placeholder, inside the exclusion or not.
+        expect(same.tree).toEqual([{ text: 'Hi ' }, ...v('name', 'Ana'), { text: ', ' }, excluded(v('name', 'Ana'))]);
+        expect(same.params).toEqual({ name: 'Ana' });
+    });
+
+    it('names an unnameable value inside a <DontTranslate> with no warning: it is in no key', () => {
+        const { code, warnings } = run(
+            '<Phrase>Total <DontTranslate>{a + b}</DontTranslate> now</Phrase><Translate><p>Sum <DontTranslate>{a + b}</DontTranslate></p></Translate>'
+        );
+        expect(warnings).toEqual([]);
+        expect(blocks(code, { a: 1, b: 2 }).map((b) => (b as { params: unknown }).params)).toEqual([{ value: 3 }, { value: 3 }]);
+    });
+
+    it('reads an author\'s translate="no" or data-notrans element as a <DontTranslate>, as the core decides it', () => {
+        const img = '<img alt="By {y}" src="x" />';
+        const { code, warnings } = run(
+            `<Translate><p>Hi <span translate="no">${img}</span></p></Translate>` +
+                `<Phrase>Hi <span data-notrans>${img}</span> now</Phrase>` +
+                `<Translate><p>Hi <span data-notrans="false">${img}</span></p></Translate>` +
+                '<span translate="NO"><Phrase>Top {v}</Phrase></span>' +
+                '<Translate><ul>{#each items as i}<li>{i}</li>{/each}</ul><span data-notrans><Phrase>Deep {v}</Phrase></span></Translate>' +
+                '<Translate><p>Hi <span translate={mode}>{v}</span></p></Translate>'
+        );
+        const [block, phrase, control, top, outer, deep, runtime] = blocks(code, { y: 'Bob', v: '1', items: [], mode: 'no' }) as Array<{
+            tree?: unknown[];
+            dyn?: unknown[];
+            params?: unknown;
+            fallback?: string;
+        }>;
+        // An attribute's text inside the exclusion is a value, rendered as written, never a placeholder.
+        const span = (attrs: Record<string, string | true>) => ({ tag: 'span', attrs, children: [{ tag: 'img', attrs: { src: 'x' }, children: [] }] });
+        expect(block.tree).toEqual([{ tag: 'p', attrs: {}, children: [{ text: 'Hi ' }, span({ translate: 'no' })] }]);
+        expect(block.dyn).toEqual([null, null, { alt: 'By Bob' }]);
+        expect(block.params).toEqual({});
+        expect(phrase.tree).toEqual([{ text: 'Hi ' }, span({ 'data-notrans': true }), { text: ' now' }]);
+        expect(phrase.params).toEqual({});
+        // Control: data-notrans="false" opts out of the opt-out.
+        expect(control.params).toEqual({ y: 'Bob' });
+        // No unit inside one is read, outside any block or in a block that falls back.
+        expect(top.fallback).toMatch(/^place inside /);
+        expect(outer.fallback).toBe('{#each}');
+        expect(deep.fallback).toMatch(/^place inside /);
+        expect(warnings.filter((w) => /whose content is never read/.test(w))).toHaveLength(2);
+        // An exclusion decided at runtime is not known at build time: the block falls back.
+        expect(runtime.fallback).toBe('translate={…}');
+    });
+
     it('marks what it cannot read as a fallback, and says so at build time', () => {
         const { code, warnings } = run('<Translate><ul>{#each items as i}<li>{i}</li>{/each}</ul></Translate><Translate><p>Hi <Other /></p></Translate>');
         expect(blocks(code)).toEqual([{ fallback: '{#each}' }, { fallback: 'component <Other>' }]);
