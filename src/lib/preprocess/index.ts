@@ -409,10 +409,11 @@ class Transform {
             const reads = name.toLowerCase() === 'value' ? readsValue(n) : false;
             if (inUnit && reads === undefined && parts.some((p) => p.type === 'Text' && /\S/.test(p.data as string)))
                 throw new Fallback(`<${tag} type={…}>`, 'which decides at runtime whether its value is translated');
-            // A block reads the text of an attribute a translator reads as a token: a name written
-            // there is taken, as in the text. A phrase copies its elements' attributes as they are.
+            // A name written in any attribute is taken, as in the text, so the caller's params never
+            // replace the unit's own value. A block reads the text of an attribute a translator reads
+            // as a token; a phrase copies its elements' attributes as they are.
+            for (const p of parts) if (p.type === 'Text') takeWritten(p.data as string, ctx.explicit);
             const token = (TRANSLATABLE.has(name.toLowerCase()) || reads === true) && inUnit;
-            if (token) for (const p of parts) if (p.type === 'Text') takeWritten(p.data as string, ctx.explicit);
             if (parts.every((p) => p.type === 'Text')) {
                 attrs.push({ name, value: [parts.map((p) => p.data as string).join('')] });
             } else if (token && parts.some((p) => p.type === 'Text' && /\S/.test(p.data as string))) {
@@ -461,6 +462,7 @@ class Transform {
             const text = parts.map((p) => (p.data as string) ?? '').join('');
             if (a.name === 'tag' && isStatic) tag = text;
             else if (a.name === 'class') {
+                for (const p of parts) if (p.type === 'Text') takeWritten(p.data as string, own.explicit);
                 if (isStatic) attrs.push({ name: 'class', value: [text] });
                 else dyn.push({ name: 'class', parts: parts.map((p) => (p.type === 'Text' ? (p.data as string) : (p.expression as Expr))) });
             } else if (a.name === 'category' && isStatic && (text === '' || text === ctx.category)) continue;

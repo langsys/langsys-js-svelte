@@ -49,3 +49,8 @@
     ><p>Send it</p>
     <input type="submit" value="Send to {user.name}" /></Translate
 >
+<!-- An attribute written without a value renders empty, and a boolean one present. -->
+<Translate category="NAMES" tag="div"
+    ><p hidden>Valueless</p>
+    <button disabled>Go</button></Translate
+>

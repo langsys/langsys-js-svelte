@@ -67,10 +67,11 @@ under the key 3.6.17 registered for the text written inside it is still found an
   alone. A `<Translate>` or `<Phrase>` nested in a block names its own values and renders with its
   own values and `params` only, never the block's, so `<Phrase>By {owner.name}</Phrase>` registers
   `By {name}` inside a block as it does standing alone, and a value it leaves unset shows empty.
-  A `%name%` written in an attribute a translator reads (`title`, `alt`, the `value` of a button or
-  a submit or button input) is taken, as in the text, and a value in such an attribute is a
-  placeholder; an `<input>` whose `type` is an expression, beside a `value` holding text, makes its
-  block a fallback;
+  A `%name%` written anywhere in a unit, in its text or in any attribute, is taken, so the caller's
+  params never replace the unit's own value; a value in an attribute a translator reads (`title`,
+  `alt`, the `value` of a button or a submit or button input) is a placeholder; an `<input>` whose
+  `type` is an expression, beside a `value` holding text, makes its block a fallback; an attribute
+  written without a value renders empty, a boolean one present;
   in a `<Phrase>` an element's attributes are not part of the phrase and show their values. Nothing inside a `<DontTranslate>`, or an element its author marks `translate="no"` or
   `data-notrans`, is read, a nested `<Phrase>` included: in a block it is left out of the text, an
   attribute's text there is rendered with its values, and a value inside it is stored as its

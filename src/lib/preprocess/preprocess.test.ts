@@ -156,22 +156,26 @@ describe('VAR-6 — the preprocessor', () => {
         }
     });
 
-    it("takes a name written in an attribute a translator reads, in a block; in a phrase an attribute's value is shown, never a placeholder", () => {
+    it("takes a name written in any attribute, as in the text; in a phrase an attribute's value is shown, never a placeholder", () => {
         const vars = { extra: { name: 'NICK' }, user: { name: 'Ana' } };
         // In a block the title's text is a token, so its %name% is the caller's, as in the text.
         const [block] = blocks(run('<Translate params={extra}><p title="To %name%">Hello {user.name}</p></Translate>').code, vars) as Array<{
             params: unknown;
         }>;
         expect(block.params).toEqual({ user_name: 'Ana' });
-        // So is one written beside a value, and a button's or a submit input's value, which the core reads
-        // as a label; an input of another type keeps its value, which is no text, and takes no name from it.
+        // So is one written beside a value, in a button's or a submit input's value, which the core reads as
+        // a label, and in any other attribute, inside an exclusion too: the caller's params never replace
+        // the unit's own value, whether or not anything fills the name.
         const taken = (markup: string) =>
             (blocks(run(`<Translate params={extra}>${markup}</Translate>`).code, { ...vars, owner: { n: 2 } })[0] as { params: unknown }).params;
         expect(taken('<p title="To %name%, {owner.n}">Hello {user.name}</p>')).toEqual({ user_name: 'Ana', n: 2 });
         expect(taken('<p>Hello {user.name}</p><input type="submit" value="To %name%" />')).toEqual({ user_name: 'Ana' });
         expect(taken('<p>Hello {user.name}</p><input type="Button" value="To %name%" />')).toEqual({ user_name: 'Ana' });
         expect(taken('<p>Hello {user.name}</p><button value="To %name%">Go</button>')).toEqual({ user_name: 'Ana' });
-        expect(taken('<p>Hello {user.name}</p><input type="text" value="To %name%" />')).toEqual({ name: 'Ana' });
+        expect(taken('<p>Hello {user.name}</p><input type="text" value="To %name%" />')).toEqual({ user_name: 'Ana' });
+        expect(taken('<p>Hello {user.name}</p><a href="/u/%name%">x</a>')).toEqual({ user_name: 'Ana' });
+        expect(taken('<p>Hello {user.name}</p><p translate="no" title="To %name%">x</p>')).toEqual({ user_name: 'Ana' });
+        expect(taken('<p>Hello {user.name} <DontTranslate class="To %name%">x</DontTranslate></p>')).toEqual({ user_name: 'Ana' });
         // A button's value with a value in it is a placeholder, as a title's is.
         const [label] = blocks(run('<Translate><p>Hi</p><input type="submit" value="Send to {user.name}" /></Translate>').code, vars) as Array<{
             tree: Array<{ attrs?: unknown }>;
@@ -195,12 +199,12 @@ describe('VAR-6 — the preprocessor', () => {
         }>;
         expect(phrase.tree).toEqual([
             { text: 'Hello ' },
-            { tag: 'a', attrs: {}, children: v('name', 'Ana') },
+            { tag: 'a', attrs: {}, children: v('user_name', 'Ana') },
             { text: ' and ' },
             { tag: 'i', attrs: { title: 'To %name%' }, children: [{ text: 'you' }] },
         ]);
         expect(phrase.dyn).toEqual([{ title: 'Profile of Ana' }, null]);
-        expect(phrase.params).toEqual({ name: 'Ana' });
+        expect(phrase.params).toEqual({ user_name: 'Ana' });
     });
 
     it('marks a value inside a <DontTranslate> as any other, in a phrase and in a block, and writes no %name% for it', () => {

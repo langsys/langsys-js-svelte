@@ -1,4 +1,5 @@
-import { createRequestScope, generateCustomId, type iCategories, type iContentBlock } from 'langsys-js-typescript';
+import { createRequestScope, generateCustomId, type iCategories, type iContentBlock, type RenderedNode } from 'langsys-js-typescript';
+import RenderedNodes from '$lib/components/RenderedNodes.svelte';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import VarContent from './VarContent.svelte';
@@ -88,6 +89,22 @@ describe('a nested unit inside a block (VAR-2)', () => {
             NAMES: { [generateCustomId('NAMES', tokens)]: { 'Send it': 'Invialo', 'Send to {name}': 'Invia a {name}' } },
         } as unknown as iCategories;
         expect((await rendered('it-it', catalog)).body).toMatch(/<p>Invialo<\/p>\s*<input type="submit" value="Invia a Ana"/);
+    });
+
+    it('renders an attribute written without a value empty, and a boolean one present', async () => {
+        for (const locale of ['en-us', 'it-it']) {
+            const { body } = await rendered(locale);
+            expect(body, locale).toMatch(/<p hidden="">Valueless<\/p>\s*<button disabled="">Go<\/button>/);
+            expect(body, locale).not.toContain('="true"');
+        }
+        // A label or a title written without a value, which a typed component cannot write, renders empty too.
+        const nodes = [
+            { tag: 'input', attrs: { type: 'submit', value: true }, children: [], source: 0 },
+            { tag: 'p', attrs: { title: true }, children: [{ text: 'x' }], source: 1 },
+        ] as unknown as RenderedNode[];
+        expect(render(RenderedNodes, { props: { nodes, dyn: [] } }).body.replace(/<!--[^]*?-->/g, '')).toMatch(
+            /<input type="submit" value=""\/?>\s*<p title="">x<\/p>/
+        );
     });
 
     it('renders with its own values, translated or not', async () => {
