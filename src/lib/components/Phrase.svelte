@@ -33,7 +33,7 @@
     import type { Snippet } from 'svelte';
     import { onDestroy } from 'svelte';
     import RenderedNodes from './RenderedNodes.svelte';
-    import { NO_TRANSFORM, blockCategory, paramsOf, type TransformOutput } from './transform.js';
+    import { NO_TRANSFORM, blockCategory, paramsOf, unitParams, type TransformOutput } from './transform.js';
 
     interface Props {
         class?: string;
@@ -87,7 +87,7 @@
      * it as one rich phrase (`m0o`…`m0c` for its inline markup) on the server as in the browser.
      */
     const tree = $derived<BlockNode[] | undefined>(
-        __ls && 'tree' in __ls ? [{ tag, attrs: { ...markerAttr, ...(clazz ? { class: clazz } : {}) }, children: __ls.tree }] : undefined
+        __ls && 'tree' in __ls ? [{ tag, attrs: { ...markerAttr, ...(clazz ? { class: clazz } : {}) }, children: unitParams(__ls.tree) }] : undefined
     );
     // The host is element 0 of the tree, so the build's entries start at 1.
     const dyn = $derived(__ls && 'tree' in __ls ? [null, ...__ls.dyn] : []);

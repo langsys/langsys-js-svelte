@@ -4,7 +4,7 @@
 
     let { name }: { name: string } = $props();
     const user = $derived({ name });
-    const owner = { name: 'Bo' };
+    const owner: { name: string; nick?: string } = { name: 'Bo' };
 </script>
 
 <Translate category="CONTENT" tag="div"
@@ -32,3 +32,15 @@
     <Phrase tag="p">By {owner.name}</Phrase></Translate
 >
 <Phrase category="NAMES" tag="p">By {owner.name}</Phrase>
+<!-- A value a nested unit leaves unset shows empty, as it does standing alone. -->
+<Translate category="NAMES" tag="div"
+    ><p>Hey {user.name}</p>
+    <Phrase tag="p">For {owner.nick}</Phrase></Translate
+>
+<Phrase category="NAMES" tag="p">For {owner.nick}</Phrase>
+<!-- An attribute's value inside a phrase is shown, standing alone and nested in a block. -->
+<Phrase category="NAMES" tag="p">Hello <abbr title="Profile of {user.name}">{user.name}</abbr></Phrase>
+<Translate category="NAMES" tag="div"
+    ><p>Photos</p>
+    <Phrase tag="p">Taken <img alt="Pic of {user.name}" src="data:," /> today</Phrase></Translate
+>

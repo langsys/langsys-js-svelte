@@ -52,3 +52,14 @@ export function paramsOf(...sources: Array<Record<string, unknown> | undefined>)
     }
     return out;
 }
+
+/**
+ * The build's tree with each nested unit's own params taken as `paramsOf` takes a unit's: the core
+ * renders a nested host with them in place of the block's, so a value left unset shows empty there
+ * as it does standing alone.
+ */
+export function unitParams(tree: readonly BlockNode[]): BlockNode[] {
+    return tree.map((n) =>
+        'tag' in n ? { ...n, ...(n.children ? { children: unitParams(n.children) } : {}), ...(n.params ? { params: paramsOf(n.params) } : {}) } : n
+    );
+}

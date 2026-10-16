@@ -58,6 +58,27 @@ describe('a nested unit inside a block (VAR-2)', () => {
         expect(phrases).not.toContain('Hi {user_name}');
     });
 
+    it('shows a value it leaves unset as empty, as it does standing alone, translated or not', async () => {
+        const catalog = { NAMES: { 'For {nick}': 'Per {nick}' } } as unknown as iCategories;
+        for (const [locale, text] of [
+            ['en-us', 'For'],
+            ['it-it', 'Per'],
+        ] as const) {
+            const { body } = await rendered(locale, locale === 'it-it' ? catalog : undefined);
+            expect(body, locale).not.toContain('{nick}');
+            expect(body.match(new RegExp(`<p data-ls-phrase[^>]*>${text}\\s*</p>`, 'g')), locale).toHaveLength(2);
+        }
+    });
+
+    it("shows an attribute's value inside a phrase, standing alone and nested, translated or not", async () => {
+        for (const locale of ['en-us', 'it-it']) {
+            const { body } = await rendered(locale);
+            expect(body, locale).toContain('title="Profile of Ana"');
+            expect(body, locale).toContain('alt="Pic of Ana"');
+            expect(body, locale).not.toMatch(/="[^"]*\{name\}/);
+        }
+    });
+
     it('renders with its own values, translated or not', async () => {
         expect((await rendered('en-us')).body).toMatch(/Hi Ana<\/p>\s*<p data-ls-phrase[^>]*>By Bo<\/p>/);
         const catalog = { NAMES: { 'By {name}': 'Di {name}', 'Hi {name}': 'Ciao {name}' } } as unknown as iCategories;

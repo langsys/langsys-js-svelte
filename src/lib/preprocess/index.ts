@@ -341,7 +341,7 @@ class Transform {
             switch (n.type) {
                 case 'Text': {
                     const data = ctx.pre ? (n.data as string) : (n.data as string).replace(/[ \t\r\n\f]+/g, ' ');
-                    for (const m of data.matchAll(/%([A-Za-z_][A-Za-z0-9_]*)%/g)) ctx.explicit.add(m[1]);
+                    takeWritten(data, ctx.explicit);
                     out.push({ k: 'text', data });
                     break;
                 }
@@ -401,9 +401,13 @@ class Transform {
                 continue;
             }
             const parts = Array.isArray(value) ? value : [value];
+            // A block reads the text of an attribute a translator reads as a token: a name written
+            // there is taken, as in the text. A phrase copies its elements' attributes as they are.
+            const token = TRANSLATABLE.has(name.toLowerCase()) && !ctx.raw && !ctx.phrase;
+            if (token) for (const p of parts) if (p.type === 'Text') takeWritten(p.data as string, ctx.explicit);
             if (parts.every((p) => p.type === 'Text')) {
                 attrs.push({ name, value: [parts.map((p) => p.data as string).join('')] });
-            } else if (TRANSLATABLE.has(name.toLowerCase()) && !ctx.raw && parts.some((p) => p.type === 'Text' && /\S/.test(p.data as string))) {
+            } else if (token && parts.some((p) => p.type === 'Text' && /\S/.test(p.data as string))) {
                 // Text with a variable in it, in an attribute a translator reads: placeholders.
                 attrs.push({
                     name,
@@ -755,6 +759,11 @@ function excludes(n: Node): boolean | string {
     };
     if (isTranslationExcluded({ tagName: n.name as string, getAttribute: text, hasAttribute: (name) => written(name.toLowerCase()) })) return true;
     return dynamic[0] ?? false;
+}
+
+/** The names written as `%name%` in a unit's text: the developer's, so taken (VAR-2). */
+function takeWritten(text: string, into: Set<string>): void {
+    for (const m of text.matchAll(/%([A-Za-z_][A-Za-z0-9_]*)%/g)) into.add(m[1]);
 }
 
 /** The names a snippet's parameters bind, and their default values. */

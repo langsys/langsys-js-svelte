@@ -65,8 +65,10 @@ under the key 3.6.17 registered for the text written inside it is still found an
   number a plural form can select on. The content a block registers with holds `{name}` where a
   marked value was, as its phrases do, and a nested `<Translate>` or `<Phrase>` as its element
   alone. A `<Translate>` or `<Phrase>` nested in a block names its own values and renders with its
-  own params, so `<Phrase>By {owner.name}</Phrase>` registers `By {name}` inside a block as it does
-  standing alone. Nothing inside a `<DontTranslate>`, or an element its author marks `translate="no"` or
+  own values and `params` only, never the block's, so `<Phrase>By {owner.name}</Phrase>` registers
+  `By {name}` inside a block as it does standing alone, and a value it leaves unset shows empty.
+  A `%name%` written in an attribute a translator reads (`title`, `alt`) is taken, as in the text;
+  in a `<Phrase>` an element's attributes are not part of the phrase and show their values. Nothing inside a `<DontTranslate>`, or an element its author marks `translate="no"` or
   `data-notrans`, is read, a nested `<Phrase>` included: in a block it is left out of the text, an
   attribute's text there is rendered with its values, and a value inside it is stored as its
   `{name}`, named without changing any other; in a `<Phrase>` it is one empty markup pair, rendered

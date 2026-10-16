@@ -27,7 +27,7 @@
     import type { Snippet } from 'svelte';
     import { onDestroy } from 'svelte';
     import RenderedNodes from './RenderedNodes.svelte';
-    import { NO_TRANSFORM, blockCategory, paramsOf, type TransformOutput } from './transform.js';
+    import { NO_TRANSFORM, blockCategory, paramsOf, unitParams, type TransformOutput } from './transform.js';
 
     interface Props {
         class?: string;
@@ -58,7 +58,7 @@
     const inBlock = blockCategory(__ls, () => named);
     const category = $derived(inBlock());
 
-    const tree = $derived(__ls && 'tree' in __ls ? __ls.tree : undefined);
+    const tree = $derived(__ls && 'tree' in __ls ? unitParams(__ls.tree) : undefined);
     const dyn = $derived(__ls && 'tree' in __ls ? __ls.dyn : []);
     // A param the app names itself wins over the build's.
     const options = $derived({

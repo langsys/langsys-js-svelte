@@ -156,6 +156,32 @@ describe('VAR-6 — the preprocessor', () => {
         }
     });
 
+    it("takes a name written in an attribute a translator reads, in a block; in a phrase an attribute's value is shown, never a placeholder", () => {
+        const vars = { extra: { name: 'NICK' }, user: { name: 'Ana' } };
+        // In a block the title's text is a token, so its %name% is the caller's, as in the text.
+        const [block] = blocks(run('<Translate params={extra}><p title="To %name%">Hello {user.name}</p></Translate>').code, vars) as Array<{
+            params: unknown;
+        }>;
+        expect(block.params).toEqual({ user_name: 'Ana' });
+        // In a phrase the core copies an element's attributes as they are: the value is carried beside the tree.
+        const [phrase] = blocks(
+            run('<Phrase>Hello <a title="Profile of {user.name}">{user.name}</a> and <i title="To %name%">you</i></Phrase>').code,
+            vars
+        ) as Array<{
+            tree: unknown[];
+            dyn: unknown[];
+            params: unknown;
+        }>;
+        expect(phrase.tree).toEqual([
+            { text: 'Hello ' },
+            { tag: 'a', attrs: {}, children: v('name', 'Ana') },
+            { text: ' and ' },
+            { tag: 'i', attrs: { title: 'To %name%' }, children: [{ text: 'you' }] },
+        ]);
+        expect(phrase.dyn).toEqual([{ title: 'Profile of Ana' }, null]);
+        expect(phrase.params).toEqual({ name: 'Ana' });
+    });
+
     it('marks a value inside a <DontTranslate> as any other, in a phrase and in a block, and writes no %name% for it', () => {
         const { code, warnings } = run(
             '<Phrase>Signed in as <DontTranslate>{user.email}</DontTranslate> today</Phrase>' +
