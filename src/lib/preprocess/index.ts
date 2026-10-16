@@ -273,6 +273,9 @@ class Transform {
         const explicit = new Set<string>();
         const spreads: Expr[] = [];
         this.explicitKeys(explicitParams, explicit);
+        // The host is one of the unit's elements: a name written in its class is taken, as on a nested host.
+        const hostClass = attributes.find((a) => a.type === 'Attribute' && a.name === 'class')?.value;
+        if (Array.isArray(hostClass)) for (const p of hostClass as Node[]) if (p.type === 'Text') takeWritten(p.data as string, explicit);
         let ir: IR[];
         try {
             ir = this.children((node.fragment as Fragment).nodes, {

@@ -249,7 +249,9 @@ for (const [key, expected] of [
     await p.goto(`${BASE}/e2e/lanes?key=ip_write`, { waitUntil: 'networkidle' });
     await p.waitForTimeout(800);
 
-    if (seen.some((u) => u.startsWith('http://langsys2.test/'))) pass('requests are genuinely cross-origin (no proxy)', seen[0]);
+    // The API's own origin, not the page's: the request leaves the dev server, no proxy in between.
+    const apiOrigin = new URL(API).origin;
+    if (apiOrigin !== new URL(BASE).origin && seen.some((u) => u.startsWith(`${apiOrigin}/`))) pass('requests are genuinely cross-origin (no proxy)', seen[0]);
     else fail('requests are genuinely cross-origin (no proxy)', seen[0] ?? 'no authorize-project request');
 
     if (!failed.length) pass('no blocked requests cross-origin', 'none');

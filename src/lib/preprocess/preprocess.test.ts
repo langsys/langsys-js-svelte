@@ -167,15 +167,20 @@ describe('VAR-6 — the preprocessor', () => {
         // a label, and in any other attribute, inside an exclusion too: the caller's params never replace
         // the unit's own value, whether or not anything fills the name.
         const taken = (markup: string) =>
-            (blocks(run(`<Translate params={extra}>${markup}</Translate>`).code, { ...vars, owner: { n: 2 } })[0] as { params: unknown }).params;
+            (blocks(run(`<Translate params={extra}>${markup}</Translate>`).code, { ...vars, owner: { n: 2 }, id: 7 })[0] as { params: unknown }).params;
         expect(taken('<p title="To %name%, {owner.n}">Hello {user.name}</p>')).toEqual({ user_name: 'Ana', n: 2 });
         expect(taken('<p>Hello {user.name}</p><input type="submit" value="To %name%" />')).toEqual({ user_name: 'Ana' });
         expect(taken('<p>Hello {user.name}</p><input type="Button" value="To %name%" />')).toEqual({ user_name: 'Ana' });
         expect(taken('<p>Hello {user.name}</p><button value="To %name%">Go</button>')).toEqual({ user_name: 'Ana' });
         expect(taken('<p>Hello {user.name}</p><input type="text" value="To %name%" />')).toEqual({ user_name: 'Ana' });
         expect(taken('<p>Hello {user.name}</p><a href="/u/%name%">x</a>')).toEqual({ user_name: 'Ana' });
+        expect(taken('<p>Hello {user.name}</p><a href="/u/%name%/{id}">x</a>')).toEqual({ user_name: 'Ana' });
         expect(taken('<p>Hello {user.name}</p><p translate="no" title="To %name%">x</p>')).toEqual({ user_name: 'Ana' });
         expect(taken('<p>Hello {user.name} <DontTranslate class="To %name%">x</DontTranslate></p>')).toEqual({ user_name: 'Ana' });
+        // The unit's own host is one of its elements: a name in its class is taken, standing alone as nested.
+        const own = (code: string) => (blocks(run(code).code, vars)[0] as { params: unknown }).params;
+        expect(own('<Phrase class="To %name%" params={extra}>Hello {user.name}</Phrase>')).toEqual({ user_name: 'Ana' });
+        expect(own('<Translate class="To %name%" params={extra}><p>Hello {user.name}</p></Translate>')).toEqual({ user_name: 'Ana' });
         // A button's value with a value in it is a placeholder, as a title's is.
         const [label] = blocks(run('<Translate><p>Hi</p><input type="submit" value="Send to {user.name}" /></Translate>').code, vars) as Array<{
             tree: Array<{ attrs?: unknown }>;
