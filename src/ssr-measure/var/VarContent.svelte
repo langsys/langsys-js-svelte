@@ -32,10 +32,10 @@
     <Phrase tag="p">By {owner.name}</Phrase></Translate
 >
 <Phrase category="NAMES" tag="p">By {owner.name}</Phrase>
-<!-- A value a nested unit leaves unset shows empty, as it does standing alone. -->
+<!-- A value a nested unit leaves unset shows empty, as it does standing alone, however deep the unit. -->
 <Translate category="NAMES" tag="div"
     ><p>Hey {user.name}</p>
-    <Phrase tag="p">For {owner.nick}</Phrase></Translate
+    <div><section><Phrase tag="p">For {owner.nick}</Phrase></section></div></Translate
 >
 <Phrase category="NAMES" tag="p">For {owner.nick}</Phrase>
 <!-- An attribute's value inside a phrase is shown, standing alone and nested in a block. -->
@@ -43,4 +43,9 @@
 <Translate category="NAMES" tag="div"
     ><p>Photos</p>
     <Phrase tag="p">Taken <img alt="Pic of {user.name}" src="data:," /> today</Phrase></Translate
+>
+<!-- A submit input's label is text a translator reads: a value in it is a placeholder. -->
+<Translate category="NAMES" tag="div"
+    ><p>Send it</p>
+    <input type="submit" value="Send to {user.name}" /></Translate
 >

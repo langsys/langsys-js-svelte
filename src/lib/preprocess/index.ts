@@ -52,6 +52,10 @@ interface Node {
 type Fragment = { nodes: Node[] };
 
 const TRANSLATABLE = new Set<string>(TRANSLATABLE_ATTRIBUTES);
+// A button's value, and a submit or button input's, is a label the core reads as text: its
+// VALUE_TRANSLATABLE_ELEMENTS and VALUE_TRANSLATABLE_INPUT_TYPES, which no entry exports.
+const VALUE_ELEMENTS = new Set(['button']);
+const VALUE_INPUT_TYPES = new Set(['submit', 'button']);
 /** TypeScript wrappers around an expression that leave its value as written. */
 const TS_WRAPPERS = new Set(['TSAsExpression', 'TSSatisfiesExpression', 'TSNonNullExpression', 'TSTypeAssertion']);
 
@@ -401,9 +405,13 @@ class Transform {
                 continue;
             }
             const parts = Array.isArray(value) ? value : [value];
+            const inUnit = !ctx.raw && !ctx.phrase;
+            const reads = name.toLowerCase() === 'value' ? readsValue(n) : false;
+            if (inUnit && reads === undefined && parts.some((p) => p.type === 'Text' && /\S/.test(p.data as string)))
+                throw new Fallback(`<${tag} type={…}>`, 'which decides at runtime whether its value is translated');
             // A block reads the text of an attribute a translator reads as a token: a name written
             // there is taken, as in the text. A phrase copies its elements' attributes as they are.
-            const token = TRANSLATABLE.has(name.toLowerCase()) && !ctx.raw && !ctx.phrase;
+            const token = (TRANSLATABLE.has(name.toLowerCase()) || reads === true) && inUnit;
             if (token) for (const p of parts) if (p.type === 'Text') takeWritten(p.data as string, ctx.explicit);
             if (parts.every((p) => p.type === 'Text')) {
                 attrs.push({ name, value: [parts.map((p) => p.data as string).join('')] });
@@ -759,6 +767,27 @@ function excludes(n: Node): boolean | string {
     };
     if (isTranslationExcluded({ tagName: n.name as string, getAttribute: text, hasAttribute: (name) => written(name.toLowerCase()) })) return true;
     return dynamic[0] ?? false;
+}
+
+/**
+ * Whether the core reads an element's `value` as text to translate, as it does a button's and a
+ * submit or button input's; `undefined` when an expression decides the input's type.
+ */
+function readsValue(n: Node): boolean | undefined {
+    const tag = (n.name as string).toLowerCase();
+    if (VALUE_ELEMENTS.has(tag)) return true;
+    if (tag !== 'input') return false;
+    const type = (n.attributes as Node[]).find((a) => a.type === 'Attribute' && (a.name as string).toLowerCase() === 'type');
+    const value = type?.value as true | Node | Node[] | undefined;
+    if (value === undefined || value === true) return false;
+    const parts = Array.isArray(value) ? value : [value];
+    if (!parts.every((p) => p.type === 'Text')) return undefined;
+    return VALUE_INPUT_TYPES.has(
+        parts
+            .map((p) => p.data as string)
+            .join('')
+            .toLowerCase()
+    );
 }
 
 /** The names written as `%name%` in a unit's text: the developer's, so taken (VAR-2). */

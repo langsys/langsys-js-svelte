@@ -1,4 +1,4 @@
-import { createRequestScope, type iCategories, type iContentBlock } from 'langsys-js-typescript';
+import { createRequestScope, generateCustomId, type iCategories, type iContentBlock } from 'langsys-js-typescript';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import VarContent from './VarContent.svelte';
@@ -77,6 +77,17 @@ describe('a nested unit inside a block (VAR-2)', () => {
             expect(body, locale).toContain('alt="Pic of Ana"');
             expect(body, locale).not.toMatch(/="[^"]*\{name\}/);
         }
+    });
+
+    it("registers a submit input's label with its value as a placeholder, and serves it translated", async () => {
+        const { blocks, body } = await rendered('en-us');
+        expect(blocks.find((b) => b.tokens.includes('Send it'))?.tokens).toEqual(['Send it', 'Send to {name}']);
+        expect(body).toContain('value="Send to Ana"');
+        const tokens = ['Send it', 'Send to {name}'];
+        const catalog = {
+            NAMES: { [generateCustomId('NAMES', tokens)]: { 'Send it': 'Invialo', 'Send to {name}': 'Invia a {name}' } },
+        } as unknown as iCategories;
+        expect((await rendered('it-it', catalog)).body).toMatch(/<p>Invialo<\/p>\s*<input type="submit" value="Invia a Ana"/);
     });
 
     it('renders with its own values, translated or not', async () => {

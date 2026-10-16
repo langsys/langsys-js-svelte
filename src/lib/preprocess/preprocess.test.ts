@@ -163,6 +163,27 @@ describe('VAR-6 — the preprocessor', () => {
             params: unknown;
         }>;
         expect(block.params).toEqual({ user_name: 'Ana' });
+        // So is one written beside a value, and a button's or a submit input's value, which the core reads
+        // as a label; an input of another type keeps its value, which is no text, and takes no name from it.
+        const taken = (markup: string) =>
+            (blocks(run(`<Translate params={extra}>${markup}</Translate>`).code, { ...vars, owner: { n: 2 } })[0] as { params: unknown }).params;
+        expect(taken('<p title="To %name%, {owner.n}">Hello {user.name}</p>')).toEqual({ user_name: 'Ana', n: 2 });
+        expect(taken('<p>Hello {user.name}</p><input type="submit" value="To %name%" />')).toEqual({ user_name: 'Ana' });
+        expect(taken('<p>Hello {user.name}</p><input type="Button" value="To %name%" />')).toEqual({ user_name: 'Ana' });
+        expect(taken('<p>Hello {user.name}</p><button value="To %name%">Go</button>')).toEqual({ user_name: 'Ana' });
+        expect(taken('<p>Hello {user.name}</p><input type="text" value="To %name%" />')).toEqual({ name: 'Ana' });
+        // A button's value with a value in it is a placeholder, as a title's is.
+        const [label] = blocks(run('<Translate><p>Hi</p><input type="submit" value="Send to {user.name}" /></Translate>').code, vars) as Array<{
+            tree: Array<{ attrs?: unknown }>;
+            params: unknown;
+        }>;
+        expect(label.tree[1].attrs).toEqual({ type: 'submit', value: 'Send to {name}' });
+        expect(label.params).toEqual({ name: 'Ana' });
+        // An input whose type an expression decides may be either: its block falls back.
+        const [typed] = blocks(run('<Translate><p>Hi</p><input type={kind} value="Send to {user.name}" /></Translate>').code, vars) as Array<{
+            fallback?: string;
+        }>;
+        expect(typed.fallback).toBe('<input type={…}>');
         // In a phrase the core copies an element's attributes as they are: the value is carried beside the tree.
         const [phrase] = blocks(
             run('<Phrase>Hello <a title="Profile of {user.name}">{user.name}</a> and <i title="To %name%">you</i></Phrase>').code,
