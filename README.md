@@ -195,7 +195,7 @@ It works the same under SvelteKit and plain Vite, and changes nothing outside `<
 | `Total {formatPrice(order.total)}` | `Total {total}`                | `total`                                   |
 | `{a} and {a}`                      | `{a} and {a}`                  | one `a`                                   |
 
-The names follow the rules every Langsys SDK shares, so the same expression gives the same phrase whichever SDK renders it: a value that cannot be named — `{a + b}`, `{ok ? x : y}` — becomes `{value}` with a build warning, and is a placeholder of its own each time it appears (`{value}`, `{value_2}`), while one that names itself, like `{name}`, is the same placeholder wherever it repeats; a name you write yourself wins (`%name%` with `params={{ name }}`; a `%name%` written anywhere in the unit, in its text or in any attribute, is yours, so a value the build names never takes it). `{#if}` and `{#key}` blocks are read branch by branch. Event handlers, classes and other attributes stay on their elements; in a `<Phrase>` an element's attributes are not part of the phrase and show their values as written. A `<DontTranslate>` inside a block is part of it. A `<Phrase>` or `<Translate>` inside a block is a unit of its own: it names its values among themselves, so it registers the phrase it registers standing alone (`<Phrase>By {owner.name}</Phrase>` is `By {name}` in any block), and it renders with its own values and its own `params` only, never the block's: hand it the `params` a `%name%` inside it needs. Inside a `<Phrase>`, a nested `<Translate>` is part of the phrase.
+The names follow the rules every Langsys SDK shares, so the same expression gives the same phrase whichever SDK renders it: a value that cannot be named — `{a + b}`, `{ok ? x : y}` — becomes `{value}` with a build warning, and is a placeholder of its own each time it appears (`{value}`, `{value_2}`), while one that names itself, like `{name}`, is the same placeholder wherever it repeats; a name you write yourself wins (`%name%` with `params={{ name }}`; a `%name%` written anywhere in the unit, in its text or in any attribute, is yours, as is a `{name}` written there through a character reference, so a value the build names never takes it). `{#if}` and `{#key}` blocks are read branch by branch. Event handlers, classes and other attributes stay on their elements; in a `<Phrase>` an element's attributes are not part of the phrase and show their values as written. A `<DontTranslate>` inside a block is part of it. A `<Phrase>` or `<Translate>` inside a block is a unit of its own: it names its values among themselves, so it registers the phrase it registers standing alone (`<Phrase>By {owner.name}</Phrase>` is `By {name}` in any block), and it renders with its own values and its own `params` only, never the block's: hand it the `params` a `%name%` inside it needs. Inside a `<Phrase>`, a nested `<Translate>` is part of the phrase.
 
 The block is then rendered through the core's block renderer, so it is **translated in the served HTML** during SSR, not only after hydration, and its host carries its id (`data-ls-contentblock`). What it registers holds a placeholder for each value the transform marks: its phrases, and the content translators see beside them, where a nested `<Translate>` or `<Phrase>` is its element alone. Text inside a `<DontTranslate>` is not translated and is in no phrase: nothing inside it is read, a nested `<Phrase>` included, an attribute's text there is shown with its values, and a value inside it is stored in the content as its placeholder, as it is anywhere else, without changing the name of any value outside it. An element you mark `translate="no"` or `data-notrans` yourself is read the same way.
 
@@ -320,7 +320,7 @@ With the transform, write values as you would anywhere in Svelte — `{name}`, `
 </Translate>
 ```
 
-`{name}` cannot be written as literal text in Svelte markup — Svelte reads it as an expression — which is why the explicit form uses percents. The base SDK normalizes `%name%` to canonical `{name}`, so **translators only ever see `{name}`**. Only simple identifiers between the percents are matched (`%[A-Za-z_][A-Za-z0-9_]*%`), so literal `%` in prose — "50% off", "width: 100%" — is left untouched.
+`{name}` cannot be written as plain text in Svelte markup — Svelte reads it as an expression — which is why the explicit form uses percents. Written through character references (`&lbrace;name&rbrace;`) it is text, and is read as `%name%` is. The base SDK normalizes `%name%` to canonical `{name}`, so **translators only ever see `{name}`**. Only simple identifiers between the percents are matched (`%[A-Za-z_][A-Za-z0-9_]*%`), so literal `%` in prose — "50% off", "width: 100%" — is left untouched.
 
 - Values interpolate into translated text **and** translatable attributes, after the lookup — translators translate the phrase and the values drop in per locale.
 - A number reaches the translation as a number, so a plural form a translation grows (`{count, plural, one {…} other {…}}`) selects correctly.
@@ -580,21 +580,20 @@ These are the core's calls, forwarded unchanged. Each takes an optional display 
 const locale = LangsysApp.detectPreferredLocale();
 // Returns 'en-us', 'fr', etc., or false if nothing can be detected
 
-// SSR (hooks.server.ts / +page.server.ts): parses Accept-Language
-const locale = LangsysApp.detectPreferredLocale(request.headers.get('Accept-Language'));
+// SSR (hooks.server.ts / +page.server.ts): parses Accept-Language. Ask only when the request sends
+// one: without it the helper reads the runtime's own languages (Node has a `navigator`), the server's.
+const header = request.headers.get('Accept-Language');
+const locale = header ? LangsysApp.detectPreferredLocale(header) : false;
 
 // Matched against the locales YOUR PROJECT is configured for — exact tags.
 // Don't build this list from getLocalesFlat(): that returns every locale Langsys
 // knows (~570 CLDR entries), so nearly any Accept-Language "matches" and you end
 // up storing a locale your project has no catalog for.
 const supportedLocales = ['en-US', 'es-CR', 'fr-FR', 'it-IT'];
-const locale = LangsysApp.detectPreferredLocale(
-    request.headers.get('Accept-Language'),
-    supportedLocales,
-);
+const locale = header ? LangsysApp.detectPreferredLocale(header, supportedLocales) : false;
 ```
 
-The matcher tries exact match first (e.g. `en-US`), then language-only (`en` matches `en-GB`), and answers in the SDK's lowercase form (`es-cr`), whatever the casing of your list. When you pass `supportedLocales` and none match, it returns `false`, so `detectPreferredLocale(header, supportedLocales) || 'en-us'` reaches your default; without the list it returns the user's top preference, and `false` only when no preference can be determined at all.
+The matcher tries exact match first (e.g. `en-US`), then the same language and script, by CLDR's likely subtags (`es-MX` matches `es-ES` and `en` matches `en-GB`; `zh-TW` matches `zh-Hant`, never `zh-CN`), and answers in the SDK's lowercase form (`es-cr`), whatever the casing of your list. When you pass `supportedLocales` and none match, it returns `false`, so `detectPreferredLocale(header, supportedLocales) || 'en-us'` reaches your default; without the list it returns the user's top preference, and `false` only when no preference can be determined at all.
 
 ### Waiting for translations to load
 

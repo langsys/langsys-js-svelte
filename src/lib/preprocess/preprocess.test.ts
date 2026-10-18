@@ -177,6 +177,10 @@ describe('VAR-6 — the preprocessor', () => {
         expect(taken('<p>Hello {user.name}</p><a href="/u/%name%/{id}">x</a>')).toEqual({ user_name: 'Ana' });
         expect(taken('<p>Hello {user.name}</p><p translate="no" title="To %name%">x</p>')).toEqual({ user_name: 'Ana' });
         expect(taken('<p>Hello {user.name} <DontTranslate class="To %name%">x</DontTranslate></p>')).toEqual({ user_name: 'Ana' });
+        // Markup holds `{name}` as text only through a character reference, and the core reads it as a placeholder: taken too.
+        expect(taken('<p>Write to &lbrace;name&rbrace;, {user.name}</p>')).toEqual({ user_name: 'Ana' });
+        expect(taken('<p>Write to &#123;name&#125;, {user.name}</p>')).toEqual({ user_name: 'Ana' });
+        expect(taken('<p title="To &lbrace;name&rbrace;">Hello {user.name}</p>')).toEqual({ user_name: 'Ana' });
         // The unit's own host is one of its elements: a name in its class is taken, standing alone as nested.
         const own = (code: string) => (blocks(run(code).code, { ...vars, cls: 'c' })[0] as { params: unknown }).params;
         expect(own('<Phrase class="To %name%" params={extra}>Hello {user.name}</Phrase>')).toEqual({ user_name: 'Ana' });
@@ -651,8 +655,12 @@ describe('VAR-6 — the preprocessor', () => {
             ])
                 expect(rewrite(call), call).toContain(`"Write to ${w}, {user_name}"`);
         }
-        // An ICU argument is a name written in the text too.
+        // Every name written, wherever it sits: spaced, after another, in a later part of the template, an ICU argument and one in its branches.
+        expect(runT('$t(`Write to { name }, ${user.name}`, extra)', { user, extra: { name: 'NICK' } }).result).toBe('Write to NICK, Ana');
+        expect(runT('$t(`{greeting} {name}, ${user.name}`, extra)', { user, extra: { greeting: 'Hi', name: 'NICK' } }).result).toBe('Hi NICK, Ana');
+        expect(runT('$t(`${user.name} wrote to {name}`, extra)', { user, extra: { name: 'NICK' } }).result).toBe('Ana wrote to NICK');
         expect(rewrite('$t(`{name, select, a {A} other {B}} ${name}`, extra)')).toContain('"{name, select, a {A} other {B}} {name_2}"');
+        expect(rewrite('$t(`{count, plural, one {# from {sender}} other {# from {sender}}} for ${sender}`, extra)')).toContain(' for {sender_2}"');
     });
 
     it("a $t template literal's own values win over params of the same name, and are read first", () => {

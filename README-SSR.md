@@ -76,17 +76,27 @@ import { PUBLIC_LANGSYS_API_KEY } from '$env/static/public';
 const SUPPORTED = ['en-us', 'es-cr', 'fr-fr', 'it-it'];
 const BASE_LOCALE = 'en-us';
 
-export async function load({ fetch, request, locals, setHeaders }) {
-    // The locale the visitor chose (a cookie or session value), else Accept-Language resolved
-    // down to a locale the project has. `detectPreferredLocale` is pure — it reads the header
-    // and touches no SDK state, so it is safe on the server — and answers `false` when nothing
-    // in SUPPORTED matches. A chosen value is checked against the list too.
-    const detected = locals.userLocale ? canonicalizeLocale(locals.userLocale) : LangsysApp.detectPreferredLocale(request.headers.get('accept-language'), SUPPORTED);
-    const locale = detected && SUPPORTED.includes(detected) ? detected : BASE_LOCALE;
+/** A candidate locale in the SDK's form when the project serves it, else undefined. */
+const served = (candidate: string | null | undefined) => {
+    const locale = candidate ? canonicalizeLocale(candidate) : '';
+    return SUPPORTED.includes(locale) ? locale : undefined;
+};
 
-    // The response now depends on something outside the URL, so say what. Without `Vary`, a
-    // CDN caches the first visitor's language and serves it to everyone after them.
-    setHeaders({ vary: locals.userLocale ? 'Cookie' : 'Accept-Language' });
+export async function load({ fetch, request, url, locals, setHeaders }) {
+    // The first usable candidate, as "Choosing the locale" below says: the URL your app routes by
+    // (`?lang=` here), then the locale the visitor chose (a cookie or session value), then
+    // Accept-Language, else the base locale. A candidate the project does not serve is skipped.
+    const fromUrl = served(url.searchParams.get('lang'));
+    // `detectPreferredLocale` is pure — it reads the header and touches no SDK state, so it is
+    // safe on the server — and answers `false` when nothing in SUPPORTED matches. It is asked only
+    // when the request sends the header: without one it reads the runtime's own languages (Node
+    // has a `navigator`), which are the server's, not the visitor's.
+    const header = request.headers.get('accept-language');
+    const locale = fromUrl || served(locals.userLocale) || (header && LangsysApp.detectPreferredLocale(header, SUPPORTED)) || BASE_LOCALE;
+
+    // Unless the URL decided, the response depends on the cookie and the header, so say so.
+    // Without `Vary`, a CDN caches the first visitor's language and serves it to everyone after them.
+    if (!fromUrl) setHeaders({ vary: 'Cookie, Accept-Language' });
 
     const response = await fetch(`https://api.langsys.dev/api/translations?project_id=${LANGSYS_PROJECT_ID}&locale=${locale}`, {
         headers: {
@@ -393,10 +403,11 @@ want.
 
 ```typescript
 // src/routes/+layout.server.ts — the Step 1 load, with the fetch made failure-safe
-export async function load({ fetch, request, locals, setHeaders }) {
-    const detected = locals.userLocale ? canonicalizeLocale(locals.userLocale) : LangsysApp.detectPreferredLocale(request.headers.get('accept-language'), SUPPORTED);
-    const locale = detected && SUPPORTED.includes(detected) ? detected : BASE_LOCALE;
-    setHeaders({ vary: locals.userLocale ? 'Cookie' : 'Accept-Language' });
+export async function load({ fetch, request, url, locals, setHeaders }) {
+    const fromUrl = served(url.searchParams.get('lang'));
+    const header = request.headers.get('accept-language');
+    const locale = fromUrl || served(locals.userLocale) || (header && LangsysApp.detectPreferredLocale(header, SUPPORTED)) || BASE_LOCALE;
+    if (!fromUrl) setHeaders({ vary: 'Cookie, Accept-Language' });
 
     // A non-2xx is not an exception, so check `response.ok` as well as catching.
     let translations: iCategories = {};

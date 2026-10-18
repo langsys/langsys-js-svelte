@@ -84,7 +84,8 @@ and `getLocalesFlat` on every call; a failed read answers an empty list and is n
   alone. A `<Translate>` or `<Phrase>` nested in a block names its own values and renders with its
   own values and `params` only, never the block's, so `<Phrase>By {owner.name}</Phrase>` registers
   `By {name}` inside a block as it does standing alone, and a value it leaves unset shows empty.
-  A `%name%` written anywhere in a unit, in its text or in any attribute, is taken, so the caller's
+  A `%name%` written anywhere in a unit, in its text or in any attribute, is taken, as is a `{name}`
+  written there through a character reference (`&lbrace;name&rbrace;`), so the caller's
   params never replace the unit's own value; a value in an attribute a translator reads (`title`,
   `alt`, the `value` of a button or a submit or button input) is a placeholder; an `<input>` whose
   `type` is an expression, beside a `value` holding text, makes its block a fallback; an attribute
