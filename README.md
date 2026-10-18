@@ -93,7 +93,7 @@ The SDK detects the key type automatically and behaves accordingly.
 Store **BCP 47 language tags** in it (`en-US`, `pt-BR`, `zh-Hant`). Casing and `_` separators are normalized for you — to **lowercase**: `en_us`, `en-US` and
 `EN-us` all become `en-us`. That lowercase form is what goes on the wire and what the SDK
 compares internally, so a store holding `en-US` resolves to the same catalog entry rather
-than fetching twice. A tag that isn't valid BCP 47 at all — `english`, `en-USA` — is passed through best-effort rather than rejected, which means it simply fails to match a catalog and the page renders base language. That looks exactly like a locale you haven't translated yet, so run with `debug: true` in development: the SDK warns on an invalid tag at the point where it can still tell the difference.
+than fetching twice. A tag that isn't valid BCP 47 at all — `en-USA`, `en_US_` — is passed through best-effort rather than rejected, which means it simply fails to match a catalog and the page renders base language. That looks exactly like a locale you haven't translated yet, so run with `debug: true` in development: the SDK warns on an invalid tag at the point where it can still tell the difference.
 
 ### Pointing the SDK at another API
 
@@ -247,7 +247,7 @@ Curly-brace placeholders are substituted from the params argument:
 <p>{$t('You have {count} new messages', 'Notifications', { count: 3 })}</p>
 ```
 
-Placeholder names are extracted from the phrase at compile time and **type-checked**: omitting a required key or adding an extra one is a TypeScript error. With the [build-time transform](#variables-in-text--the-build-time-transform), a template literal — ``$t(`You have ${count} new messages`)`` — is rewritten into this form for you. A `%name%` written in its text stays yours: the params you pass fill it, and a value the template holds takes another name.
+Placeholder names are extracted from the phrase at compile time and **type-checked**: omitting a required key or adding an extra one is a TypeScript error. With the [build-time transform](#variables-in-text--the-build-time-transform), a template literal — ``$t(`You have ${count} new messages`)`` — is rewritten into this form for you. A `%name%` or `{name}` written in its text stays yours: the params you pass fill it, and a value the template holds takes another name.
 
 ```typescript
 $t('You have {count} new messages', 'Notifications', {});
@@ -571,14 +571,14 @@ Full detail, the measurements behind those numbers, and the SEO and troubleshoot
 </script>
 ```
 
-These are the core's calls, forwarded unchanged. Each takes an optional display locale, else the current one as `$t()` serves it, normalised the same way (`iw-IL` is `he-il`), and answers the list named in it, with locale codes in the API's lowercase `xx-yy` form. On the server, inside a request `createLangsysHandle` handles, the current locale is the request's. A list is read once per display locale and held for the page session, or for the server process, so a country field on every page costs one request per locale; concurrent calls share one request, and each call answers its own copy, safe to sort or edit. No call throws: a failed read answers an empty list (`{}` for `getLocales`) and logs why, and is not tried again under the same credentials until the catalog's failure window has passed (3 seconds, doubling to 5 minutes). A display locale not shaped as a locale is refused with nothing sent. `getLocalesData(locale, true)` and `LangsysApp.refresh()` read the locale data again.
+These are the core's calls, forwarded unchanged. Each takes an optional display locale, else the current one as `$t()` serves it, normalised the same way (`iw-IL` is `he-il`), and answers the list named in it, with locale codes in the API's lowercase `xx-yy` form. On the server, inside a request `createLangsysHandle` handles, the current locale is the request's. A list is read once per display locale and held for the page session, or for the server process, so a country field on every page costs one request per locale; concurrent calls share one request, and each call answers its own copy, safe to sort or edit. Unless `requireCredentials` is set (_Running without credentials_), no call throws: a failed read answers an empty list (`{}` for `getLocales`) and logs why, and is not tried again under the same credentials until the catalog's failure window has passed (3 seconds, doubling to 5 minutes). A display locale not shaped as a locale is refused with nothing sent. `getLocalesData(locale, true)` reads the locale data again; `LangsysApp.refresh()` drops the locale data held for every locale, so `getLocaleName` answers `''` until `getLocalesData()` or `getLocaleNameWithLookup()` has read it again.
 
 ### Detecting the user's preferred locale
 
 ```typescript
 // Browser: navigator.languages → fallback to navigator.language
 const locale = LangsysApp.detectPreferredLocale();
-// Returns 'en-US', 'fr', etc., or false if nothing can be detected
+// Returns 'en-us', 'fr', etc., or false if nothing can be detected
 
 // SSR (hooks.server.ts / +page.server.ts): parses Accept-Language
 const locale = LangsysApp.detectPreferredLocale(request.headers.get('Accept-Language'));
@@ -594,7 +594,7 @@ const locale = LangsysApp.detectPreferredLocale(
 );
 ```
 
-The matcher tries exact match first (e.g. `en-US`), then language-only (`en` matches `en-GB`). When you pass `supportedLocales` and none match, it falls back to the user's top preference (normalized); it returns `false` only when no preference can be determined at all.
+The matcher tries exact match first (e.g. `en-US`), then language-only (`en` matches `en-GB`), and answers in the SDK's lowercase form (`es-cr`), whatever the casing of your list. When you pass `supportedLocales` and none match, it returns `false`, so `detectPreferredLocale(header, supportedLocales) || 'en-us'` reaches your default; without the list it returns the user's top preference, and `false` only when no preference can be determined at all.
 
 ### Waiting for translations to load
 

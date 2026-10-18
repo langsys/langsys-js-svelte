@@ -32,13 +32,14 @@ debug off, a `write` or `ip_write` key the server resolves read-only logs "this 
 write" once per page load, and a phrase the message formatter cannot render logs that it was
 rendered by the SDK's own branch selection. A key with discovery on that cannot send a hint logs
 "Discovery hint failed", a catalog fetch whose HTTP client throws logs "Catalog fetch threw", and
-a malformed catalog logs "Ignoring non-category member". A `<Phrase>` holding a
+a malformed catalog logs "Ignoring non-category member". A reference list asked for in a display
+locale not shaped as a locale, or answered in a shape that is not a list, logs why. A `<Phrase>` holding a
 `<DontTranslate>`, a `translate="no"` or `data-notrans` element, or a `<noscript>` registers a new
 key, the excluded element one empty markup pair (`Built with {m0o}{m0c} on`); a translation filed
 under the key 3.6.17 registered for the text written inside it is still found and rendered. The
 country, currency, dial-code and locale lists are read once per display locale and held, where
-3.6.17 held only the last locale's country, currency and dial-code lists and read the locale lists
-on every call; a failed read answers an empty list and is not sent again for a few seconds.
+3.6.17 held only the last locale's country, currency and dial-code lists and read `getLocales`
+and `getLocalesFlat` on every call; a failed read answers an empty list and is not sent again for a few seconds.
 
 ### Changed
 
@@ -106,7 +107,7 @@ on every call; a failed read answers an empty list and is not sent again for a f
   same name). The rewritten call reads `$t` before its arguments, as the call does, so in an async
   template an `await` in an argument leaves the text following the locale; every key an object
   literal argument writes is a taken name, so the registered phrase does not depend on the rest of
-  the call, and a `%name%` written in the template's text is the caller's, filled by its params;
+  the call, and a `%name%` or `{name}` written in the template's text is the caller's, filled by its params;
   anything else makes the block a fallback, named in a build warning, and a block inside a
   fallback that the build can read is transformed on its own, under the category the fallback
   block renders with unless it names one. A `<Translate>` or `<Phrase>` inside a `<DontTranslate>` is never read and

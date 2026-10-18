@@ -535,7 +535,7 @@ class Transform {
         // the template's text, which the caller's params fill.
         const explicit = new Set<string>();
         for (const arg of rest) this.writtenKeys(arg, explicit);
-        for (const q of quasis) takeWritten(q.value.cooked!, explicit);
+        for (const q of quasis) takeWrittenInPhrase(q.value.cooked!, explicit);
         const { names, unnameable } = assignNames(occurrences, explicit);
         for (const id of unnameable) {
             const { expr } = occurrences[id];
@@ -800,6 +800,15 @@ function readsValue(n: Node): boolean | undefined {
 /** The names written as `%name%` in a unit's text: the developer's, so taken (VAR-2). */
 function takeWritten(text: string, into: Set<string>): void {
     for (const m of text.matchAll(/%([A-Za-z_][A-Za-z0-9_]*)%/g)) into.add(m[1]);
+}
+
+/**
+ * The names a `$t` template literal's text writes: `%name%`, and the core's own `{name}` or ICU
+ * argument (`{count, plural, …}`), which only a JavaScript string can hold as text.
+ */
+function takeWrittenInPhrase(text: string, into: Set<string>): void {
+    takeWritten(text, into);
+    for (const m of text.matchAll(/\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*[,}]/g)) into.add(m[1]);
 }
 
 /** The names a snippet's parameters bind, and their default values. */

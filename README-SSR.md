@@ -65,24 +65,24 @@ comments.
 
 ```typescript
 // src/routes/+layout.server.ts
-import { LangsysApp, type iCategories } from 'langsys-js-svelte';
+import { LangsysApp, canonicalizeLocale, type iCategories } from 'langsys-js-svelte';
 import { LANGSYS_PROJECT_ID, LANGSYS_API_KEY } from '$env/static/private';
 import { PUBLIC_LANGSYS_API_KEY } from '$env/static/public';
 
-// The locales configured on your Langsys project, as exact tags. The translations
-// endpoint matches them LITERALLY — if your project's Spanish is `es-CR`, then
-// `locale=es` is a 422, not a fuzzy match onto `es-CR`.
-const SUPPORTED = ['en-US', 'es-CR', 'fr-FR', 'it-IT'];
-const BASE_LOCALE = 'en-US';
+// The locales configured on your Langsys project, in the SDK's lowercase form, which
+// `detectPreferredLocale` and `canonicalizeLocale` answer in. The translations endpoint
+// matches a locale exactly — if your project's Spanish is `es-cr`, then `locale=es` is a
+// 422, not a fuzzy match onto it.
+const SUPPORTED = ['en-us', 'es-cr', 'fr-fr', 'it-it'];
+const BASE_LOCALE = 'en-us';
 
 export async function load({ fetch, request, locals, setHeaders }) {
-    // Resolve Accept-Language down to a tag the project actually has. This helper is
-    // pure — it reads the header and returns a string; it touches no SDK state, so
-    // it is safe on the server. It returns `false` when there is nothing to go on,
-    // and returns the VISITOR'S OWN TAG UNCHANGED when nothing matches — so always
-    // check the result against your list rather than trusting it.
-    const detected = locals.userLocale || LangsysApp.detectPreferredLocale(request.headers.get('accept-language'), SUPPORTED);
-    const locale = typeof detected === 'string' && SUPPORTED.includes(detected) ? detected : BASE_LOCALE;
+    // The locale the visitor chose (a cookie or session value), else Accept-Language resolved
+    // down to a locale the project has. `detectPreferredLocale` is pure — it reads the header
+    // and touches no SDK state, so it is safe on the server — and answers `false` when nothing
+    // in SUPPORTED matches. A chosen value is checked against the list too.
+    const detected = locals.userLocale ? canonicalizeLocale(locals.userLocale) : LangsysApp.detectPreferredLocale(request.headers.get('accept-language'), SUPPORTED);
+    const locale = detected && SUPPORTED.includes(detected) ? detected : BASE_LOCALE;
 
     // The response now depends on something outside the URL, so say what. Without `Vary`, a
     // CDN caches the first visitor's language and serves it to everyone after them.
@@ -394,8 +394,8 @@ want.
 ```typescript
 // src/routes/+layout.server.ts — the Step 1 load, with the fetch made failure-safe
 export async function load({ fetch, request, locals, setHeaders }) {
-    const detected = locals.userLocale || LangsysApp.detectPreferredLocale(request.headers.get('accept-language'), SUPPORTED);
-    const locale = typeof detected === 'string' && SUPPORTED.includes(detected) ? detected : BASE_LOCALE;
+    const detected = locals.userLocale ? canonicalizeLocale(locals.userLocale) : LangsysApp.detectPreferredLocale(request.headers.get('accept-language'), SUPPORTED);
+    const locale = detected && SUPPORTED.includes(detected) ? detected : BASE_LOCALE;
     setHeaders({ vary: locals.userLocale ? 'Cookie' : 'Accept-Language' });
 
     // A non-2xx is not an exception, so check `response.ok` as well as catching.
@@ -637,7 +637,7 @@ assuming the catalog is simply untranslated.
 2. **Matching locales.** Always provide `initialTranslationsLocale` with
    `initialTranslations` so the SDK knows what locale the data represents.
 3. **Exact locale tags.** The value must be one of your project's configured locales,
-   spelled the same way. Casing and `_` are normalized (`es_cr` → `es-CR`), but a bare
+   spelled the same way. Casing and `_` are normalized (`es_cr` and `es-CR` are both `es-cr`), but a bare
    language is _not_ widened to a region — `es` will not find `es-CR`. Resolve with
    `LangsysApp.detectPreferredLocale(header, supportedLocales)`, which does the
    language-to-region match for you.

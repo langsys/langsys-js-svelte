@@ -637,18 +637,22 @@ describe('VAR-6 — the preprocessor', () => {
         expect(rewrite('$t(`Hello ${name}`, "UI", { name: "Zed" }!)')).toContain('"Hello {name_2}"');
     });
 
-    it("a $t template literal takes a name written in its text: the caller's params fill it, and the template's own value keeps a name of its own", () => {
+    it("a $t template literal takes a name written in its text, as `%name%` or `{name}`: the caller's params fill it, and the template's own value keeps a name of its own", () => {
         const user = { name: 'Ana' };
-        expect(runT('$t(`Write to %name%, ${user.name}`, extra)', { user, extra: { name: 'NICK' } }).result).toBe('Write to NICK, Ana');
-        expect(runT('$t(`%name% invited ${name}`, extra)', { name: 'Ana', extra: { name: 'NICK' } }).result).toBe('NICK invited Ana');
-        expect(runT('$t(`Write to %name%, ${user.name}`, "UI", { name: "NICK" })', { user }).result).toBe('Write to NICK, Ana');
-        // One key, whatever the rest of the call holds.
-        for (const call of [
-            '$t(`Write to %name%, ${user.name}`)',
-            '$t(`Write to %name%, ${user.name}`, extra)',
-            '$t(`Write to %name%, ${user.name}`, { name: "NICK" })',
-        ])
-            expect(rewrite(call), call).toContain('"Write to %name%, {user_name}"');
+        for (const w of ['%name%', '{name}']) {
+            expect(runT(`$t(\`Write to ${w}, \${user.name}\`, extra)`, { user, extra: { name: 'NICK' } }).result, w).toBe('Write to NICK, Ana');
+            expect(runT(`$t(\`${w} invited \${name}\`, extra)`, { name: 'Ana', extra: { name: 'NICK' } }).result, w).toBe('NICK invited Ana');
+            expect(runT(`$t(\`Write to ${w}, \${user.name}\`, "UI", { name: "NICK" })`, { user }).result, w).toBe('Write to NICK, Ana');
+            // One key, whatever the rest of the call holds.
+            for (const call of [
+                `$t(\`Write to ${w}, \${user.name}\`)`,
+                `$t(\`Write to ${w}, \${user.name}\`, extra)`,
+                `$t(\`Write to ${w}, \${user.name}\`, { name: "NICK" })`,
+            ])
+                expect(rewrite(call), call).toContain(`"Write to ${w}, {user_name}"`);
+        }
+        // An ICU argument is a name written in the text too.
+        expect(rewrite('$t(`{name, select, a {A} other {B}} ${name}`, extra)')).toContain('"{name, select, a {A} other {B}} {name_2}"');
     });
 
     it("a $t template literal's own values win over params of the same name, and are read first", () => {
