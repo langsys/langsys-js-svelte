@@ -410,7 +410,7 @@ export async function load({ fetch, request, url, locals, setHeaders }) {
     if (!fromUrl) setHeaders({ vary: 'Cookie, Accept-Language' });
 
     // A non-2xx is not an exception, so check `response.ok` as well as catching.
-    let translations: iCategories = {};
+    let translations = {} as iCategories;
     try {
         const response = await fetch(`https://api.langsys.dev/api/translations?project_id=${LANGSYS_PROJECT_ID}&locale=${locale}`, {
             headers: { 'x-Authorization': LANGSYS_API_KEY, 'Content-Type': 'application/json' },

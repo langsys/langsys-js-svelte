@@ -49,6 +49,12 @@
     ><p>Send it</p>
     <input type="submit" value="Send to {user.name}" /></Translate
 >
+<!-- A name written by hand in a phrase beside a value: the caller's params fill it, as source and translated. -->
+<Phrase category="NAMES" tag="p" params={{ who: 'NICK' }}>Hey %who%, from {user.name}</Phrase>
+<Translate category="NAMES" tag="div"
+    ><p>Notes</p>
+    <Phrase tag="p" params={{ who: 'NICK' }}>Hey %who%, from {user.name}</Phrase></Translate
+>
 <!-- An attribute written without a value renders empty, and a boolean one present. -->
 <Translate category="NAMES" tag="div"
     ><p hidden>Valueless</p>

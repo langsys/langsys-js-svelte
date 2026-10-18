@@ -107,6 +107,15 @@ describe('a nested unit inside a block (VAR-2)', () => {
         );
     });
 
+    it("fills a name written in a phrase beside a value with the caller's params, as source and translated, standing alone and nested", async () => {
+        const { body, phrases } = await rendered('en-us');
+        expect(phrases).toContain('Hey {who}, from {name}');
+        expect(body.match(/<p data-ls-phrase[^>]*>Hey NICK, from Ana<\/p>/g)).toHaveLength(2);
+        expect(body).not.toContain('%who%');
+        const catalog = { NAMES: { 'Hey {who}, from {name}': 'Ehi {who}, da {name}' } } as unknown as iCategories;
+        expect((await rendered('it-it', catalog)).body.match(/<p data-ls-phrase[^>]*>Ehi NICK, da Ana<\/p>/g)).toHaveLength(2);
+    });
+
     it('renders with its own values, translated or not', async () => {
         expect((await rendered('en-us')).body).toMatch(/Hi Ana<\/p>\s*<p data-ls-phrase[^>]*>By Bo<\/p>/);
         const catalog = { NAMES: { 'By {name}': 'Di {name}', 'Hi {name}': 'Ciao {name}' } } as unknown as iCategories;

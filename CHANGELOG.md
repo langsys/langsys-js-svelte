@@ -201,8 +201,11 @@ match?, seed?, storage? })` for `hooks.server.ts`: it opens the core's request s
 
 - **README-SSR's example `load` chose a locale from `Accept-Language` or a cookie without saying
   so.** A CDN in front of the site would cache the first visitor's language and serve it to the
-  next. The example now sets `Vary: Accept-Language` or `Vary: Cookie` to match where the locale
-  came from, and states the order: URL, then cookie or session, then `Accept-Language`.
+  next. The example takes the first candidate the project serves, the URL, then the cookie or
+  session value, then `Accept-Language`, else the base locale, and sends
+  `Vary: Cookie, Accept-Language` unless the URL decided. It asks `detectPreferredLocale` only when
+  the request sends the header: without one the helper reads the runtime's own languages, and Node
+  has a `navigator`, so a request with no header would get the server's language.
 
 - **`LangsysApp.t` was a different function on every read.** The proxy bound every function it
   forwarded, including the `TFunction` the core's `t` getter returns — so `LangsysApp.t ===
