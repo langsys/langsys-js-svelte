@@ -5,6 +5,8 @@
     let { name }: { name: string } = $props();
     const user = $derived({ name });
     const owner: { name: string; nick?: string } = { name: 'Bo' };
+    const since = new Date(2026, 9, 18);
+    const project = { name: 'Atlas' };
 </script>
 
 <Translate category="CONTENT" tag="div"
@@ -55,6 +57,28 @@
     ><p>Notes</p>
     <Phrase tag="p" params={{ who: 'NICK' }}>Hey %who%, from {user.name}</Phrase></Translate
 >
+<!-- A plural written in a phrase beside a value, split by markup or by the value in a branch: as source it renders as translated. -->
+<Phrase category="NAMES" tag="p" params={{ n: 3 }}
+    >You have &lbrace;n, plural, one &lbrace;<b>#</b> item&rbrace; other &lbrace;<b>#</b> items&rbrace;&rbrace; from {user.name}</Phrase
+>
+<Phrase category="NAMES" tag="p" params={{ n: 1 }}
+    >&lbrace;n, plural, one &lbrace;# file for {user.name}&rbrace; other &lbrace;# files for {user.name}&rbrace;&rbrace;</Phrase
+>
+<!-- A Date beside a plural in a phrase, or a whole branch of it: a date for the locale, as source and translated. -->
+<Phrase category="NAMES" tag="p" params={{ n: 2 }}>&lbrace;n, plural, one &lbrace;# change&rbrace; other &lbrace;# changes&rbrace;&rbrace; since {since}</Phrase
+>
+<Phrase category="NAMES" tag="p" params={{ n: 0 }}>&lbrace;n, plural, =0 &lbrace;{since}&rbrace; other &lbrace;# edits since {since}&rbrace;&rbrace;</Phrase>
+<!-- In a phrase holding a plural an apostrophe before a value or an element quotes it, as ICU does, and one written twice is an apostrophe. Without a plural it is text. -->
+<Phrase category="NAMES" tag="p" params={{ n: 2 }}
+    >Delete '{project.name}' and its &lbrace;n, plural, one &lbrace;# file&rbrace; other &lbrace;# files&rbrace;&rbrace;?</Phrase
+>
+<Phrase category="NAMES" tag="p" params={{ n: 2 }}
+    >Remove ''{project.name}'' and its &lbrace;n, plural, one &lbrace;# file&rbrace; other &lbrace;# files&rbrace;&rbrace;?</Phrase
+>
+<Phrase category="NAMES" tag="p" params={{ n: 2 }}
+    >Type '<code>DELETE</code>' to remove &lbrace;n, plural, one &lbrace;# file&rbrace; other &lbrace;# files&rbrace;&rbrace;</Phrase
+>
+<Phrase category="NAMES" tag="p">Rename '{project.name}' now</Phrase>
 <!-- An attribute written without a value renders empty, and a boolean one present. -->
 <Translate category="NAMES" tag="div"
     ><p hidden>Valueless</p>

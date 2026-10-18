@@ -116,6 +116,69 @@ describe('a nested unit inside a block (VAR-2)', () => {
         expect((await rendered('it-it', catalog)).body.match(/<p data-ls-phrase[^>]*>Ehi NICK, da Ana<\/p>/g)).toHaveLength(2);
     });
 
+    it('renders a plural written in a phrase beside a value, split by markup or by the value in a branch, as source as it does translated', async () => {
+        const items = 'You have {n, plural, one {{m0o}#{m0c} item} other {{m1o}#{m1c} items}} from {name}';
+        const files = '{n, plural, one {# file for {name}} other {# files for {name}}}';
+        const source = await rendered('en-us');
+        expect(source.phrases).toEqual(expect.arrayContaining([items, files]));
+        expect(source.body).toMatch(/<p data-ls-phrase[^>]*>You have <b>3<\/b> items from Ana<\/p>/);
+        expect(source.body).toMatch(/<p data-ls-phrase[^>]*>1 file for Ana<\/p>/);
+        expect(source.body).not.toContain('plural');
+        const catalog = {
+            NAMES: {
+                [items]: 'Hai {n, plural, one {{m0o}#{m0c} articolo} other {{m1o}#{m1c} articoli}} da {name}',
+                [files]: '{n, plural, one {# file per {name}} other {# file per {name}}}',
+            },
+        } as unknown as iCategories;
+        const translated = (await rendered('it-it', catalog)).body;
+        expect(translated).toMatch(/<p data-ls-phrase[^>]*>Hai <b>3<\/b> articoli da Ana<\/p>/);
+        expect(translated).toMatch(/<p data-ls-phrase[^>]*>1 file per Ana<\/p>/);
+    });
+
+    it('writes a Date beside a plural in a phrase, or as a whole branch of it, as a date for the locale, as source as it does translated', async () => {
+        const changes = '{n, plural, one {# change} other {# changes}} since {since}';
+        const edits = '{n, plural, =0 {{since}} other {# edits since {since}}}';
+        const source = await rendered('en-us');
+        expect(source.phrases).toEqual(expect.arrayContaining([changes, edits]));
+        expect(source.body).toMatch(/<p data-ls-phrase[^>]*>2 changes since Oct 18, 2026<\/p>/);
+        expect(source.body).toMatch(/<p data-ls-phrase[^>]*>Oct 18, 2026<\/p>/);
+        const catalog = {
+            NAMES: {
+                [changes]: '{n, plural, one {# modifica} other {# modifiche}} dal {since}',
+                [edits]: '{n, plural, =0 {{since}} other {# modifiche dal {since}}}',
+            },
+        } as unknown as iCategories;
+        const translated = (await rendered('it-it', catalog)).body;
+        expect(translated).toMatch(/<p data-ls-phrase[^>]*>2 modifiche dal 18 ott 2026<\/p>/);
+        expect(translated).toMatch(/<p data-ls-phrase[^>]*>18 ott 2026<\/p>/);
+    });
+
+    it('quotes a value or an element an apostrophe opens in a phrase holding a plural, as ICU does, as source as it does translated', async () => {
+        const quoted = "Delete '{name}' and its {n, plural, one {# file} other {# files}}?";
+        const doubled = "Remove ''{name}'' and its {n, plural, one {# file} other {# files}}?";
+        const element = "Type '{m0o}DELETE{m0c}' to remove {n, plural, one {# file} other {# files}}";
+        const source = await rendered('en-us');
+        expect(source.phrases).toEqual(expect.arrayContaining([quoted, doubled, element, "Rename '{name}' now"]));
+        expect(source.body).toMatch(/<p data-ls-phrase[^>]*>Delete \{name\} and its 2 files\?<\/p>/);
+        expect(source.body).toMatch(/<p data-ls-phrase[^>]*>Remove 'Atlas' and its 2 files\?<\/p>/);
+        expect(source.body).toMatch(/<p data-ls-phrase[^>]*>Type <code>DELETE<\/code> to remove 2 files<\/p>/);
+        // Without a plural the apostrophe is text.
+        expect(source.body).toMatch(/<p data-ls-phrase[^>]*>Rename 'Atlas' now<\/p>/);
+        expect(source.body).not.toMatch(/\{m\d+[oc]\}/);
+        const catalog = {
+            NAMES: {
+                [quoted]: "Elimina '{name}' e i suoi {n, plural, one {# file} other {# file}}?",
+                [doubled]: "Rimuovi ''{name}'' e i suoi {n, plural, one {# file} other {# file}}?",
+                [element]: "Digita '{m0o}DELETE{m0c}' per rimuovere {n, plural, one {# file} other {# file}}",
+            },
+        } as unknown as iCategories;
+        const translated = (await rendered('it-it', catalog)).body;
+        expect(translated).toMatch(/<p data-ls-phrase[^>]*>Elimina \{name\} e i suoi 2 file\?<\/p>/);
+        expect(translated).toMatch(/<p data-ls-phrase[^>]*>Rimuovi 'Atlas' e i suoi 2 file\?<\/p>/);
+        expect(translated).toMatch(/<p data-ls-phrase[^>]*>Digita <code>DELETE<\/code> per rimuovere 2 file<\/p>/);
+        expect(translated).not.toMatch(/\{m\d+[oc]\}/);
+    });
+
     it('renders with its own values, translated or not', async () => {
         expect((await rendered('en-us')).body).toMatch(/Hi Ana<\/p>\s*<p data-ls-phrase[^>]*>By Bo<\/p>/);
         const catalog = { NAMES: { 'By {name}': 'Di {name}', 'Hi {name}': 'Ciao {name}' } } as unknown as iCategories;

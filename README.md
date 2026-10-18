@@ -257,7 +257,7 @@ $t('You have {count} new messages', 'Notifications', { count: 3, extra: 'x' });
 // ❌ Object literal may only specify known properties, and 'extra' does not exist
 ```
 
-Allowed value types: `string | number | Date | boolean`. `number` and `Date` values are formatted for the active locale via CLDR — `1234.5` renders as `1,234.5` in `en-US` and `1.234,5` in `de-DE`; a `Date` renders in medium date style (`Mar 14, 2026` / `14.03.2026`). `string` values pass through untouched.
+Allowed value types: `string | number | Date | boolean`. `number` and `Date` values are formatted for the active locale via CLDR — `1234.5` renders as `1,234.5` in `en-US` and `1.234,5` in `de-DE`; a `Date` renders in medium date style (`Mar 14, 2026` / `14.03.2026`), and a `boolean` as `true` or `false`, in a plain phrase and an ICU one alike. `string` values pass through untouched.
 
 **ICU MessageFormat is supported** alongside the simple form, on the same signature — plural, select, and date/time/number skeletons all work:
 
@@ -267,6 +267,8 @@ Allowed value types: `string | number | Date | boolean`. `number` and `Date` val
 ```
 
 You rarely need to write these yourself: Langsys promotes a plain `{name}` phrase to an ICU construct in target locales that require it — a gendered locale can grow a `select` argument your source phrase never had. When an argument the target expects isn't supplied, the SDK resolves `select` to its `other` branch and `plural` to `other` rather than rendering the raw construct.
+
+A phrase holding a `plural` or `select` is an ICU message throughout, so ICU's quoting applies to all of it: an apostrophe right before a `{` starts a quote, and the quoting apostrophes do not show. `'{name}'` there shows the text `{name}`, not the value, and so does a value the transform marks (`<Phrase>Delete '{project.name}' and its &lbrace;n, plural, …&rbrace;?</Phrase>`). An element in a `<Phrase>` still renders after one: `'<code>DELETE</code>'` shows `DELETE` in its `<code>`, without the apostrophes. Write the apostrophe twice to show one (`''{project.name}''` shows `'Atlas'`). In a phrase with no `plural` or `select` an apostrophe is text.
 
 #### Categorization disambiguates context
 
