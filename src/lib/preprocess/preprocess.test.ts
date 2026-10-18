@@ -178,9 +178,15 @@ describe('VAR-6 — the preprocessor', () => {
         expect(taken('<p>Hello {user.name}</p><p translate="no" title="To %name%">x</p>')).toEqual({ user_name: 'Ana' });
         expect(taken('<p>Hello {user.name} <DontTranslate class="To %name%">x</DontTranslate></p>')).toEqual({ user_name: 'Ana' });
         // The unit's own host is one of its elements: a name in its class is taken, standing alone as nested.
-        const own = (code: string) => (blocks(run(code).code, vars)[0] as { params: unknown }).params;
+        const own = (code: string) => (blocks(run(code).code, { ...vars, cls: 'c' })[0] as { params: unknown }).params;
         expect(own('<Phrase class="To %name%" params={extra}>Hello {user.name}</Phrase>')).toEqual({ user_name: 'Ana' });
         expect(own('<Translate class="To %name%" params={extra}><p>Hello {user.name}</p></Translate>')).toEqual({ user_name: 'Ana' });
+        expect(own('<Phrase class="To %name% {cls}" params={extra}>Hello {user.name}</Phrase>')).toEqual({ user_name: 'Ana' });
+        const nested = (host: string) =>
+            (blocks(run(`<Translate><p>Hi</p>${host}</Translate>`).code, { ...vars, cls: 'c' })[0] as { tree: Array<{ params?: unknown }> }).tree[1].params;
+        expect(nested('<Phrase class="To %name%" params={extra}>Hello {user.name}</Phrase>')).toEqual({ user_name: 'Ana', name: 'NICK' });
+        expect(nested('<Phrase class="To %name% {cls}" params={extra}>Hello {user.name}</Phrase>')).toEqual({ user_name: 'Ana', name: 'NICK' });
+        expect(nested('<Translate class="To %name%" params={extra}><p>Hello {user.name}</p></Translate>')).toEqual({ user_name: 'Ana', name: 'NICK' });
         // A button's value with a value in it is a placeholder, as a title's is.
         const [label] = blocks(run('<Translate><p>Hi</p><input type="submit" value="Send to {user.name}" /></Translate>').code, vars) as Array<{
             tree: Array<{ attrs?: unknown }>;
@@ -629,6 +635,20 @@ describe('VAR-6 — the preprocessor', () => {
         expect(rewrite('$t(`Hello ${name}`, { name: "Zed" } as Record<string, string>)')).toContain('"Hello {name_2}"');
         expect(rewrite('$t(`Hello ${name}`, { name: "Zed" } satisfies Record<string, string>)')).toContain('"Hello {name_2}"');
         expect(rewrite('$t(`Hello ${name}`, "UI", { name: "Zed" }!)')).toContain('"Hello {name_2}"');
+    });
+
+    it("a $t template literal takes a name written in its text: the caller's params fill it, and the template's own value keeps a name of its own", () => {
+        const user = { name: 'Ana' };
+        expect(runT('$t(`Write to %name%, ${user.name}`, extra)', { user, extra: { name: 'NICK' } }).result).toBe('Write to NICK, Ana');
+        expect(runT('$t(`%name% invited ${name}`, extra)', { name: 'Ana', extra: { name: 'NICK' } }).result).toBe('NICK invited Ana');
+        expect(runT('$t(`Write to %name%, ${user.name}`, "UI", { name: "NICK" })', { user }).result).toBe('Write to NICK, Ana');
+        // One key, whatever the rest of the call holds.
+        for (const call of [
+            '$t(`Write to %name%, ${user.name}`)',
+            '$t(`Write to %name%, ${user.name}`, extra)',
+            '$t(`Write to %name%, ${user.name}`, { name: "NICK" })',
+        ])
+            expect(rewrite(call), call).toContain('"Write to %name%, {user_name}"');
     });
 
     it("a $t template literal's own values win over params of the same name, and are read first", () => {

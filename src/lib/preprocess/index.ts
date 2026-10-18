@@ -531,9 +531,11 @@ class Transform {
         const exprs = template.expressions as Expr[];
         const occurrences = exprs.map((expr, id) => ({ id, expr }));
         // Every key an object literal argument writes is taken, whichever way the call is decided,
-        // so the registered phrase does not depend on the rest of the call.
+        // so the registered phrase does not depend on the rest of the call; so is a name written in
+        // the template's text, which the caller's params fill.
         const explicit = new Set<string>();
         for (const arg of rest) this.writtenKeys(arg, explicit);
+        for (const q of quasis) takeWritten(q.value.cooked!, explicit);
         const { names, unnameable } = assignNames(occurrences, explicit);
         for (const id of unnameable) {
             const { expr } = occurrences[id];

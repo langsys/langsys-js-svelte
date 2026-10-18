@@ -16,7 +16,7 @@ import fixtureFile from '../../../vectors/canonicalization-reference.json';
 
 /**
  * The shared canonicalization rows (`vectors/canonicalization-reference.json`, vendored byte-exact
- * from the JS core, blob f197c687), run through the build: each row's markup written as the body of
+ * from the JS core, blob 525afacd), run through the build: each row's markup written as the body of
  * a `<Translate>`, turned into a tree by the preprocessor, and tokenized by the core. The ids a
  * server render stamps are these, so they must be the ids a DOM reader derives from the same markup,
  * and a row pinning the content a block registers with is that content (VAR-3). Each phrase row is

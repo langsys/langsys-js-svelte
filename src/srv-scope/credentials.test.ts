@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { LangsysApp } from '$lib/index.js';
 import { createLangsysHandle } from '$lib/kit/server.js';
 import Creds from './Creds.svelte';
+import { startDouble, type Double } from './double.js';
 
 /**
  * SRV-2, credentials, through SvelteKit's handle: a request whose `credentials` names its own
@@ -13,12 +14,7 @@ import Creds from './Creds.svelte';
  * out under is a transport fact, read at the fetch seam; what each project accepted is read from
  * the contract double, which refuses a key for another project.
  */
-/** The contract double's process. This repo carries no Node types, so its shape is stated here. */
-interface Child {
-    stdout: { on(event: 'data', listener: (chunk: Uint8Array) => void): void };
-    kill(): void;
-}
-let double: Child | undefined;
+let double: Double | undefined;
 let base = '';
 let fixture = '';
 
@@ -80,21 +76,8 @@ async function request(query: string, miss: string, delay: number): Promise<stri
 }
 
 beforeAll(async () => {
-    // Loaded at run time, as kit/server.ts loads node:async_hooks.
-    const id = 'node:child_process';
-    const { spawn } = (await import(/* @vite-ignore */ id)) as { spawn: (command: string, args: string[]) => Child };
-    const { execPath } = (globalThis as unknown as { process: { execPath: string } }).process;
-    const child = spawn(execPath, ['contract-fixture/server.mjs']);
-    double = child;
-    const line = await new Promise<string>((resolve) => {
-        let out = '';
-        child.stdout.on('data', (chunk) => {
-            out += new TextDecoder().decode(chunk);
-            if (out.includes('\n')) resolve(out.slice(0, out.indexOf('\n')));
-        });
-    });
-    ({ base_url: base, fixture_url: fixture } = JSON.parse(line) as { base_url: string; fixture_url: string });
-    await fetch(`${fixture}/seed`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(SEED) });
+    double = await startDouble(SEED);
+    ({ base, fixture } = double);
     for (const m of ['log', 'info', 'warn', 'group', 'groupCollapsed', 'groupEnd'] as const) vi.spyOn(console, m).mockImplementation(() => {});
     await LangsysApp.init({ projectid: 'zero', key: 'key-zero', UserLocaleStore: writable('en'), baseLocale: 'en', apiUrl: base, ssrTokenStrategy: 'server' });
     const realFetch = globalThis.fetch;
@@ -117,7 +100,7 @@ beforeAll(async () => {
 });
 afterAll(() => {
     vi.restoreAllMocks();
-    double?.kill();
+    double?.stop();
 });
 
 describe('SRV-2: a request sends under the credentials its handle gives it', () => {

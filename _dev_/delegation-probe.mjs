@@ -96,6 +96,7 @@ export const PROBES = [
     ['SSR-2', 'ssrWriteEnabled'],
     ['CACHE-1', 'langsys:translations'],
     ['CACHE-2', 'catalogUnavailable'],
+    ['REF-1', 'readReferenceList|referenceLists'],
     ['OBS-1', 'noticeUnusableWriteCapability'],
     ['WIRE-1', 'x-Authorization|X-Authorization'],
     ['WIRE-2', '204'],

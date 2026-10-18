@@ -124,12 +124,12 @@ describe('LangsysApp — the proxy forwards every core member', () => {
     });
 
     /**
-     * These five are the names the fleet reported as "dropped methods". They are
+     * These four are names the fleet reported as "dropped methods". They are
      * private core implementation, not API — asserted here only to pin that the
      * proxy forwards uniformly, and named so the next person who meets the fleet
      * report finds the correction rather than repeating it.
      */
-    it.each(['applyAuthorization', 'getUserLanguagePreferences', 'parseAcceptLanguageHeader', 'findBestLocaleMatch', 'resolveLocale'])(
+    it.each(['applyAuthorization', 'getUserLanguagePreferences', 'parseAcceptLanguageHeader', 'findBestLocaleMatch'])(
         '`%s` forwards at runtime (core-PRIVATE, not recovered API)',
         (name) => {
             expect(typeof asRecord(binding.LangsysApp)[name]).toBe('function');

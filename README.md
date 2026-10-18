@@ -100,7 +100,7 @@ than fetching twice. A tag that isn't valid BCP 47 at all — `english`, `en-USA
 `apiUrl` redirects every request — to a staging API, or to a test double in integration tests — without touching the built package. Defaults to `https://api.langsys.dev/api`.
 
 ```ts
-await LangsysApp.init({ projectid, key, UserLocaleStore, apiUrl: 'http://langsys2.test/api' });
+await LangsysApp.init({ projectid, key, UserLocaleStore, apiUrl: 'https://api.langsys2.test/api' });
 ```
 
 Pass it to `init()` rather than calling `LangsysAppAPI.setBaseUrl()`. `setBaseUrl` only works if it runs **before** `init()`; called after, the SDK has already authorized against the default host and stays inert for the life of the page — nothing throws, and translations simply never arrive. `apiUrl` is applied inside `init()`, before authorization, so the order cannot go wrong.
@@ -109,7 +109,7 @@ Pass it to `init()` rather than calling `LangsysAppAPI.setBaseUrl()`. `setBaseUr
 
 `init()` without a project id, an API key or a locale store does not throw: it resolves `{ status: false, errors }` and leaves the client unconfigured, so a preview build or a test run without secrets still renders. `$t()` shows the source text with its params filled and makes no request, `<Translate>` and `<Phrase>` render the text as written, and a block's registration resolves skipped with reason `'not-configured'`. An explicit write, such as `LangsysAppAPI.createTranslatableItems`, throws `LangsysConfigurationError`, exported from this package by reference so `instanceof` matches. `LangsysApp.isConfigured()` reports the state.
 
-To fail loudly instead, pass `requireCredentials: true`. `$t()` then throws `LangsysConfigurationError` while the client is unconfigured, which during SSR fails the request. `<Translate>` and `<Phrase>` never throw while rendering. In the browser a block that registers surfaces the error as a rejected promise instead — a block mounted before `init()` once `init()` refuses — left unhandled on purpose, so it reaches the page's unhandled-rejection handler. A block that only reads the catalog — one without the transform, or a fallback, both `register: false` — never fails: the option fails on the first `t()` call or registration. A server render registers blocks only inside a request scope (`createLangsysHandle`), where nothing rejects.
+To fail loudly instead, pass `requireCredentials: true`. `$t()` then throws `LangsysConfigurationError` while the client is unconfigured, which during SSR fails the request. `<Translate>` and `<Phrase>` never throw while rendering. In the browser a block that registers surfaces the error as a rejected promise instead — a block mounted before `init()` once `init()` refuses — left unhandled on purpose, so it reaches the page's unhandled-rejection handler. A block that only reads the catalog — one without the transform, or a fallback, both `register: false` — never fails: the option fails on the first `t()` call, registration or reference-list call. Unconfigured, each list call (`getCountries()` and the others under _Utilities_) answers an empty list without a request, or under `requireCredentials` rejects with the error, and `getLocaleName`, which is synchronous, answers `''` or throws it. A server render registers blocks only inside a request scope (`createLangsysHandle`), where nothing rejects.
 
 ### SSR token strategy
 
@@ -247,7 +247,7 @@ Curly-brace placeholders are substituted from the params argument:
 <p>{$t('You have {count} new messages', 'Notifications', { count: 3 })}</p>
 ```
 
-Placeholder names are extracted from the phrase at compile time and **type-checked**: omitting a required key or adding an extra one is a TypeScript error. With the [build-time transform](#variables-in-text--the-build-time-transform), a template literal — ``$t(`You have ${count} new messages`)`` — is rewritten into this form for you.
+Placeholder names are extracted from the phrase at compile time and **type-checked**: omitting a required key or adding an extra one is a TypeScript error. With the [build-time transform](#variables-in-text--the-build-time-transform), a template literal — ``$t(`You have ${count} new messages`)`` — is rewritten into this form for you. A `%name%` written in its text stays yours: the params you pass fill it, and a value the template holds takes another name.
 
 ```typescript
 $t('You have {count} new messages', 'Notifications', {});
@@ -562,14 +562,16 @@ Full detail, the measurements behind those numbers, and the SEO and troubleshoot
     let localeName: string;
 
     onMount(async () => {
-        countries  = await LangsysApp.getCountries();     // [{ code: "US", label: "United States" }, ...]
-        dialCodes  = await LangsysApp.getDialCodes();     // [{ country_code: "US", dial_code: "+1", name: "United States" }, ...]
+        countries  = await LangsysApp.getCountries();     // [{ code: "US", label: "United States", eu: false }, ...]
+        dialCodes  = await LangsysApp.getDialCodes();     // [{ country_code: "US", dial_code: "1", name: "United States (+1)" }, ...]
         currencies = await LangsysApp.getCurrencies();    // [{ code: "USD", name: "US Dollar", symbol: "$", ... }, ...]
-        locales    = await LangsysApp.getLocales();       // { "English": [{ code: "en-US", name: "English (US)" }, ...], ... }
-        localeName = await LangsysApp.getLocaleNameWithLookup('es-ES', true, 'fr-FR'); // "espagnol"
+        locales    = await LangsysApp.getLocales();       // { "English": [{ code: "en-us", name: "English (US)" }, ...], ... }
+        localeName = await LangsysApp.getLocaleNameWithLookup('es-ES', true, 'fr-FR'); // "Espagnol"
     });
 </script>
 ```
+
+These are the core's calls, forwarded unchanged. Each takes an optional display locale, else the current one as `$t()` serves it, normalised the same way (`iw-IL` is `he-il`), and answers the list named in it, with locale codes in the API's lowercase `xx-yy` form. On the server, inside a request `createLangsysHandle` handles, the current locale is the request's. A list is read once per display locale and held for the page session, or for the server process, so a country field on every page costs one request per locale; concurrent calls share one request, and each call answers its own copy, safe to sort or edit. No call throws: a failed read answers an empty list (`{}` for `getLocales`) and logs why, and is not tried again under the same credentials until the catalog's failure window has passed (3 seconds, doubling to 5 minutes). A display locale not shaped as a locale is refused with nothing sent. `getLocalesData(locale, true)` and `LangsysApp.refresh()` read the locale data again.
 
 ### Detecting the user's preferred locale
 

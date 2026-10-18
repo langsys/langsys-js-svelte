@@ -228,6 +228,10 @@ the wrong locale.
     so it sends nothing after the response and the browser registers what the page missed. The key
     is never written into the page.
 
+- **Reference lists.** Inside the scope, `LangsysApp.getCountries()` and the other lists
+  (README, _Utilities_) name their list in the request's locale when given none. The core holds
+  each list per display locale for the life of the process, so a later request in that locale
+  answers it with no request. Each request with `credentials` reads under its own.
 - **Components.** With the build-time transform, `<Translate>` and `<Phrase>` are rendered
   translated in the served HTML, their hosts stamped with the block's id, and the misses of a
   server render are registered through the scope after the response. A block the transform

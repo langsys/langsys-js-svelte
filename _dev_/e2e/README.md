@@ -35,9 +35,14 @@ ln -s ../../langsys-js-typescript node_modules/langsys-js-typescript
 ## Running
 
 ```bash
-npm run dev                                      # terminal 1 — must be 127.0.0.1:5173
+npm run dev                                      # terminal 1 — 127.0.0.1:5173
 node --env-file=.env _dev_/e2e/verify.mjs        # terminal 2
 ```
+
+The page's origin must be one the API's CORS config lists; for another port, start the dev
+server there and set `E2E_BASE_URL` to its origin. The suite also calls the API from Node, so
+a local API served over HTTPS under a local certificate authority needs that CA in
+`NODE_EXTRA_CA_CERTS`.
 
 About two minutes (110–160 s on a freshly started server). The hint-attribution assertions deliberately wait
 out the SDK's 5–30s jitter window twice over — see below. Start the dev server fresh before a

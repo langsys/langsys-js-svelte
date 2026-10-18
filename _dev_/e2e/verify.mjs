@@ -27,7 +27,7 @@ import { PHRASE_MARKER_ATTR, generateCustomId } from 'langsys-js-typescript';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173';
 const SECRET = process.env.LANGSYS_WRITE_GRANT_SECRET;
-const API = process.env.VITE_LANGSYS_BASE_URL ?? 'http://langsys2.test/api';
+const API = process.env.VITE_LANGSYS_BASE_URL ?? 'https://api.langsys2.test/api';
 const PROJECT = process.env.VITE_LANGSYS_PROJECT_ID;
 const KEY_READ = process.env.VITE_LANGSYS_KEY_READ;
 

@@ -22,6 +22,7 @@
  */
 import { createServer } from 'node:http';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 // ---------------------------------------------------------------------------------------
 // State
@@ -51,6 +52,8 @@ function emptyState() {
         hintRate: new Map(), // source ip -> { count, resetAt }
         hintDedup: new Map(), // `${key}|${dedupKey}` -> expiresAt
         duplicateGuard: new Map(), // request hash -> { count, resetAt }
+        // The reference tables (Locale, Country, DialCode, Currency), in table order.
+        reference: { locales: [], countries: [], dial_codes: [], currencies: [] },
         clockOffsetMs: 0,
     };
 }
@@ -76,9 +79,14 @@ function seed(doc) {
             // translations in a rolling window (null = uncapped), and the words already used.
             human_translation_word_limit: p.human_translation_word_limit ?? null,
             human_translation_words_used: p.human_translation_words_used ?? 0,
+            // The organization's settings.locales.locale_code_format (LocaleCodeFormat).
+            locale_code_format: p.locale_code_format ?? 'lowercase-hyphen',
             phrases: new Map(),
             blocks: new Map(),
         };
+        if (!LOCALE_CODE_FORMATS.includes(project.locale_code_format)) {
+            throw new Error(`project ${p.id}: locale_code_format must be one of ${LOCALE_CODE_FORMATS.join(', ')}`);
+        }
         for (const ph of p.phrases ?? []) upsertPhrase(project, ph.category ?? null, ph.phrase, ph.translations);
         for (const b of p.blocks ?? []) {
             upsertBlock(project, b.category ?? null, b.custom_id, b.content ?? null, b.label ?? null, b.phrases ?? []);
@@ -102,12 +110,43 @@ function seed(doc) {
             duplicate_guard: k.duplicate_guard ?? null,
         });
     }
+    next.reference = seedReference(doc.reference ?? {});
     next.faults = (doc.faults ?? []).map((f) => ({ ...f, times: f.times ?? 1 }));
     next.clockOffsetMs = state.clockOffsetMs;
     state = next;
 }
 
 const lower = (s) => (typeof s === 'string' ? s.toLowerCase() : s);
+
+const LOCALE_CODE_FORMATS = ['lowercase-hyphen', 'bcp47', 'posix'];
+
+/** The reference tables, as the seeders fill them: locale codes as stored (lowercase), the rest as rows. */
+function seedReference(ref) {
+    const strings = (list, what) => {
+        if (!Array.isArray(list) || list.some((v) => typeof v !== 'string' || v === '')) throw new Error(`reference.${what} must be a list of non-empty strings`);
+        return list;
+    };
+    const rows = (list, what, fields) => {
+        if (!Array.isArray(list)) throw new Error(`reference.${what} must be a list`);
+        return list.map((row) => {
+            for (const f of fields) if (typeof row?.[f] !== 'string' || row[f] === '') throw new Error(`reference.${what}: every row needs a string ${f}`);
+            return { ...row };
+        });
+    };
+    return {
+        locales: strings(ref.locales ?? [], 'locales').map(lower),
+        countries: rows(ref.countries ?? [], 'countries', ['code']),
+        dial_codes: rows(ref.dial_codes ?? [], 'dial_codes', ['country_code', 'dial_code']),
+        currencies: rows(ref.currencies ?? [], 'currencies', ['code', 'name']).map((c) => ({
+            code: c.code,
+            name: c.name,
+            symbol: c.symbol ?? c.code,
+            symbol_native: c.symbol_native ?? c.symbol ?? c.code,
+            decimal_digits: c.decimal_digits ?? 2,
+            rounding: c.rounding ?? 0,
+        })),
+    };
+}
 const itemKey = (category, text) => JSON.stringify([category ?? null, text]);
 
 function upsertPhrase(project, category, phrase, translations = {}) {
@@ -638,6 +677,322 @@ function discoveryHint(req, body) {
 }
 
 // ---------------------------------------------------------------------------------------
+// Reference reads: LocaleController, CountryController, CurrencyController, ported
+// ---------------------------------------------------------------------------------------
+
+/** EuCountries::EU_COUNTRY_CODES. */
+const EU_COUNTRY_CODES = ['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK'];
+
+/** A display locale as ICU reads it: `_` as `-`, so `es_ES` is `es-es`. */
+const icuLocale = (visitor) => String(visitor).replace(/_/g, '-').toLowerCase();
+
+/**
+ * ICU's root locale: `und`, and any locale whose language is `root` (`root_ES` too). A locale
+ * with `und` and more subtags (`und_ES`) has no language and falls back to the host's default.
+ */
+const isIcuRoot = (visitor) => {
+    const locale = icuLocale(visitor);
+    return locale === 'und' || locale.split('-')[0] === 'root';
+};
+
+/**
+ * symfony/intl's data, as langsys2 locks it (symfony-intl.json): each locale with a currency
+ * bundle and the currencies its bundle names, and the locale aliases.
+ */
+const SYMFONY_INTL = JSON.parse(readFileSync(new URL('./symfony-intl.json', import.meta.url), 'utf8'));
+
+/** Whether a locale's currency bundle names a currency: undefined where it has no bundle. */
+function bundleNames(locale, code) {
+    const bundle = Object.hasOwn(SYMFONY_INTL.currency_bundles, locale) ? SYMFONY_INTL.currency_bundles[locale] : undefined;
+    if (!bundle) return undefined;
+    return bundle.holds ? bundle.holds.includes(code) : SYMFONY_INTL.all_currencies.includes(code) && !bundle.lacks.includes(code);
+}
+
+/** ICU's data for a display locale, or null for one it has none for or cannot parse. */
+function icuData(visitor) {
+    try {
+        return Intl.DisplayNames.supportedLocalesOf([icuLocale(visitor)])[0] ?? null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * ICU's display names, which the backend reads through PHP's \Locale. ICU's root locale (`root`,
+ * `root_ES`, `und`) names a region by its code and a locale by its subtags (`es (ES)`). A display
+ * locale ICU has no data for, or cannot parse, falls back to the host's default locale; the
+ * double models a backend host whose default is English, which is PHP's `en_US_POSIX` with
+ * nothing set. A code ICU cannot name is named by itself, or with `fallback: 'none'` is
+ * undefined.
+ */
+function displayName(type, code, visitor, fallback = 'code') {
+    const unnamed = fallback === 'code' ? code : undefined;
+    if (isIcuRoot(visitor)) return rootName(type, code);
+    const names = new Intl.DisplayNames([icuData(visitor) ?? 'en'], { type, languageDisplay: 'standard', fallback });
+    try {
+        return names.of(code) ?? unnamed;
+    } catch {
+        return unnamed;
+    }
+}
+
+/** ICU's root locale's names: a region and a currency by code, a locale by its subtags, `es (ES)`. */
+function rootName(type, code) {
+    if (type !== 'language') return code.toUpperCase();
+    const [language, ...rest] = code.split('-');
+    const subtags = rest.map((t) => (t.length === 4 ? t[0].toUpperCase() + t.slice(1) : t.toUpperCase()));
+    return subtags.length ? `${language} (${subtags.join(', ')})` : language;
+}
+
+/** PHP's locale_compose given no language: a ValueError, which CurrencyController does not catch. */
+class LocaleComposeError extends Error {}
+
+/**
+ * PHP's locale_parse, for a display locale of the modelled shape: a language, then a script, a
+ * region and variants, with no extension or private-use subtag. `root` and `und` alone are
+ * empty, `und` names no language, a script is title-cased, a region of two or three letters or
+ * three digits upper-cased, and each later subtag is a variant, upper-cased.
+ */
+function localeParse(locale) {
+    if (locale === 'root' || locale === 'und') return [];
+    const subtags = locale.split('_');
+    const parsed = subtags[0] === 'und' ? [] : [['language', subtags[0].toLowerCase()]];
+    let at = 1;
+    if (/^[a-z]{4}$/i.test(subtags[at] ?? '')) parsed.push(['script', subtags[at][0].toUpperCase() + subtags[at++].slice(1).toLowerCase()]);
+    if (/^(?:[a-z]{2,3}|\d{3})$/i.test(subtags[at] ?? '')) parsed.push(['region', subtags[at++].toUpperCase()]);
+    for (let variant = 0; at < subtags.length; at++) parsed.push([`variant${variant++}`, subtags[at].toUpperCase()]);
+    return parsed;
+}
+
+/**
+ * Symfony Intl's Locale::getFallback: a locale of one subtag falls back to `en` when it is two or
+ * three characters long, `en` to `root`, and any other to nothing; a longer one drops its last
+ * subtag, through locale_compose, which throws when no language is left (`und_Latn_ES`).
+ */
+function symfonyFallback(locale) {
+    const parsed = localeParse(locale);
+    if (parsed.length === 1) {
+        if (parsed[0][0] === 'language' && parsed[0][1] === 'en') return 'root';
+        return locale.length < 4 ? 'en' : null;
+    }
+    parsed.pop();
+    if (!parsed.length) return null;
+    if (parsed[0][0] !== 'language') throw new LocaleComposeError(`locale_compose: no language in ${locale}`);
+    return parsed.map(([, subtag]) => subtag).join('_');
+}
+
+/**
+ * Symfony Intl's Currencies::getName as CurrencyController calls it, with the display locale's
+ * `-` turned to `_` and its case kept. BundleEntryReader resolves an alias, reads the locale's
+ * currency bundle if there is one, matched case-sensitively as on the backend's Linux hosts, and
+ * otherwise falls back; so `zh-tw` reads `zh_tw`, has no bundle, and is named in `zh`. The first
+ * bundle on the way that names the currency names it, as ICU names it in that bundle's locale,
+ * and `root` by its code. Undefined where Symfony throws a MissingResourceException, which the
+ * controller catches to keep the stored name; a LocaleComposeError where it throws a ValueError.
+ */
+function symfonyCurrencyName(code, visitor) {
+    const currency = code.toUpperCase();
+    let locale = String(visitor).replace(/-/g, '_');
+    while (locale !== null) {
+        if (Object.hasOwn(SYMFONY_INTL.locale_aliases, locale)) locale = SYMFONY_INTL.locale_aliases[locale];
+        if (bundleNames(locale, currency)) return locale === 'root' ? currency : displayName('currency', currency, locale);
+        locale = symfonyFallback(locale);
+    }
+    return undefined;
+}
+
+/** UsesLocales::_labelCase: the first character upper-cased. */
+const labelCase = (name) => (name ? [...name][0].toUpperCase() + [...name].slice(1).join('') : name);
+/** PHP's strcmp, byte order over UTF-8, which Sorteable and Collection::sortBy compare with. */
+const strcmp = (a, b) => Buffer.compare(Buffer.from(String(a)), Buffer.from(String(b)));
+const sortBy = (rows, field) => [...rows].sort((a, b) => strcmp(a[field], b[field]));
+/** UsesLocales::getLang. */
+const langOf = (code) => code.split('-')[0];
+
+/** UsesLocales::formatLocaleCode: the organisation's code format, applied to a code stored lowercase. */
+function formatLocaleCode(code, format) {
+    if (format === 'lowercase-hyphen' || !code.includes('-')) return code;
+    const at = code.indexOf('-');
+    const [lang, region] = [code.slice(0, at), code.slice(at + 1)];
+    return format === 'bcp47' ? `${lang}-${region.toUpperCase()}` : `${lang}_${region.toUpperCase()}`;
+}
+
+/** The three locale forms, each named in one display locale (UsesLocales). */
+const LOCALE_FORMS = {
+    // categorizeLocales: grouped by language name, groups by key, each group by name.
+    locales: (visitor) => {
+        const groups = {};
+        for (const code of state.reference.locales) {
+            const language = labelCase(displayName('language', langOf(code), visitor));
+            (groups[language] ??= []).push({ code, name: labelCase(displayName('language', code, visitor)) });
+        }
+        return Object.fromEntries(Object.keys(groups).sort(strcmp).map((language) => [language, sortBy(groups[language], 'name')]));
+    },
+    // getFlatLocales: by name.
+    'locales/flat': (visitor) => sortBy(state.reference.locales.map((code) => ({ code, name: labelCase(displayName('language', code, visitor)) })), 'name'),
+    // getDetailedLocales: by locale name.
+    'locales/data': (visitor) =>
+        sortBy(
+            state.reference.locales.map((code) => ({
+                code,
+                locale_name: labelCase(displayName('language', code, visitor)),
+                lang_name: labelCase(displayName('language', langOf(code), visitor)),
+            })),
+            'locale_name'
+        ),
+};
+
+/** LocaleController::_formatLocaleResources: every resource's `code` in the organisation's format. */
+function formatCodes(value, format) {
+    if (Array.isArray(value)) return value.map((row) => ({ ...row, code: formatLocaleCode(row.code, format) }));
+    return Object.fromEntries(Object.entries(value).map(([group, rows]) => [group, formatCodes(rows, format)]));
+}
+
+/** LocalesIndexRequest's declared fields: request-dto-processor refuses any other query key. */
+const LOCALES_INDEX_FIELDS = ['locales', 'project_id', 'append_target_locales', 'user_locale'];
+
+/**
+ * A query key as PHP's parse_str names it, leading spaces dropped: a key with a bracketed part
+ * (`locales[]`, `locales[a]`, `foo[bar]`) by the name before the bracket, with `index` the text
+ * inside it, and in that name `.`, a space and an unclosed `[` as `_`, so
+ * `append.target_locales` is `append_target_locales`. A key with no name (`=1`, `[x]`) is
+ * dropped, as null.
+ */
+function phpQueryKey(name) {
+    const key = name.replace(/^ +/, '');
+    const open = key.indexOf('[');
+    if (!key || open === 0) return null;
+    const close = open > 0 ? key.indexOf(']', open) : -1;
+    if (close < 0) return { field: key.replace(/[. []/g, '_'), index: null };
+    return { field: key.slice(0, open).replace(/[. ]/g, '_'), index: key.slice(open + 1, close) };
+}
+
+/**
+ * The query as LocalesIndexRequest receives it, keyed as PHP parses it, with TrimStrings and
+ * ConvertEmptyStringsToNull applied: each value trimmed, an empty one null. As parse_str does, a
+ * field given twice takes its last value, and `locales` the shape of its last key. A key without
+ * a bracket makes it a string, not a list, or absent when empty; a key with one adds to a list,
+ * started anew if `locales` was not one: `[]` at the next index, `[k]` at index k, replacing
+ * what was there. request-dto-processor formats each listed locale as UsesLocales::formatLocale
+ * does, `_` to `-` and lowercased. `undeclared` is every key the DTO does not declare, in order.
+ */
+function localesQuery(url) {
+    const undeclared = [];
+    const scalars = {};
+    let locales = null;
+    let next = 0;
+    for (const [name, raw] of url.searchParams.entries()) {
+        const key = phpQueryKey(name);
+        if (!key) continue;
+        const { field, index } = key;
+        if (!LOCALES_INDEX_FIELDS.includes(field)) {
+            if (!undeclared.includes(field)) undeclared.push(field);
+        } else if (field === 'locales') {
+            if (index === null) locales = clean(raw);
+            else {
+                if (!(locales instanceof Map)) [locales, next] = [new Map(), 0];
+                // PHP keys an index that is a canonical integer by that integer.
+                const at = index === '' ? next : /^(?:0|-?[1-9]\d*)$/.test(index) ? Number(index) : index;
+                if (typeof at === 'number' && at >= next) next = at + 1;
+                locales.set(at, clean(raw));
+            }
+        } else scalars[field] = clean(raw);
+    }
+    const scalar = typeof locales === 'string';
+    const listed = locales instanceof Map ? [...locales.values()].filter((value) => value !== null).map(formatLocale) : [];
+    return { listed, scalar, undeclared, scalars };
+}
+
+/**
+ * GET /locales, /locales/flat, /locales/data: auth:sanctum → prevent-duplicate → auth.apikey →
+ * request-dto-processor (an undeclared query key is 422 `not_allowed`; `locales[]` formatted)
+ * → deduct → BooleanQueryParamCast and LocalesIndexRequest's validation → the controller. The
+ * display locales are the `locales[]` the Locale table holds; the key's project's target
+ * locales are appended unless `append_target_locales` is false, and always with a
+ * `project_id`. Each display locale's entry is keyed, and every code written, in the
+ * organisation's locale-code format. An empty answer is `data: []`, as PHP writes an empty map.
+ */
+function localeLists(req, url, form, fullUrl) {
+    const unauthenticated = sanctum(req);
+    if (unauthenticated) return unauthenticated;
+    const dup = duplicateGuard(req, fullUrl, null);
+    if (dup) return dup;
+    const auth = authApiKey(req);
+    if (Array.isArray(auth)) return auth;
+    const { listed, scalar, undeclared, scalars } = localesQuery(url);
+    if (undeclared.length) return [422, validationFailed(undeclared.map((field) => entry(field, 'not_allowed', 'This field is not allowed.')))];
+    const deduct = deductRequest(auth.key);
+    if (deduct) return deduct;
+
+    const flag = scalars.append_target_locales ?? null;
+    // BooleanQueryParamCast reads 'true', 'false', '1' and '0'; anything else fails `boolean`.
+    const append = flag === null ? true : ['true', '1'].includes(flag) ? true : ['false', '0'].includes(flag) ? false : undefined;
+    const invalid = [];
+    if (scalar) invalid.push(entry('locales', 'invalid_type', 'The locales must be a list.'));
+    if (append === undefined) invalid.push(entry('append_target_locales', 'invalid_type', 'The append target locales setting must be true or false.'));
+    if (invalid.length) return [422, validationFailed(invalid)];
+
+    // _getRequestLocales: the listed locales the Locale table holds, in its order, then targets.
+    const table = state.reference.locales;
+    let requested = table.filter((code) => listed.includes(code));
+    let project = auth.project;
+    const projectId = scalars.project_id ?? null;
+    if (projectId !== null) {
+        // gateByKey('belongsToProject'): a project the key does not belong to is forbidden.
+        project = state.projects.get(projectId) ?? null;
+        if (!project || auth.key.project !== project.id) return ERRORS.forbidden();
+        requested = [...requested, ...project.target_locales];
+    } else if (append) requested = [...requested, ...project.target_locales];
+    requested = [...new Set(requested)];
+    const format = project.locale_code_format;
+
+    // `data` names only the requested locales the table holds, in the table's order.
+    const visitors = form === 'locales/data' ? table.filter((code) => requested.includes(code)) : requested;
+    const data = {};
+    for (const visitor of visitors) data[formatLocaleCode(visitor, format)] = formatCodes(LOCALE_FORMS[form](visitor), format);
+    return [200, { status: true, data: Object.keys(data).length ? data : [] }];
+}
+
+/** The rows of `countries/{locale}`, `countries/dial-codes/{locale}` and `currencies/{locale}`, named in the display locale. */
+const REFERENCE_LISTS = {
+    // CountryController::index; CountryResource's default order is by label.
+    countries: (visitor) =>
+        sortBy(state.reference.countries.map((c) => ({ label: displayName('region', c.code, visitor), code: c.code, eu: EU_COUNTRY_CODES.includes(c.code.toUpperCase()) })), 'label'),
+    // CountryController::dialCode; DialCodeResource's default order is by name.
+    'countries/dial-codes': (visitor) =>
+        sortBy(
+            state.reference.dial_codes.map((d) => ({ country_code: d.country_code, dial_code: d.dial_code, name: `${displayName('region', d.country_code, visitor)} (+${d.dial_code})` })),
+            'name'
+        ),
+    // CurrencyController::index: Symfony Intl's name, else, where Symfony throws, the stored
+    // one. Table order.
+    currencies: (visitor) => state.reference.currencies.map((c) => ({ ...c, name: symfonyCurrencyName(c.code, visitor) ?? c.name })),
+};
+
+/**
+ * GET /countries/{locale}, /countries/dial-codes/{locale}, /currencies/{locale}: auth:sanctum →
+ * prevent-duplicate → auth.apikey → deduct → the controller. Nothing checks the display locale;
+ * it is named as `displayName` and `symfonyCurrencyName` say.
+ */
+function referenceList(req, list, visitor, fullUrl) {
+    const unauthenticated = sanctum(req);
+    if (unauthenticated) return unauthenticated;
+    const dup = duplicateGuard(req, fullUrl, null);
+    if (dup) return dup;
+    const auth = authApiKey(req);
+    if (Array.isArray(auth)) return auth;
+    const deduct = deductRequest(auth.key);
+    if (deduct) return deduct;
+    try {
+        return [200, { status: true, data: REFERENCE_LISTS[list](visitor) }];
+    } catch (error) {
+        // An exception the controller does not catch, rendered as the backend renders one.
+        if (error instanceof LocaleComposeError) return [500, statusError(500)];
+        throw error;
+    }
+}
+
+// ---------------------------------------------------------------------------------------
 // Setup namespace: seed, reset, clock, and accepted state
 // ---------------------------------------------------------------------------------------
 
@@ -715,6 +1070,15 @@ function send(res, status, body) {
     res.end(text);
 }
 
+/** A route parameter, percent-decoded as the router decodes it; one that does not decode is taken as written. */
+function decodeSegment(segment) {
+    try {
+        return decodeURIComponent(segment);
+    } catch {
+        return segment;
+    }
+}
+
 function takeFault(method, path) {
     const fault = state.faults.find((f) => f.times > 0 && f.method === method && f.path === path);
     if (!fault) return null;
@@ -738,6 +1102,11 @@ const server = createServer(async (req, res) => {
     if (fault) {
         if (fault.delay_ms) await new Promise((r) => setTimeout(r, fault.delay_ms));
         if (fault.drop) return req.socket.destroy();
+        // Something in front of the API answering in its place: a proxy's error page, a captive portal.
+        if (fault.body !== undefined) {
+            res.writeHead(fault.status ?? 200, { 'Content-Type': fault.content_type ?? 'application/json', 'Content-Length': Buffer.byteLength(fault.body) });
+            return res.end(fault.body);
+        }
         // A bare status renders as the case ApiErrorService maps it to, as the backend's own would.
         if (fault.status) return send(res, fault.status, statusError(fault.status));
     }
@@ -750,11 +1119,17 @@ const server = createServer(async (req, res) => {
 
     let result;
     const authorize = path.match(/^\/authorize-project\/([^/]+)$/);
+    // `countries/{userLocale}` is registered before `countries/dial-codes/{userLocale}`, and each
+    // parameter is one segment, so `/countries/dial-codes` alone names the countries in `dial-codes`.
+    const reference = path.match(/^\/(countries\/dial-codes|countries|currencies)\/([^/]+)$/);
+    const localeForm = ['/locales', '/locales/flat', '/locales/data'].includes(path) ? path.slice(1) : null;
     if (method === 'GET' && authorize) result = authorizeProject(req, decodeURIComponent(authorize[1]), fullUrl);
     else if (method === 'GET' && (path === '/translations' || path === '/translations/data')) result = translations(req, query, fullUrl);
     else if (method === 'POST' && path === '/translatable-items') result = translatableItems(req, body, fullUrl);
     else if (method === 'POST' && path === '/discovery/hint') result = discoveryHint(req, body);
-    else if (authorize || ['/translations', '/translations/data', '/translatable-items', '/discovery/hint'].includes(path)) {
+    else if (method === 'GET' && localeForm) result = localeLists(req, url, localeForm, fullUrl);
+    else if (method === 'GET' && reference) result = referenceList(req, reference[1], decodeSegment(reference[2]), fullUrl);
+    else if (authorize || reference || localeForm || ['/translations', '/translations/data', '/translatable-items', '/discovery/hint'].includes(path)) {
         result = ERRORS.methodNotAllowed();
     } else result = ERRORS.notFound();
     return send(res, result[0], result[1]);

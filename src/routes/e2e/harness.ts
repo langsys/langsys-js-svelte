@@ -18,10 +18,10 @@ import { writable, type Writable } from 'svelte/store';
  *
  * The allow-list is explicit, not a wildcard: an unlisted port or an `https://`
  * scheme gets no headers at all, and `localhost` and `127.0.0.1` are separate
- * entries despite being the same host. If this testbed moves off port 5173,
- * the new origin has to be added server-side.
+ * entries despite being the same host. A testbed on a port the API does not
+ * list needs its origin added there.
  */
-export const BASE_URL = import.meta.env.VITE_LANGSYS_BASE_URL ?? 'http://langsys2.test/api';
+export const BASE_URL = import.meta.env.VITE_LANGSYS_BASE_URL ?? 'https://api.langsys2.test/api';
 export const PROJECT_ID = import.meta.env.VITE_LANGSYS_PROJECT_ID;
 
 export const KEYS = {

@@ -11,8 +11,9 @@ change in the app, and one moves catalog entries:
   every translation the catalog holds either way, but register new content only through the
   build-time transform (VAR-7). `$t()` registers as before.
 - **Locale values are lowercase.** `$currentlyLoadedLocale`, `canonicalizeLocale()` and
-  `detectPreferredLocale()` return `en-us`, `zh-hant-tw`. Code comparing them with `'en-US'`
-  compares with the lowercase form instead. The app's own locale store is never rewritten.
+  `detectPreferredLocale()` return `en-us`, `zh-hant-tw`, and a variant is kept as written
+  (`en-US-POSIX` is `en-us-posix`). Code comparing them with `'en-US'` compares with the lowercase
+  form instead. The app's own locale store is never rewritten.
 - **`detectPreferredLocale()` returns `false`** when nothing in the supported list matches, where
   it returned the visitor's own first preference.
 - **Some blocks are looked up under a new id and render source text until translated again.** The
@@ -34,9 +35,24 @@ rendered by the SDK's own branch selection. A key with discovery on that cannot 
 a malformed catalog logs "Ignoring non-category member". A `<Phrase>` holding a
 `<DontTranslate>`, a `translate="no"` or `data-notrans` element, or a `<noscript>` registers a new
 key, the excluded element one empty markup pair (`Built with {m0o}{m0c} on`); a translation filed
-under the key 3.6.17 registered for the text written inside it is still found and rendered.
+under the key 3.6.17 registered for the text written inside it is still found and rendered. The
+country, currency, dial-code and locale lists are read once per display locale and held, where
+3.6.17 held only the last locale's country, currency and dial-code lists and read the locale lists
+on every call; a failed read answers an empty list and is not sent again for a few seconds.
 
 ### Changed
+
+- **The reference lists are held per display locale (REF-1).** `LangsysApp.getCountries()`,
+  `getCurrencies()`, `getDialCodes()` and the locale lists are the core's calls, forwarded
+  unchanged. Each reads its list once per display locale and holds it for the page session, or for
+  the server process; concurrent calls share one request, and each call answers its own copy. A
+  call with no locale names its list in the current locale, which inside a request
+  `createLangsysHandle` handles is the request's. No call throws: a failed read answers an empty
+  list and is not sent again under the same credentials until the catalog's failure window has
+  passed, and under `requireCredentials` an unconfigured client's list calls reject. Codes in the
+  locale lists are lowercase `xx-yy`. Measured against the contract double: a list the core holds
+  is answered through the binding with no request, and a request's lists are named in its locale.
+  README, _Utilities_.
 
 - **`<Translate>` and `<Phrase>` register only what the build-time transform can read (VAR-7).**
   Svelte compiles a variable straight into the DOM, so at runtime `Hello Ana` cannot be told from
@@ -90,7 +106,7 @@ under the key 3.6.17 registered for the text written inside it is still found an
   same name). The rewritten call reads `$t` before its arguments, as the call does, so in an async
   template an `await` in an argument leaves the text following the locale; every key an object
   literal argument writes is a taken name, so the registered phrase does not depend on the rest of
-  the call;
+  the call, and a `%name%` written in the template's text is the caller's, filled by its params;
   anything else makes the block a fallback, named in a build warning, and a block inside a
   fallback that the build can read is transformed on its own, under the category the fallback
   block renders with unless it names one. A `<Translate>` or `<Phrase>` inside a `<DontTranslate>` is never read and

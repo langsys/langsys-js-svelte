@@ -34,6 +34,8 @@ The real API routes an SDK calls:
 | `GET /api/translations`, `GET /api/translations/data` | The flat catalog for `project_id` and `locale`, with `write_enabled` and `discovery_base_locale_only` as top-level siblings of `data`. An empty project answers `data: []`. |
 | `POST /api/translatable-items` | Registers phrases and content blocks, and stores the translations sent with phrases. `200 {status:true, data:{human_translations_saved, human_translations_skipped}}` on success. |
 | `POST /api/discovery/hint` | Always `204` once past the rate limit and URL validation. |
+| `GET /api/locales`, `GET /api/locales/flat`, `GET /api/locales/data` | The locale list in its grouped, flat or data form, named in each display locale given as `locales[]`: a map keyed by display locale in the organisation's code format, with the key's project's target locales appended unless `append_target_locales` is false. |
+| `GET /api/countries/{locale}`, `GET /api/countries/dial-codes/{locale}`, `GET /api/currencies/{locale}` | The list itself, named in the display locale. |
 
 And a setup namespace:
 
@@ -76,6 +78,63 @@ order. On the catalog and registration routes (`GET /translations`, `GET /transl
 authorization (where a missing key is the `401`), the usage balance, and then answers a key for
 another project `403`. `POST /discovery/hint` runs only its rate limit and the validation of
 `page_url`; no key is checked.
+
+**The reference lists are the backend's, read from seeded tables.** The seed's `reference`
+holds the Locale, Country, DialCode and Currency tables, in table order; names are never seeded.
+Each route names its rows in the display locale through ICU, as the backend does through PHP's
+`\Locale` and Symfony Intl, so each display locale answers its own list: `Español (Costa Rica)`
+in `es-es`, `Spanish (Costa Rica)` in `en-us`. A display locale is modelled as a language, then
+a script, a region and variants (`sr-latn-ba`, `en-us-posix`), the shape every SDK sends. ICU
+reads `_` as `-` (`es_ES` is `es-es`), and its root locale, `und` or any locale whose language is
+`root` (`root_ES` too), names a region by its code and a locale by its subtags (`es (ES)`); `und`
+with more subtags (`und_ES`) has no language and is not root. A display locale ICU has no data for falls back to the host's default locale; the
+double models a backend host whose default is English, which is PHP's `en_US_POSIX` with nothing
+set, so it answers such a locale in English whatever its own host's locale. The routes run
+`auth:sanctum` (`401`), duplicate requests, API-key authorization (`403`) and the usage balance
+(`402`), and nothing checks the display locale itself.
+
+Query keys are read as PHP's `parse_str` reads them, leading spaces dropped: a key with a
+bracketed part by the name before the bracket (`locales[a]` is `locales`, `foo[bar]` is `foo`),
+and in a name `.`, a space and an unclosed `[` as `_` (`append.target_locales` is
+`append_target_locales`). A key with no name (`=1`, `[x]`) is dropped. Each value is trimmed and
+an empty one is null, as TrimStrings and ConvertEmptyStringsToNull make it. A field given twice
+takes its last value, and `locales` the shape of its last key: without a bracket it is a string,
+or absent when empty (`locales=`), and with one it is a list, started anew if `locales` was not
+one, whose index is a key as PHP keys an array: `[]` the next index, `[0]` or `[a]` that index,
+so a repeated index keeps its last value (`locales[0]=fr-fr&locales[0]=es-es` is `[es-es]`).
+
+- **The three locale forms** take their display locales as `locales[]` (`locales=es-es`, a
+  string, is `422 invalid_type`). request-dto-processor runs after API-key authorization and before the
+  usage balance: a query key
+  LocalesIndexRequest does not declare (`locales`, `project_id`, `append_target_locales`,
+  `user_locale`) is `422 not_allowed`, and each `locales[]` is formatted as the backend formats a
+  locale, `_` read as `-` and lowercased. Only the codes the Locale table holds are named. The
+  key's project's target locales are appended after them unless `append_target_locales` is
+  `false` or `0` (`true` and `1` also read; anything else is `422 invalid_type`), and a
+  `project_id` appends them whatever the flag says, after a `403 forbidden` for a project the key
+  does not belong to. `locales/data` names its display locales in the table's order, so an
+  appended one can come first. Each entry is keyed, and every `code` in it written, in the
+  project's `locale_code_format` (`lowercase-hyphen`, `bcp47` or `posix`: `es-es`, `es-ES`,
+  `es_ES`). The grouped form groups by language name, groups and rows in byte order; the flat
+  form is by name and the data form by locale name. An answer naming nothing is `data: []`, as
+  PHP writes an empty map.
+- **Countries** are `{label, code, eu}` by label, **dial codes** `{country_code, dial_code,
+  name}` by name, the name carrying the code as `Spain (+34)`, and **currencies** `{code, name,
+  symbol, symbol_native, decimal_digits, rounding}` in table order. A currency is named as
+  Symfony Intl's `Currencies::getName` names it for CurrencyController, which turns the display
+  locale's `-` into `_` and keeps its case. Symfony resolves a locale alias, reads that locale's
+  currency bundle if it has one, matched case-sensitively as on the backend's Linux hosts, and
+  otherwise falls back: a locale drops its last subtag as PHP's `locale_parse` reads it, a
+  one-subtag locale of two or three letters falls back to `en`, `en` to `root`, and any other
+  ends the chain. The first bundle on the way that holds the currency names it, in ICU's name for
+  it in that bundle's locale, and `root` by its code. So `zh-tw` reads `zh_tw`, which has neither
+  a bundle nor an alias (Symfony's is `zh_TW`), and is named in `zh`; `pt-pt` is named in `pt`,
+  `sr-latn-ba` in `sr_Latn`, `nb` and `tl` in `en`, and `iw-il` in `he`. `symfony-intl.json`
+  holds the bundles, the currencies each holds, and the aliases, from the symfony/intl langsys2
+  locks. Where Symfony throws a MissingResourceException, for a currency no bundle on the chain
+  holds, the stored name is kept. Where it throws a ValueError, which the controller does not
+  catch, for `und` with two or more subtags after it (`und-latn-es`), the route answers
+  `500 internal_error`.
 
 **`write_enabled` is computed, never seeded.** A `write` key may write. An `ip_write` key may
 write when the source address is in its allow-list or in `renderer_egress_ips`. Any key may
@@ -134,12 +193,25 @@ fragment kept only when it is a route (`#/…` or `#!/…`).
   existing translation exempts a provided one from the quota.
 - **Parts of the backend's request handling that every seed and lane would trip over**:
   project ids that are not UUIDs (`422 invalid_format` in the backend; seeds use ids like
-  `p1`), request fields a route does not declare (`422 not_allowed`), the general
+  `p1`), request fields a route does not declare (`422 not_allowed`) on any route but the
+  locale routes, the general
   `throttle:api` limit of 120 requests a minute, a locale that is not one of the project's
   (`422`), the same routes served without the `/api` prefix, and the `Retry-After` and
   `X-RateLimit-*` headers on a `429`.
-- **Routes outside the conformance contract**, such as the locale display data an SDK may
-  request at start-up (`/locales/{locale}/data`). They answer `404`.
+- **A declared scalar field sent as a list** on the locale routes: `append_target_locales[]=0`
+  is read as its value, where the backend refuses it as not of its type. A nested index
+  (`locales[a][b]`) is read as one value, where the backend holds a list in it.
+- **A display locale with an extension or private-use subtag** (`-u-ca-gregory`, `-x-foo`),
+  which PHP's ICU parses by rules of its own. The double reads those subtags as variants, so its
+  answer can differ from the backend's.
+- **Routes outside the conformance contract**, among them the deprecated
+  `locales/{locale}/{format}` the current locale routes replace. They answer `404`.
+- **On the list routes**, the `page`, `records_per_page`, `order_by` and `filter_by` parameters,
+  which the backend applies to countries, dial codes and currencies; the lists answer whole, in
+  their default order. ICU's names are the double's Node ICU, which can word a name differently
+  from the backend's PHP ICU, and can lack one Symfony's newer data holds (the currency `XCG`,
+  the locale `kk_Arab`), which it then names in English or by its code; assert on which display
+  locale's list came back, not on a name's exact wording.
 - **Word counts** in the catalog envelope count whitespace-separated words, which is close to
   the backend's count and never asserted on.
 
@@ -147,8 +219,9 @@ fragment kept only when it is a route (`#/…` or `#!/…`).
 
 A seed may carry `faults`: deterministic failures matched by method and route path and
 consumed in order, before any other handling. A fault answers a status, drops the connection,
-or delays the response. They model the network and infrastructure, for retry, backoff and
-degradation tests.
+delays the response, or answers a raw `body` with its `status` (default `200`) and
+`content_type`, as something in front of the API would: a proxy's error page, a captive portal.
+They model the network and infrastructure, for retry, backoff and degradation tests.
 
 ## Error bodies
 
@@ -165,11 +238,11 @@ error's `template` is its message. Assert on the status, on `error.code`, on an 
 | `403` | `api_key_invalid` | An unknown key, a key with no project, or, on `authorize-project`, a key for another project. |
 | `403` | `project_unavailable` | A suspended project, to any key but a `write` key. |
 | `403` | `api_key_write_not_allowed` | A write from a session that may not write. |
-| `403` | `forbidden` | A key for another project, on the catalog and registration routes. |
+| `403` | `forbidden` | A key for another project, on the catalog and registration routes, or a `project_id` the key does not belong to on a locale route. |
 | `404` | `not_found` | An unknown project (before the key is checked), or an unknown route. |
 | `405` | `method_not_allowed` | A known route with the wrong method. |
 | `422` | `batch_size_exceeded` | More than `batch_limit` items, with `details:{limit, item_count}`. |
-| `422` | `validation_failed` | One entry per failed rule in `errors`: `locale` `invalid_option` (missing locale on the catalog), `project_id` `required`, `translatable_items` `invalid_type`, `translatable_items.<i>.translations` `invalid_option` (a locale that is not a target), and `page_url` `required`, `invalid_type`, `invalid_format` or `too_long` (`params:{max:2048}`). |
+| `422` | `validation_failed` | One entry per failed rule in `errors`: `locale` `invalid_option` (missing locale on the catalog), `project_id` `required`, `translatable_items` `invalid_type`, `translatable_items.<i>.translations` `invalid_option` (a locale that is not a target), `page_url` `required`, `invalid_type`, `invalid_format` or `too_long` (`params:{max:2048}`), and on the locale routes `locales` and `append_target_locales` `invalid_type` and an undeclared query key `not_allowed`. |
 | `429` | `duplicate_request` | The duplicate-request guard. |
 | `429` | `too_many_requests` | The hint rate limit. |
 
