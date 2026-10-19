@@ -200,14 +200,14 @@ match?, seed?, storage? })` for `hooks.server.ts`: it opens the core's request s
 ### Fixed
 
 - **A Date or a boolean in an ICU phrase printed as the formatter's parts.** In a plain argument of
-  a phrase holding a plural or select (`{count, plural, …} since {date}`), `$t()` returned an array
+  a phrase holding an ICU argument (`{count, plural, …} since {date}`), `$t()` returned an array
   that a page printed as `since ,Sun Oct 18 2026 …`, a Date that is a branch's whole output came
   back as the Date itself, and `false` came back as nothing. With the core this release requires, a
   Date is a medium date for the locale and a boolean `true` or `false`, as in a plain phrase, in
   `$t()`, `<Translate>` and `<Phrase>` alike; a boolean still selects its branch.
 
-- **An element right after an apostrophe in a `<Phrase>` holding a plural showed its markup
-  tokens.** `Type '<code>DELETE</code>' to remove {n, plural, …}` showed
+- **An element right after an apostrophe in a `<Phrase>` holding an ICU argument showed its
+  markup tokens.** `Type '<code>DELETE</code>' to remove {n, plural, …}` showed
   `Type {m0o}DELETE{m0c} to remove 2 files`: ICU reads an apostrophe before `{` as a quote, and the
   phrase holds the element as `{m0o}`…`{m0c}`. The element renders, as source and translated, and
   the quoting apostrophes do not show; README says how ICU's quoting reads a phrase.

@@ -135,34 +135,40 @@ describe('a nested unit inside a block (VAR-2)', () => {
         expect(translated).toMatch(/<p data-ls-phrase[^>]*>1 file per Ana<\/p>/);
     });
 
-    it('writes a Date beside a plural in a phrase, or as a whole branch of it, as a date for the locale, as source as it does translated', async () => {
+    it('writes a Date beside a plural in a phrase, or as a whole branch of it, as a date for the locale, and a number as written unless it is a number argument, as source as it does translated', async () => {
         const changes = '{n, plural, one {# change} other {# changes}} since {since}';
         const edits = '{n, plural, =0 {{since}} other {# edits since {since}}}';
+        const totals = '{n, plural, one {# file} other {# files}} totalling {total}, or {total, number}';
         const source = await rendered('en-us');
-        expect(source.phrases).toEqual(expect.arrayContaining([changes, edits]));
+        expect(source.phrases).toEqual(expect.arrayContaining([changes, edits, totals]));
         expect(source.body).toMatch(/<p data-ls-phrase[^>]*>2 changes since Oct 18, 2026<\/p>/);
         expect(source.body).toMatch(/<p data-ls-phrase[^>]*>Oct 18, 2026<\/p>/);
+        expect(source.body).toMatch(/<p data-ls-phrase[^>]*>2 files totalling 1234.5, or 1,234.5<\/p>/);
         const catalog = {
             NAMES: {
                 [changes]: '{n, plural, one {# modifica} other {# modifiche}} dal {since}',
                 [edits]: '{n, plural, =0 {{since}} other {# modifiche dal {since}}}',
+                [totals]: '{n, plural, one {# file} other {# file}} per {total}, ovvero {total, number}',
             },
         } as unknown as iCategories;
         const translated = (await rendered('it-it', catalog)).body;
         expect(translated).toMatch(/<p data-ls-phrase[^>]*>2 modifiche dal 18 ott 2026<\/p>/);
         expect(translated).toMatch(/<p data-ls-phrase[^>]*>18 ott 2026<\/p>/);
+        expect(translated).toMatch(/<p data-ls-phrase[^>]*>2 file per 1234.5, ovvero 1234,5<\/p>/);
     });
 
-    it('quotes a value or an element an apostrophe opens in a phrase holding a plural, as ICU does, as source as it does translated', async () => {
+    it('quotes a value or an element an apostrophe opens in a phrase holding an ICU argument, as ICU does, as source as it does translated', async () => {
         const quoted = "Delete '{name}' and its {n, plural, one {# file} other {# files}}?";
         const doubled = "Remove ''{name}'' and its {n, plural, one {# file} other {# files}}?";
         const element = "Type '{m0o}DELETE{m0c}' to remove {n, plural, one {# file} other {# files}}";
+        const priced = "Drop '{name}' for {price, number}";
         const source = await rendered('en-us');
-        expect(source.phrases).toEqual(expect.arrayContaining([quoted, doubled, element, "Rename '{name}' now"]));
+        expect(source.phrases).toEqual(expect.arrayContaining([quoted, doubled, element, priced, "Rename '{name}' now"]));
         expect(source.body).toMatch(/<p data-ls-phrase[^>]*>Delete \{name\} and its 2 files\?<\/p>/);
         expect(source.body).toMatch(/<p data-ls-phrase[^>]*>Remove 'Atlas' and its 2 files\?<\/p>/);
         expect(source.body).toMatch(/<p data-ls-phrase[^>]*>Type <code>DELETE<\/code> to remove 2 files<\/p>/);
-        // Without a plural the apostrophe is text.
+        expect(source.body).toMatch(/<p data-ls-phrase[^>]*>Drop \{name\} for 5<\/p>/);
+        // Without an ICU argument the apostrophe is text.
         expect(source.body).toMatch(/<p data-ls-phrase[^>]*>Rename 'Atlas' now<\/p>/);
         expect(source.body).not.toMatch(/\{m\d+[oc]\}/);
         const catalog = {
@@ -170,12 +176,14 @@ describe('a nested unit inside a block (VAR-2)', () => {
                 [quoted]: "Elimina '{name}' e i suoi {n, plural, one {# file} other {# file}}?",
                 [doubled]: "Rimuovi ''{name}'' e i suoi {n, plural, one {# file} other {# file}}?",
                 [element]: "Digita '{m0o}DELETE{m0c}' per rimuovere {n, plural, one {# file} other {# file}}",
+                [priced]: "Togli '{name}' per {price, number}",
             },
         } as unknown as iCategories;
         const translated = (await rendered('it-it', catalog)).body;
         expect(translated).toMatch(/<p data-ls-phrase[^>]*>Elimina \{name\} e i suoi 2 file\?<\/p>/);
         expect(translated).toMatch(/<p data-ls-phrase[^>]*>Rimuovi 'Atlas' e i suoi 2 file\?<\/p>/);
         expect(translated).toMatch(/<p data-ls-phrase[^>]*>Digita <code>DELETE<\/code> per rimuovere 2 file<\/p>/);
+        expect(translated).toMatch(/<p data-ls-phrase[^>]*>Togli \{name\} per 5<\/p>/);
         expect(translated).not.toMatch(/\{m\d+[oc]\}/);
     });
 
