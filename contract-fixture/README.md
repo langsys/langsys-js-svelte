@@ -232,9 +232,17 @@ fragment kept only when it is a route (`#/…` or `#!/…`).
   locale's list came back, not on a name's exact wording.
 - **Word counts** in the catalog envelope count whitespace-separated words, which is close to
   the backend's count and never asserted on.
-- **A content block served whole or not at all.** The backend serves a block with every phrase
-  `null` in a locale where any of its translatable phrases has no translation. The double serves
-  each phrase's own translation.
+- **Which translation a locale is served.** The backend serves a phrase the best translation it
+  holds in the locale's language: the locale's own, then the language's default locale's, then
+  any locale of the language's, from the project's translations or, where the project uses
+  translation memory, the organisation's. A standalone phrase can take a content block's
+  translation of the same text. The double serves only the translation stored for that phrase in
+  that exact locale.
+- **A content block served whole or not at all.** In a target locale, the backend serves a block
+  with every phrase `null` where any of its translatable phrases has no translation. At the base
+  locale it serves such a block's translatable phrases as their own text, in place of a stored ICU
+  message too. The double serves each phrase's own translation, and at the base locale a stored
+  ICU message.
 - **Content-block identity** (`ContentBlockIdentityService`). The backend treats the same phrases,
   in the same order and category, as one block whatever `custom_id` a client sends, and serves it
   under every id it was sent with. It names a block sent with no `custom_id` by its content, gives

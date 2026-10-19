@@ -135,7 +135,7 @@ describe('a nested unit inside a block (VAR-2)', () => {
         expect(translated).toMatch(/<p data-ls-phrase[^>]*>1 file per Ana<\/p>/);
     });
 
-    it('writes a Date beside a plural in a phrase, or as a whole branch of it, as a date for the locale, and a number as written unless it is a number argument, as source as it does translated', async () => {
+    it("writes a Date beside a plural in a phrase, or as a whole branch of it, as a date for the locale, and a number in a plain argument as written where the plural's # and a number argument are formatted, as source as it does translated", async () => {
         const changes = '{n, plural, one {# change} other {# changes}} since {since}';
         const edits = '{n, plural, =0 {{since}} other {# edits since {since}}}';
         const totals = '{n, plural, one {# file} other {# files}} totalling {total}, or {total, number}';
@@ -143,7 +143,7 @@ describe('a nested unit inside a block (VAR-2)', () => {
         expect(source.phrases).toEqual(expect.arrayContaining([changes, edits, totals]));
         expect(source.body).toMatch(/<p data-ls-phrase[^>]*>2 changes since Oct 18, 2026<\/p>/);
         expect(source.body).toMatch(/<p data-ls-phrase[^>]*>Oct 18, 2026<\/p>/);
-        expect(source.body).toMatch(/<p data-ls-phrase[^>]*>2 files totalling 1234.5, or 1,234.5<\/p>/);
+        expect(source.body).toMatch(/<p data-ls-phrase[^>]*>12,345 files totalling 67890\.5, or 67,890\.5<\/p>/);
         const catalog = {
             NAMES: {
                 [changes]: '{n, plural, one {# modifica} other {# modifiche}} dal {since}',
@@ -154,7 +154,7 @@ describe('a nested unit inside a block (VAR-2)', () => {
         const translated = (await rendered('it-it', catalog)).body;
         expect(translated).toMatch(/<p data-ls-phrase[^>]*>2 modifiche dal 18 ott 2026<\/p>/);
         expect(translated).toMatch(/<p data-ls-phrase[^>]*>18 ott 2026<\/p>/);
-        expect(translated).toMatch(/<p data-ls-phrase[^>]*>2 file per 1234.5, ovvero 1234,5<\/p>/);
+        expect(translated).toMatch(/<p data-ls-phrase[^>]*>12\.345 file per 67890\.5, ovvero 67\.890,5<\/p>/);
     });
 
     it('quotes a value or an element an apostrophe opens in a phrase holding an ICU argument, as ICU does, as source as it does translated', async () => {

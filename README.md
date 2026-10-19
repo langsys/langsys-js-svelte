@@ -326,7 +326,7 @@ With the transform, write values as you would anywhere in Svelte — `{name}`, `
 
 - Values interpolate into translated text **and** translatable attributes, after the lookup — translators translate the phrase and the values drop in per locale.
 - A number reaches the translation as a number, so a plural form a translation grows (`{count, plural, one {…} other {…}}`) selects correctly.
-- `number` and `Date` values are formatted for the active locale via the base SDK's CLDR rules; `string` values pass through untouched. In a sentence holding an ICU argument a `number` is formatted only where it is written as one (`&lbrace;total, number&rbrace;`), as in `$t()`.
+- `number` and `Date` values are formatted for the active locale via the base SDK's CLDR rules; `string` values pass through untouched. In a sentence holding an ICU argument, a `number` in a plain argument is written as it is; a plural's `#` and a `number` argument (`&lbrace;total, number&rbrace;`) are formatted for the locale, as in `$t()`.
 - Unknown keys stay visible in canonical form (`%missing%` renders as `{missing}`) rather than blanked — matching `$t()`'s unknown-key behavior.
 - The values are **reactive**: a changed `count` re-renders the block.
 - **`debug: true`** warns when `params` has keys that match no placeholder in the content, and names each block the transform could not read.

@@ -64,11 +64,11 @@
 <Phrase category="NAMES" tag="p" params={{ n: 1 }}
     >&lbrace;n, plural, one &lbrace;# file for {user.name}&rbrace; other &lbrace;# files for {user.name}&rbrace;&rbrace;</Phrase
 >
-<!-- A Date beside a plural in a phrase, or a whole branch of it: a date for the locale, as source and translated. A number there is written as it is, unless it is a `number` argument. -->
+<!-- A Date beside a plural in a phrase, or a whole branch of it: a date for the locale, as source and translated. A number in a plain argument there is written as it is; a plural's `#` and a `number` argument are formatted for the locale. -->
 <Phrase category="NAMES" tag="p" params={{ n: 2 }}>&lbrace;n, plural, one &lbrace;# change&rbrace; other &lbrace;# changes&rbrace;&rbrace; since {since}</Phrase
 >
 <Phrase category="NAMES" tag="p" params={{ n: 0 }}>&lbrace;n, plural, =0 &lbrace;{since}&rbrace; other &lbrace;# edits since {since}&rbrace;&rbrace;</Phrase>
-<Phrase category="NAMES" tag="p" params={{ n: 2, total: 1234.5 }}
+<Phrase category="NAMES" tag="p" params={{ n: 12345, total: 67890.5 }}
     >&lbrace;n, plural, one &lbrace;# file&rbrace; other &lbrace;# files&rbrace;&rbrace; totalling &lbrace;total&rbrace;, or &lbrace;total, number&rbrace;</Phrase
 >
 <!-- In a phrase holding an ICU argument (a plural, or a number argument) an apostrophe before a value or an element quotes it, as ICU does, and one written twice is an apostrophe. Without an ICU argument it is text. -->
