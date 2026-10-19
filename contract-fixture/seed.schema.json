@@ -140,6 +140,11 @@
                                 "phrase": {
                                     "type": "string"
                                 },
+                                "translatable": {
+                                    "type": "boolean",
+                                    "default": true,
+                                    "description": "Registered as TranslatableItemService registers it: false when false here, or when the text has nothing to translate (PhraseAnalyzer). An untranslatable phrase is served null in every locale, the base locale included."
+                                },
                                 "translations": {
                                     "type": "object",
                                     "additionalProperties": {
@@ -195,6 +200,11 @@
                                         "properties": {
                                             "phrase": {
                                                 "type": "string"
+                                            },
+                                            "translatable": {
+                                                "type": "boolean",
+                                                "default": true,
+                                                "description": "Registered as TranslatableItemService registers it: false when false here, or when the text has nothing to translate (PhraseAnalyzer). An untranslatable phrase is served null in every locale, the base locale included."
                                             },
                                             "translations": {
                                                 "type": "object",

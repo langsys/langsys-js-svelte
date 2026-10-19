@@ -34,9 +34,9 @@ const DEFAULT_CONFIG = Object.freeze({
     hint_dedup_ttl_seconds: 60, // config content_discovery.hint_dedup_ttl_seconds
     renderer_egress_ips: [], // config content_discovery.renderer_egress_ips
     legacy_omit_capability: false, // a server that predates write_enabled, auto_discovery and discovery_base_locale_only
-    // Reproduces the backend's current drop of an uncategorised content block, which
-    // answers 200 and stores nothing. Off by default: the double models the decided
-    // behaviour, under which such a block registers. For a regression row only.
+    // Reproduces the backend's former drop of an uncategorised content block, which
+    // answered 200 and stored nothing. Off by default: the backend registers such a block.
+    // For a regression row only.
     drop_uncategorized_blocks: false,
 });
 
@@ -87,9 +87,11 @@ function seed(doc) {
         if (!LOCALE_CODE_FORMATS.includes(project.locale_code_format)) {
             throw new Error(`project ${p.id}: locale_code_format must be one of ${LOCALE_CODE_FORMATS.join(', ')}`);
         }
-        for (const ph of p.phrases ?? []) upsertPhrase(project, ph.category ?? null, ph.phrase, ph.translations);
+        // A seeded phrase is held as registration would have stored it.
+        for (const ph of p.phrases ?? []) upsertPhrase(project, ph.category ?? null, ph.phrase, ph.translations, registersTranslatable(ph.translatable, ph.phrase));
         for (const b of p.blocks ?? []) {
-            upsertBlock(project, b.category ?? null, b.custom_id, b.content ?? null, b.label ?? null, b.phrases ?? []);
+            const phrases = (b.phrases ?? []).map((ph) => ({ ...ph, translatable: registersTranslatable(ph.translatable, ph.phrase) }));
+            upsertBlock(project, b.category ?? null, b.custom_id, b.content ?? null, b.label ?? null, phrases);
         }
         next.projects.set(project.id, project);
     }
@@ -149,23 +151,74 @@ function seedReference(ref) {
 }
 const itemKey = (category, text) => JSON.stringify([category ?? null, text]);
 
-function upsertPhrase(project, category, phrase, translations = {}) {
+/**
+ * TranslatableItemService::_prepareBatchData: a phrase, standalone or in a block, registers
+ * translatable unless it is sent with `translatable: false` or its text has nothing to translate.
+ */
+const registersTranslatable = (translatable, phrase) => Boolean(translatable ?? true) && !looksUntranslatable(phrase);
+
+function upsertPhrase(project, category, phrase, translations, translatable) {
     const k = itemKey(category, phrase);
-    const existing = project.phrases.get(k);
-    if (existing) return;
-    project.phrases.set(k, { category: category ?? null, phrase, translations: lowerKeys(translations) });
+    if (project.phrases.has(k)) return;
+    project.phrases.set(k, { category: category ?? null, phrase, translatable, translations: lowerKeys(translations) });
 }
 
+/** Each of `phrases` carries the `translatable` it registers with. */
 function upsertBlock(project, category, customId, content, label, phrases) {
     const k = itemKey(category, customId);
     const block = project.blocks.get(k) ?? { category: category ?? null, custom_id: customId, content, label, phrases: [] };
     for (const p of phrases) {
-        if (!block.phrases.some((q) => q.phrase === p.phrase)) {
-            block.phrases.push({ phrase: p.phrase, translations: lowerKeys(p.translations ?? {}) });
-        }
+        const held = block.phrases.find((q) => q.phrase === p.phrase);
+        // batch_create_translatable_items writes a block's phrases again when a flag changes.
+        if (held) held.translatable = p.translatable;
+        else block.phrases.push({ phrase: p.phrase, translatable: p.translatable, translations: lowerKeys(p.translations ?? {}) });
     }
     project.blocks.set(k, block);
 }
+
+// ---------------------------------------------------------------------------------------
+// Text with nothing to translate: PhraseAnalyzer::looksUntranslatable, ported
+// ---------------------------------------------------------------------------------------
+
+/** PHP's `trim()` characters, and PCRE's `\s` with no `u` flag. */
+const PHP_TRIM = /^[ \t\n\r\0\x0B]+|[ \t\n\r\0\x0B]+$/g;
+const LONELY_URL = /^(?:https?:\/\/|ftp:\/\/|mailto:|tel:)[^ \t\n\x0B\f\r]+$/i;
+const TLD_WHITELIST = ['com', 'org', 'net', 'info', 'biz', 'name', 'mobi', 'io', 'app', 'co', 'ai', 'dev', 'tech', 'store', 'online', 'site', 'website', 'page', 'cloud', 'digital', 'blog', 'shop', 'design', 'studio', 'agency', 'link', 'club', 'news', 'media', 'today', 'world', 'life', 'live', 'tv', 'me', 'fm', 'cc', 'ws', 'edu', 'gov', 'mil', 'us', 'uk', 'de', 'fr', 'es', 'it', 'nl', 'jp', 'cn', 'br', 'mx', 'au', 'ca', 'ru', 'in', 'cr', 'kr', 'tw', 'hk', 'sg', 'ar', 'cl', 'pe', 've', 'gt', 'hn', 'sv', 'ni', 'pa', 'do', 'cu', 'ch', 'at', 'be', 'se', 'no', 'fi', 'dk', 'pl', 'cz', 'hu', 'gr', 'pt', 'ie', 'ro', 'bg', 'hr', 'sk', 'si', 'ee', 'lv', 'lt', 'tr', 'il', 'sa', 'ae', 'eg', 'za', 'ng', 'ke', 'ma', 'th', 'vn', 'id', 'my', 'ph', 'nz'];
+const LONELY_DOMAIN = new RegExp(`^(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\\.)+(?:${TLD_WHITELIST.join('|')})$`);
+const LONELY_IDENTIFIER = /^(?=.*[A-Za-z])(?=.*_)[A-Za-z0-9_]+$/;
+const MULTI_CHAR_SYMBOLS = ['Mex$', 'Bs.S', 'Bs.F', 'NT$', 'NZ$', 'HK$', 'US$', 'MX$', 'ر.س', 'ر.ع', 'ر.ق', 'ر.ي', 'ج.م', 'د.ك', 'د.ا', 'د.ت', 'ل.ل', 'ل.س', 'руб', 'грн', 'ден', 'дин', 'Lek', 'lei', 'C$', 'R$', 'A$', 'S$', 'B$', 'T$', 'Z$', 'Bs', 'kr', 'Kč', 'zł', 'Ft', 'KM', 'лв'];
+const TEXT_EMOTICONS = [':-D', ':-P', ':-p', ':-O', ':-o', ':-S', ':-s', ':-X', ':-x', ';-D', ';-P', ';-p', 'B-)', 'B-(', ':D', ':P', ':p', ':O', ':o', ':S', ':s', ':X', ':x', ';D', ';P', ';p', 'B)', 'B(', '=D', '=P', '=O', 'xD', 'XD', 'xP', 'XP', 'T_T', 'o_O', 'O_o', '^_^'];
+const ISO_4217_CODES = ['AED', 'AFN', 'ALL', 'AMD', 'ANG', 'AOA', 'ARS', 'AUD', 'AWG', 'AZN', 'BAM', 'BBD', 'BDT', 'BGN', 'BHD', 'BIF', 'BMD', 'BND', 'BOB', 'BOV', 'BRL', 'BSD', 'BTN', 'BWP', 'BYN', 'BZD', 'CAD', 'CDF', 'CHE', 'CHF', 'CHW', 'CLF', 'CLP', 'CNY', 'COP', 'COU', 'CRC', 'CUC', 'CUP', 'CVE', 'CZK', 'DJF', 'DKK', 'DOP', 'DZD', 'EGP', 'ERN', 'ETB', 'EUR', 'FJD', 'FKP', 'GBP', 'GEL', 'GHS', 'GIP', 'GMD', 'GNF', 'GTQ', 'GYD', 'HKD', 'HNL', 'HRK', 'HTG', 'HUF', 'IDR', 'ILS', 'INR', 'IQD', 'IRR', 'ISK', 'JMD', 'JOD', 'JPY', 'KES', 'KGS', 'KHR', 'KMF', 'KPW', 'KRW', 'KWD', 'KYD', 'KZT', 'LAK', 'LBP', 'LKR', 'LRD', 'LSL', 'LYD', 'MAD', 'MDL', 'MGA', 'MKD', 'MMK', 'MNT', 'MOP', 'MRU', 'MUR', 'MVR', 'MWK', 'MXN', 'MXV', 'MYR', 'MZN', 'NAD', 'NGN', 'NIO', 'NOK', 'NPR', 'NZD', 'OMR', 'PAB', 'PEN', 'PGK', 'PHP', 'PKR', 'PLN', 'PYG', 'QAR', 'RON', 'RSD', 'RUB', 'RWF', 'SAR', 'SBD', 'SCR', 'SDG', 'SEK', 'SGD', 'SHP', 'SLE', 'SLL', 'SOS', 'SRD', 'SSP', 'STN', 'SVC', 'SYP', 'SZL', 'THB', 'TJS', 'TMT', 'TND', 'TOP', 'TRY', 'TTD', 'TWD', 'TZS', 'UAH', 'UGX', 'USD', 'USN', 'UYI', 'UYU', 'UYW', 'UZS', 'VED', 'VES', 'VND', 'VUV', 'WST', 'XAF', 'XCD', 'XDR', 'XOF', 'XPF', 'XSU', 'XUA', 'YER', 'ZAR', 'ZMW', 'ZWL'];
+// `\b` under PHP's `u` flag is Unicode-aware: a letter, digit or underscore on either side keeps a code.
+const ISO_4217 = new RegExp(`(?<![\\p{L}\\p{N}_])(?:${ISO_4217_CODES.join('|')})(?![\\p{L}\\p{N}_])`, 'gu');
+// FILTER_VALIDATE_EMAIL's expression (ext/filter, without FILTER_FLAG_EMAIL_UNICODE), flags `iD`.
+const PHP_EMAIL = new RegExp(
+    String.raw`^(?!(?:(?:\x22?\x5C[\x00-\x7E]\x22?)|(?:\x22?[^\x5C\x22]\x22?)){255,})(?!(?:(?:\x22?\x5C[\x00-\x7E]\x22?)|(?:\x22?[^\x5C\x22]\x22?)){65,}@)(?:(?:[\x21\x23-\x27\x2A\x2B\x2D\x2F-\x39\x3D\x3F\x5E-\x7E]+)|(?:\x22(?:[\x01-\x08\x0B\x0C\x0E-\x1F\x21\x23-\x5B\x5D-\x7F]|(?:\x5C[\x00-\x7F]))*\x22))(?:\.(?:(?:[\x21\x23-\x27\x2A\x2B\x2D\x2F-\x39\x3D\x3F\x5E-\x7E]+)|(?:\x22(?:[\x01-\x08\x0B\x0C\x0E-\x1F\x21\x23-\x5B\x5D-\x7F]|(?:\x5C[\x00-\x7F]))*\x22)))*@(?:(?:(?!.*[^.]{64,})(?:(?:(?:xn--)?[a-z0-9]+(?:-+[a-z0-9]+)*\.){1,126}){1,}(?:(?:[a-z][a-z0-9]*)|(?:(?:xn--)[a-z0-9]+))(?:-+[a-z0-9]+)*)|(?:\[(?:(?:IPv6:(?:(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){7})|(?:(?!(?:.*[a-f0-9][:\]]){7,})(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,5})?::(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,5})?)))|(?:(?:IPv6:(?:(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){5}:)|(?:(?!(?:.*[a-f0-9]:){5,})(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,3})?::(?:[a-f0-9]{1,4}(?::[a-f0-9]{1,4}){0,3}:)?)))?(?:(?:25[0-5])|(?:2[0-4][0-9])|(?:1[0-9]{2})|(?:[1-9]?[0-9]))(?:\.(?:(?:25[0-5])|(?:2[0-4][0-9])|(?:1[0-9]{2})|(?:[1-9]?[0-9]))){3}))\]))$`,
+    'i'
+);
+/** At most 320 octets, then the expression. */
+const isPhpEmail = (value) => Buffer.byteLength(value) <= 320 && PHP_EMAIL.test(value);
+
+/**
+ * Text with nothing to translate: a lone URL, email address, naked domain or snake_case
+ * identifier, or nothing but numbers, symbols, currency tokens and emoticons once those are
+ * stripped. A number with a decimal or thousands separator is translatable, since the
+ * separator is the locale's.
+ */
+function looksUntranslatable(value) {
+    let stripped = String(value).replace(PHP_TRIM, '');
+    if (stripped === '') return false;
+    if (LONELY_URL.test(stripped) || isPhpEmail(stripped) || LONELY_DOMAIN.test(stripped) || LONELY_IDENTIFIER.test(stripped)) return true;
+    if (/\d[.,]\d/.test(stripped)) return false;
+    for (const token of [...MULTI_CHAR_SYMBOLS, ...TEXT_EMOTICONS]) stripped = stripped.replaceAll(token, '');
+    stripped = stripped.replace(ISO_4217, '').replace(/[^\p{L}\p{N}]/gu, '');
+    // is_numeric on what is left, which holds only letters and numbers: ASCII digits, with an
+    // optional exponent.
+    return stripped === '' || /^[0-9]+(?:[eE][0-9]+)?$/.test(stripped);
+}
+
+/** IcuMessageFormat::isIcu: a plural, select, number, date or time argument with a style. */
+const isIcu = (value) => typeof value === 'string' && /\{[^{}]+,[ \t\n\x0B\f\r]*(?:plural|select|selectordinal|number|date|time)[ \t\n\x0B\f\r]*,/.test(value);
 
 function lowerKeys(obj) {
     const out = {};
@@ -353,25 +406,40 @@ const deductRequest = (key) => (key.usage_exhausted ? ERRORS.apiUnitsLimitExceed
 
 const words = (text) => String(text).split(/\s+/).filter(Boolean).length;
 
+/**
+ * TranslationService::generateTranslationsData. An untranslatable phrase is served null in
+ * every locale. At the project's base locale a translatable phrase needs no translation: it is
+ * served as its own text, or as its stored ICU message, which is the phrase's own plural or
+ * gender wording. Untranslated words count only translatable phrases served null.
+ */
 function catalog(project, locale) {
     const loc = lower(locale);
+    const isBaseLocale = formatLocale(locale) === formatLocale(project.base_locale);
     const data = {};
     let total = 0;
     let untranslated = 0;
     const place = (category) => (data[category] ??= {});
-    for (const p of project.phrases.values()) {
-        const value = p.translations[loc] ?? null;
-        place(p.category ?? '__uncategorized__')[p.phrase] = value;
+    const served = (p) => {
+        if (!p.translatable) return null;
+        const stored = p.translations[loc] ?? null;
+        if (isBaseLocale && !isIcu(stored)) return p.phrase;
+        return stored;
+    };
+    const count = (p, value) => {
         total += words(p.phrase);
-        if (value === null) untranslated += words(p.phrase);
+        if (p.translatable && value === null) untranslated += words(p.phrase);
+    };
+    for (const p of project.phrases.values()) {
+        const value = served(p);
+        place(p.category ?? '__uncategorized__')[p.phrase] = value;
+        count(p, value);
     }
     for (const b of project.blocks.values()) {
         const inner = {};
         for (const p of b.phrases) {
-            const value = p.translations[loc] ?? null;
+            const value = served(p);
             inner[p.phrase] = value;
-            total += words(p.phrase);
-            if (value === null) untranslated += words(p.phrase);
+            count(p, value);
         }
         // An uncategorised block is served under the same key uncategorised phrases use.
         place(b.category ?? '__uncategorized__')[b.custom_id] = inner;
@@ -564,19 +632,27 @@ function translatableItems(req, body, url) {
     const refused = assertTargetLocales(project, items);
     if (refused) return refused;
     // TranslatableItemService::_prepareBatchData: skips, never rejects.
+    const heldBefore = new Set(project.phrases.keys());
     for (const item of items) {
         if (!item || typeof item !== 'object') continue;
         const type = item.type ?? null;
         if (type === 'phrase' || type === null) {
             if (!item.phrase || item.category === '__uncategorized__') continue;
-            upsertPhrase(project, item.category ?? null, item.phrase);
+            const translatable = registersTranslatable(item.translatable, item.phrase);
+            const k = itemKey(item.category ?? null, item.phrase);
+            // batch_create_translatable_items: a phrase new to the project takes the flag of its
+            // first occurrence in the batch, one it already holds the flag of its last.
+            if (heldBefore.has(k)) project.phrases.get(k).translatable = translatable;
+            else upsertPhrase(project, item.category ?? null, item.phrase, {}, translatable);
         } else {
             // An uncategorised block arrives with a null category, because empty strings
             // become null on input. It registers. `drop_uncategorized_blocks` reproduces
-            // the backend's current behaviour, which skips every phrase of such a block.
+            // the backend's former behaviour, which skipped every phrase of such a block.
             const uncategorised = item.category === null || item.category === undefined;
             if (uncategorised && state.config.drop_uncategorized_blocks) continue;
-            const phrases = (item.phrases ?? []).filter((p) => p && p.phrase);
+            const phrases = (item.phrases ?? [])
+                .filter((p) => p && p.phrase)
+                .map((p) => ({ ...p, translatable: registersTranslatable(p.translatable, p.phrase) }));
             if (!phrases.length) continue;
             upsertBlock(project, item.category ?? null, item.custom_id ?? null, item.content ?? null, item.label ?? null, phrases);
         }
@@ -1001,7 +1077,7 @@ function acceptedState() {
     for (const p of state.projects.values()) {
         projects[p.id] = {
             human_translation_words_used: p.human_translation_words_used,
-            phrases: [...p.phrases.values()].map(({ category, phrase, translations }) => ({ category, phrase, translations })),
+            phrases: [...p.phrases.values()].map(({ category, phrase, translatable, translations }) => ({ category, phrase, translatable, translations })),
             blocks: [...p.blocks.values()].map(({ category, custom_id, content, label, phrases }) => ({
                 category,
                 custom_id,

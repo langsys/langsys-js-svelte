@@ -31,7 +31,7 @@ The real API routes an SDK calls:
 | Route | Behaviour |
 |---|---|
 | `GET /api/authorize-project/{project}` | Key type, computed `write_enabled`, `auto_discovery`, the project's `discovery_base_locale_only`, the batch limit in `langsys_settings.translatable_items.batch_limit`. |
-| `GET /api/translations`, `GET /api/translations/data` | The flat catalog for `project_id` and `locale`, with `write_enabled` and `discovery_base_locale_only` as top-level siblings of `data`. An empty project answers `data: []`. |
+| `GET /api/translations`, `GET /api/translations/data` | The flat catalog for `project_id` and `locale`, with `write_enabled` and `discovery_base_locale_only` as top-level siblings of `data`. At the project's base locale a translatable phrase is served as its own text. An empty project answers `data: []`. |
 | `POST /api/translatable-items` | Registers phrases and content blocks, and stores the translations sent with phrases. `200 {status:true, data:{human_translations_saved, human_translations_skipped}}` on success. |
 | `POST /api/discovery/hint` | Always `204` once past the rate limit and URL validation. |
 | `GET /api/locales`, `GET /api/locales/flat`, `GET /api/locales/data` | The locale list in its grouped, flat or data form, named in each display locale given as `locales[]`: a map keyed by display locale in the organisation's code format, with the key's project's target locales appended unless `append_target_locales` is false. |
@@ -146,15 +146,33 @@ carrying `exp` (60 seconds of leeway) and a non-empty `sub`. Tests connect from 
 
 **Registration skips rather than rejects.** A phrase with empty text, or with the category
 `__uncategorized__`, is skipped; a content block with no phrase text is skipped. Everything
-else registers, and re-sending an item is idempotent. A registered phrase reads back as
-present with a `null` translation; a registered block reads back as an object whose phrases
-are `null`.
+else registers, and re-sending an item is idempotent. At a target locale, a registered phrase
+reads back as present with a `null` translation, and a registered block as an object whose
+phrases are `null`.
 
 A content block with no category registers, and the flat catalog serves it under
 `__uncategorized__`, the key uncategorised phrases use. The literal `__uncategorized__` is
 never accepted as a category on registration, so the key only ever appears on the read side.
 The seed option `drop_uncategorized_blocks` reproduces the backend's former behaviour, which
 answered `200` and stored nothing, for a regression test.
+
+**Each phrase registers translatable or not, as `TranslatableItemService` decides.** A phrase,
+standalone or in a content block, is untranslatable when it is sent with `translatable: false`,
+or when its text has nothing to translate, as `PhraseAnalyzer::looksUntranslatable` reads it: a
+lone URL (`http`, `https`, `ftp`, `mailto:`, `tel:`), an email address PHP's
+`FILTER_VALIDATE_EMAIL` accepts, a naked domain ending in one of the analyzer's TLDs, a
+snake_case identifier, or nothing but digits, symbols, currency tokens and emoticons once those
+are stripped. A number with a decimal or thousands separator stays translatable, since the
+separator is the locale's. Registering a phrase the project already holds sets its flag from the
+batch's last occurrence of it; a phrase new to the project takes its first. A seeded phrase is
+held as registration would hold it, and `GET /__fixture/state` reports each phrase's
+`translatable`.
+
+**The catalog serves each phrase as `TranslationService::generateTranslationsData` does.** An
+untranslatable phrase is `null` in every locale. At the project's base locale a translatable
+phrase needs no translation, so it is served as its own text, or as its stored ICU message where
+it has one, which is the phrase's own plural or gender wording. At any other locale it is served
+its translation, or `null`. `untranslated_words` counts only translatable phrases served `null`.
 
 **Translations sent with phrases are stored as human translations** (`ProvidedTranslationService`).
 A phrase item may carry `translations`, keyed by target locale; locales are compared as the
@@ -214,6 +232,27 @@ fragment kept only when it is a route (`#/…` or `#!/…`).
   locale's list came back, not on a name's exact wording.
 - **Word counts** in the catalog envelope count whitespace-separated words, which is close to
   the backend's count and never asserted on.
+- **A content block served whole or not at all.** The backend serves a block with every phrase
+  `null` in a locale where any of its translatable phrases has no translation. The double serves
+  each phrase's own translation.
+- **Content-block identity** (`ContentBlockIdentityService`). The backend treats the same phrases,
+  in the same order and category, as one block whatever `custom_id` a client sends, and serves it
+  under every id it was sent with. It names a block sent with no `custom_id` by its content, gives
+  a block that moves to another category the translations of the block it was, and rebuilds the
+  block a known id names in place when its content changes. The double keys a block by category
+  and `custom_id`, and adds new phrases to the block it holds.
+- **Translations sent with phrases as a list.** The backend takes `translations` as a list of
+  `{locale, translation}` entries, on a phrase item and on each phrase of a content block, refuses
+  a map keyed by locale with `422`, and names a refused locale by its entry
+  (`translatable_items.N.translations.M.locale`). The double takes the map, on phrase items only.
+- **Plain-text plurals for an SDK without ICU.** The backend serves a client that does not send
+  `X-Langsys-Capabilities: icu` each ICU message as a flat template. The double serves every
+  client the ICU message.
+- **The data format of `GET /translations/data`.** The backend answers it with item rows (ids,
+  flags, timestamps) unless `format=flat` is sent. The double answers the flat catalog on both
+  routes.
+- **Key order in the catalog.** The backend sorts categories by name, and each category's items
+  by their translation state, then by text. The double keeps the order phrases registered in.
 
 ## Faults
 
