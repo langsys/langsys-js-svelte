@@ -157,22 +157,24 @@ On served bytes: a German render and then an Italian one in the same process, an
 concurrent Italian and German renders that await in `load` before they read. In a real browser:
 the hydrated page keeps the served text with the seed, and re-renders without it (`?noseed=1`).
 `core` passes all nine; `global` and `shared` fail the concurrent case. Freshly started server
-per run. Starting the server with `SRV_API` (the contract double) and `SRV_KEY` also initialises
-the SDK on the server, which the post-response flush needs.
+per run. Starting the server with `SRV_API` (the contract fixture's forwarder), `SRV_PROJECT` and
+`SRV_KEY` also initialises the SDK on the server, which the post-response flush needs.
 
 ## SRV-3 — the post-response flush
 
 `_dev_/e2e/srv-flush.mjs` checks that a server render's missed phrases are sent after the
-response, and only by a key that may write. The contract double answers
-`POST /translatable-items` 3 s late, so the order of events shows up as two numbers: the page
-arrives well inside 3 s, and the phrase is absent from the double's state on arrival and present
-after the flush.
+response, and only by a key that may write, against an SDK test clone through the contract
+fixture's forwarder (`_dev_/contract/README.md`, for the clone's environment). The case's
+`POST /translatable-items` is answered 3 s late, so the order of events shows up as two numbers:
+the page arrives well inside 3 s, and the phrase is absent from the clone's catalog on arrival and
+present after the flush.
 
 ```bash
-node _dev_/e2e/srv-flush.mjs --serve                                   # the double, :8787
-SRV_API=http://127.0.0.1:8787/api SRV_KEY=k-write npm run dev          # fresh server
+eval "$(node _dev_/e2e/srv-flush.mjs --env write)"
+SRV_API=http://127.0.0.1:8787/api SRV_PROJECT=$SRV_PROJECT SRV_KEY=$SRV_KEY npm run dev     # fresh server
 node _dev_/e2e/srv-flush.mjs --expect write
-SRV_API=http://127.0.0.1:8787/api SRV_KEY=k-read npm run dev           # fresh server again
+eval "$(node _dev_/e2e/srv-flush.mjs --env read)"
+SRV_API=http://127.0.0.1:8787/api SRV_PROJECT=$SRV_PROJECT SRV_KEY=$SRV_KEY npm run dev     # fresh server again
 node _dev_/e2e/srv-flush.mjs --expect read
 ```
 
@@ -193,26 +195,31 @@ node _dev_/e2e/svelte-dom.mjs
 ## VAR — variables in registered text
 
 `_dev_/e2e/var.mjs` runs `/fixture/var` (compiled with the build-time transform) and
-`/fixture/var-plain` (without it) through `createLangsysHandle`, against the contract double: served
-translations and ids, plurals, one phrase for two users, a block's registered content holding
-placeholders and no values, handlers, the `{#await}` and `{@html}` cases, and that a hydrated client
-resends nothing the server collected. A unit whose one token sits beside a `<DontTranslate>` at a
+`/fixture/var-plain` (without it) through `createLangsysHandle`, against an SDK test clone through
+the contract fixture's forwarder, each case a project of its own (`_dev_/contract/cases.mjs`,
+suite 2; the browser parts that register share case 2.2): served translations and ids,
+plurals, one phrase for two users, a block's registered content holding placeholders and no values,
+handlers, and the `{#await}` and `{@html}` cases. That a hydrated client resends nothing the server
+collected is read at the browser's transport seam, on the page the clone's server render served. A
+unit whose one token sits beside a `<DontTranslate>` at a
 paragraph's edge keeps the space between them: served in Italian, in the base locale in the browser,
 after hydration, rendered by the client after a locale switch, and on `/fixture/var-plain`, through
 the core's DOM class. On `/fixture/var/category` a unit inside a fallback block takes the block's
 category: served in Italian and hydrated, and rendered by the client after a locale switch, in a
-read session (`k-read`) and a write session (`k-write`), then following the block's category when it
-changes. The catalog requests the browser makes carry `X-Langsys-Capabilities: icu`.
+read session and a write session, then following the block's category when it changes. The catalog
+requests the browser makes carry `X-Langsys-Capabilities: icu`.
 
 ```bash
-node _dev_/e2e/var.mjs --serve                                     # the double, :8787
-SRV_API=http://127.0.0.1:8787/api SRV_KEY=k-write npm run dev      # fresh server
+eval "$(node _dev_/e2e/srv-flush.mjs --env write)"
+SRV_API=http://127.0.0.1:8787/api SRV_PROJECT=$SRV_PROJECT SRV_KEY=$SRV_KEY npm run dev     # fresh server
 node _dev_/e2e/var.mjs
 ```
 
 ## Credentials, a locale race, fallback blocks
 
-Each needs only a freshly started `npm run dev`; the last two start the double themselves.
+Each needs only a freshly started `npm run dev`. `locale-race.mjs` runs against an SDK test clone
+and starts the contract fixture's forwarder itself; `credentials.mjs` sends no request, and
+`freeze.mjs` answers the page's requests inside the browser.
 
 - `_dev_/e2e/credentials.mjs` — `requireCredentials` with no key: the page's blocks surface
   `LangsysConfigurationError`s, mounted before `init()` or not, and the page shows the text as
@@ -225,6 +232,16 @@ Each needs only a freshly started `npm run dev`; the last two start the double t
 - `_dev_/e2e/freeze.mjs` — what Svelte's updates show in a block on the core's DOM class
   (`/fixture/freeze`, hydrated, and `/fixture/freeze-csr`, client-only). Prints a table, asserts
   nothing; README.md's _Blocks the transform cannot read_ is that table.
+
+## Never sent — the transport seam
+
+`_dev_/e2e/seam.mjs` needs only a freshly started `npm run dev`, and no API: in real Chromium every
+request the page makes is answered inside the browser and recorded, for a write-enabled session
+whose registrations are all accepted, so a block that sends nothing does so by the binding's
+choice. GATE-10 (`/fixture/gate10`): a block or `<Phrase>` under a resolved ancestor sends nothing.
+VAR-7 (`/fixture/var-plain` and `/fixture/var`'s fallback blocks): the core's DOM class sends
+nothing, while a block whose only dynamic part is `{@html}` sends its HTML as content. On every page
+a control beside the check sends through the same session.
 
 ## Testbed routes
 

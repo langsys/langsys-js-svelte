@@ -4,7 +4,7 @@ import { writable } from 'svelte/store';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LangsysApp } from '$lib/index.js';
 import { createLangsysHandle } from '$lib/kit/server.js';
-import { startDouble, type Double } from './double.js';
+import { startClone, type Case, type Clone } from './clone.js';
 
 /**
  * REF-1 in a binding: the reference lists are the core's calls, forwarded (BIND-6). A list call
@@ -12,9 +12,12 @@ import { startDouble, type Double } from './double.js';
  * goes out as the core's own read, and the binding sends nothing of its own. Through
  * `createLangsysHandle` a call with no locale names its list in the request's locale (SRV-6).
  *
- * The double names every list in the display locale through ICU, so each locale answers a list
- * of its own. A call that must not send is shown twice: at the fetch seam, and by reseeding the
- * double's tables so that a read would answer a different list.
+ * Against an SDK test clone through the contract fixture's forwarder (CONF-2), whose crafted
+ * reference lists (`/__fixture/setup`'s `reference`) answer the list routes once the clone has
+ * accepted the request, each named in the display locale through ICU, so each locale answers a list
+ * of its own. A call that must not send is shown twice: at the fetch seam, and by giving the case
+ * other tables, so that a read would answer a different list. The case is
+ * `_dev_/contract/cases.mjs`'s suite 7.
  */
 const REFERENCE = {
     locales: ['fr-fr', 'es-es', 'en-us', 'de-de'],
@@ -28,18 +31,15 @@ const REFERENCE = {
         { code: 'CRC', name: 'Costa Rican Colón', symbol: '₡' },
     ],
 };
-/** Other tables, so that a read made after a reseed answers a different list. */
-const RESEEDED = {
+/** Other tables, so that a read made after the case is given them answers a different list. */
+const OTHER = {
     locales: ['it-it', 'es-es', 'en-us', 'fr-fr', 'de-de'],
     countries: [{ code: 'IT' }],
     dial_codes: [{ country_code: 'IT', dial_code: '39' }],
     currencies: [{ code: 'CHF', name: 'Swiss Franc', symbol: 'CHF' }],
 };
-const seed = (reference: unknown) => ({
-    projects: [{ id: 'p1', base_locale: 'en-us', target_locales: ['fr-fr'], locale_code_format: 'lowercase-hyphen' }],
-    keys: [{ key: 'k1', project: 'p1', type: 'read' }],
-    reference,
-});
+/** The case's organisation's locale code format, beside its tables, as the forwarder takes them. */
+const tables = (reference: object) => ({ ...reference, locale_code_format: 'lowercase-hyphen' });
 
 type App = Pick<typeof CoreApp, 'getLocales' | 'getLocalesFlat' | 'getLocalesData' | 'getCurrencies' | 'getCountries' | 'getDialCodes'>;
 const LISTS: { name: keyof App; route: string }[] = [
@@ -52,17 +52,21 @@ const LISTS: { name: keyof App; route: string }[] = [
 ];
 const call = (app: App, name: keyof App, locale?: string) => (app[name] as (locale?: string) => Promise<unknown>)(locale);
 
-let double: Double;
+let clone: Clone;
+let c: Case;
+const give = (reference: object) => clone.update(c, { reference: tables(reference) });
 /** Every request sent to the API, as its route and the display locale a locale form asks for. */
 let sent: string[] = [];
 /** The request the core sends for one list in one display locale, in the form `sent` records it. */
 const read = (route: string, locale: string) => (route.startsWith('locales') ? `${route} ${locale}` : `${route}/${locale}`);
 
 beforeAll(async () => {
-    double = await startDouble(seed(REFERENCE));
+    clone = await startClone();
+    c = clone.caseOf(7, 1);
+    await give(REFERENCE);
     for (const m of ['log', 'info', 'warn', 'error', 'group', 'groupCollapsed', 'groupEnd'] as const) vi.spyOn(console, m).mockImplementation(() => {});
     const realFetch = globalThis.fetch;
-    const api = new URL(double.base);
+    const api = new URL(clone.base);
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
         const url = new URL(input instanceof Request ? input.url : String(input));
         if (url.origin === api.origin && url.pathname.startsWith(`${api.pathname}/`)) {
@@ -72,16 +76,16 @@ beforeAll(async () => {
         }
         return realFetch(input, init);
     });
-    await LangsysApp.init({ projectid: 'p1', key: 'k1', UserLocaleStore: writable('fr-fr'), baseLocale: 'en', apiUrl: double.base });
+    await LangsysApp.init({ projectid: c.projects.app.id, key: c.keys.read.key, UserLocaleStore: writable('fr-fr'), baseLocale: 'en', apiUrl: clone.base });
     // init() reads the current locale's locale data ahead of getLocaleName; let that read land first.
     await LangsysApp.getLocalesData();
 });
 afterAll(() => {
     vi.restoreAllMocks();
-    double?.stop();
+    clone?.stop();
 });
 beforeEach(async () => {
-    await double.seed(seed(REFERENCE));
+    await give(REFERENCE);
     sent = [];
 });
 
@@ -93,7 +97,7 @@ describe('REF-1: the binding forwards the core’s reference lists', () => {
         expect(held).not.toEqual(await call(CoreApp, name, 'en-us'));
         expect(JSON.stringify(held)).not.toMatch(/^(\[\]|\{\})$/);
 
-        await double.seed(seed(RESEEDED));
+        await give(OTHER);
         sent = [];
         // The binding answers the core's held list: nothing is sent, and a read would now answer another list.
         expect(await call(LangsysApp, name, 'es-es')).toEqual(held);
@@ -125,8 +129,8 @@ describe('REF-1 through createLangsysHandle: a call with no locale names its lis
         expect(sent).toEqual([read('countries', 'it-it')]);
         expect(italian).toEqual(await CoreApp.getCountries('it-it'));
         expect(italian).not.toEqual(fr);
-        // A second request in that locale, after a reseed: the held list, nothing sent.
-        await double.seed(seed(RESEEDED));
+        // A second request in that locale, with other tables given: the held list, nothing sent.
+        await give(OTHER);
         sent = [];
         expect(await countriesIn('locale=it-it')).toEqual(italian);
         expect(sent).toEqual([]);

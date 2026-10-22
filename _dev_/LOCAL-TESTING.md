@@ -29,15 +29,19 @@ link lines again after any install.
 Check it took:
 
 ```bash
-npm test -- --run        # 378 tests, no network
+npm test -- --run        # 372 tests, no network
 npm run check            # 0 errors
 ```
 
 ## 2. Two ways to run the testbed
 
-- **Against the contract double** — `contract-fixture/`, a local stand-in for the Langsys API.
-  No account, no `.env`. The VAR pages (`/fixture/var`, `/fixture/var-plain`) and the
-  request-scope page (`/e2e/srv-scope`) run this way.
+- **Against an SDK test clone** — a local Langsys seeded for the SDKs, reached through the
+  contract fixture's forwarder, which `node _dev_/contract/clone.mjs --serve` starts with every
+  case named, printing each case's project and keys. No `.env`; the clone's environment and its
+  reseed are in [`contract/README.md`](./contract/README.md). The VAR pages (`/fixture/var`,
+  `/fixture/var-plain`) and the request-scope page (`/e2e/srv-scope`) run this way, each page
+  naming its case's `project` and `key` in its query. A case's writes stay until the next reseed,
+  so reseed before an automated run.
 - **Against a local Langsys** — the demo at `/` and the `/e2e/*` routes, with a `.env` per
   `.env.example`. See [`e2e/README.md`](./e2e/README.md) for keys and seeding.
 
@@ -49,14 +53,16 @@ text — the build-time transform_.
 ## 3. Placeholders, blocks and ids, server rendering
 
 ```bash
-node _dev_/e2e/var.mjs --serve                                      # terminal 1: the double on :8787
-node _dev_/e2e/var.mjs --seed                                       # its catalog: en-us → it-it
-SRV_API=http://127.0.0.1:8787/api SRV_KEY=k-write npm run dev       # terminal 2, freshly started
+node _dev_/contract/clone.mjs --serve                               # terminal 1: the forwarder on :8787
+SRV_API=http://127.0.0.1:8787/api SRV_PROJECT=76000301-0000-4000-8000-000000000001 \
+  SRV_KEY=svelte-03-01-write LANGSYS_FX_PORT=8787 npm run dev        # terminal 2, freshly started
 ```
 
-Seed before the dev server's first request: the server initialises the SDK once, on that request.
+Start the forwarder before the dev server's first request: the server initialises the SDK once, on
+that request. Case 2.1's project (`76000201-…`, read key `svelte-02-01-read`) holds the VAR
+catalog, `en-us` → `it-it`; case 2.2's (`76000202-…`, write key `svelte-02-02-write`) starts empty.
 
-Open **`http://127.0.0.1:5173/fixture/var?locale=it-it&key=k-write&user=Ana`**:
+Open **`http://127.0.0.1:5173/fixture/var?locale=it-it&user=Ana&project=76000201-0000-4000-8000-000000000001&key=svelte-02-01-read`**:
 
 | Feature                   | What you see                                                                                                           |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
@@ -68,47 +74,44 @@ Open **`http://127.0.0.1:5173/fixture/var?locale=it-it&key=k-write&user=Ana`**:
 | `{#await}` is a fallback  | The source shows `Loading…`, and its host has no `data-ls-resolved`; after hydration it reads `Loaded after a moment`. |
 | Accept-Language helper    | The last line reads `Accept-Language: it-it`; without `locale=` it reads `en-us`.                                      |
 
-Then what registered. Empty the double's catalog, keeping the key, so that everything it holds
-afterwards was registered by the page:
+Then what registered, in case 2.2's project, which starts empty, so that everything it holds
+afterwards was registered by the page. A server render alone registers: `curl` the page once with
+`user=Zoe` (no `locale=`, the base language, so misses register) and read the catalog below —
+`Hello {name}, welcome back` is there within a few seconds, with no browser involved and no `Zoe`
+anywhere.
 
 ```bash
-curl -s -X POST http://127.0.0.1:8787/__fixture/seed -H 'content-type: application/json' -d '{"projects":[{"id":"p1","base_locale":"en-us","target_locales":["it-it"],"phrases":[],"blocks":[]}],"keys":[{"key":"k-write","project":"p1","type":"write"}]}'
+P=76000202-0000-4000-8000-000000000001 K=svelte-02-02-write
+curl -s "http://127.0.0.1:5173/fixture/var?user=Zoe&project=$P&key=$K" > /dev/null
+curl -s -H "x-authorization: $K" "http://127.0.0.1:8787/api/translations?project_id=$P&locale=it-it" | jq '[.data[] | to_entries[] | if (.value | type) == "object" then (.value | keys[]) else .key end]'
 ```
-
-Then wait a minute: a server render reuses a catalog it fetched within the last minute, and one
-fetched before the emptying still holds the seed's entries, so the page's phrases would read as
-known and nothing would register.
-
-A server render alone registers: `curl` the page once with `user=Zoe` (no `locale=`, the base
-language, so misses register) and read the state below — `Hello {name}, welcome back` is there
-within a few seconds, with no browser involved and no `Zoe` anywhere.
 
 Then open the same page **without** `locale=` as two users, wait about 30 s for the browser's
-flush, and read the double's state:
-
-```bash
-curl -s http://127.0.0.1:8787/__fixture/state | jq '.projects.p1 | [.phrases[].phrase, (.blocks[].phrases[].phrase)]'
-```
+flush, and read the catalog again:
 
 - `Hello {name}, welcome back` appears once, and no other phrase carries a user's name.
   (`Layout phrase 0` is the fixture layout's own `$t`.)
 - `You have {items_count} items` is the count's derived placeholder.
-- Each block's `content` (`jq '.projects.p1.blocks[].content'`) holds a placeholder where its value
-  was: `{items_count}` in the cart block the server sends, and `{name}` in the block only the
-  browser renders (`Shown in the browser to {name}`).
+- Each block's stored content holds a placeholder where its value was: `{items_count}` in the cart
+  block the server sends, and `{name}` in the block only the browser renders (`Shown in the browser
+to {name}`). The project's owner reads it: `GET /api/translatable-items/{id}` with
+  `Authorization: Bearer 112021|svelte-token-112021` and `x-device-id: svelte-device-112021`, for
+  each `content_block` row of `GET /api/translations/data?project_id=$P&locale=it-it`.
 - `From the CMS, section one` registers: a block whose only dynamic part is `{@html}` is content.
 - Nothing from the `{#each}` list, the `{#await}` block, or the block mixing `{@html}` with a name.
 
 ## 4. Without the transform
 
-Same servers, with the catalog seeded again (`node _dev_/e2e/var.mjs --seed`). Open
-**`http://127.0.0.1:5173/fixture/var-plain?key=k-write&debug=1`** and the browser console:
+Same servers. Open
+**`http://127.0.0.1:5173/fixture/var-plain?project=76000202-0000-4000-8000-000000000001&key=svelte-02-02-write&debug=1`**
+and the browser console:
 
 - The notice: _A `<Translate>` or `<Phrase>` registers nothing (svelte-transform-missing: add
   langsysPreprocess() from langsys-js-svelte/preprocess to svelte.config.js)…_
-- The double's state gains nothing from the page's blocks, for any user. (`Layout phrase 0`, the
-  fixture layout's own `$t`, registers as it does on every page.)
-- With `&locale=it-it` the catalogued translation still renders: `Ciao Ana, bentornato`.
+- The catalog gains nothing from the page's blocks, for any user. (`Layout phrase 0`, the fixture
+  layout's own `$t`, registers as it does on every page.)
+- In case 2.1's project, with `&locale=it-it`, the catalogued translation still renders:
+  `Ciao Ana, bentornato`.
 
 ## 5. Request scope and the hydration seed (`$t`)
 
@@ -124,9 +127,9 @@ server with `SRV_SEAM=core`). By hand:
 
 Discovery hints are stored for read-only sessions, and are checked two ways:
 
-- **Contract double:** `npm run dev` (fresh), then `node _dev_/contract/verify-contract.mjs` —
-  the `HINT-13` lines: a layout that stays mounted across a client-side navigation records its
-  miss for the new page.
+- **SDK test clone:** `LANGSYS_FX_PORT=8787 npm run dev` (fresh), then
+  `node _dev_/contract/verify-contract.mjs`: a layout that stays mounted across a client-side
+  navigation records its miss for the new page, read from the hints the clone stored.
 - **Local Langsys:** `node --env-file=.env _dev_/e2e/verify.mjs`, TEST 10 (hint URL attribution).
 
 ## 7. Running without credentials
@@ -142,13 +145,15 @@ and `requireCredentials` on.
 
 ## 8. A locale switch overtaken by another
 
-`npm run dev` (fresh), then `node _dev_/e2e/locale-race.mjs`. It picks one locale and, before its
+`LANGSYS_FX_PORT=8787 npm run dev` (fresh), then `node _dev_/e2e/locale-race.mjs`, against an SDK
+test clone. It picks one locale and, before its
 catalog arrives, another. A slow French overtaken by a German that fails leaves the source text and
 stores nothing under `de-de`; a slow Italian overtaken by a Portuguese that succeeds shows `Olá`.
 
 ## 9. Everything at once
 
-The full run, each suite on a freshly started server, is the command block in `CONFORMANCE.md`
-under _Evidence — and re-running it_. On the core above every suite passes: unit 378, VAR 41,
-contract 22, live E2E 61, Svelte DOM 17, SRV concurrency 6, SRV-7 scope 9, SRV-3 flush 6 + 6,
-locale race 4, running without credentials 8.
+The full run, each suite on a freshly started server, is the command block in `CONFORMANCE.md` under
+_Evidence — and re-running it_. On the core above every suite passes: unit 372, transport seam 31,
+live E2E 61, Svelte DOM 17, SRV concurrency 6, SRV-7 scope 9, running without credentials 8; and
+on the SDK test clone, contract unit 9, HINT-13 12, VAR 42, hydration 11, SRV-3 flush 6 + 6,
+locale race 4.

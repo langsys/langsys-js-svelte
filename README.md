@@ -15,6 +15,9 @@ Integrate the Langsys Translation Manager into your Svelte and SvelteKit applica
 ## Requirements
 
 - **Svelte 5**. Runs in SvelteKit under SSR — see [Server-Side Rendering](#server-side-rendering) for what that does and does not cover.
+- **SvelteKit 2.10 or later** for the `langsys-js-svelte/kit` and `langsys-js-svelte/kit/server` entries. `@sveltejs/kit` is an optional peer dependency: an app without SvelteKit uses the main entry alone.
+
+Upgrading from 3.x? See [Upgrading from 3.x](#upgrading-from-3x).
 
 > The last version supporting Svelte 3 / 4 (client-side only) is tagged `v-last-svelte4-compat` (`1.2.1`).
 >
@@ -45,10 +48,8 @@ Visit [Langsys.dev](https://Langsys.dev/) to create your account, then create yo
 
 ### API key permissions
 
-- **Write key** (development): the SDK auto-creates new translation tokens and content blocks as they appear in your app.
-- **Read-only key** (production): the SDK fetches translations only — no token creation, no content-block writes.
-
-The SDK detects the key type automatically and behaves accordingly.
+- **Read key**: the SDK fetches translations only and registers nothing.
+- **Write and `ip_write` keys**: the SDK registers new phrases and content blocks as they appear, in a session the server lets write. The server decides that per session, from the key, the caller's address (an `ip_write` key writes only from an address on its allow-list) and any write grant — see [`writeEnabled` and write grants](#writeenabled-and-write-grants). A session it does not let write fetches translations only, and says so once in the console.
 
 ## Initialization
 
@@ -97,10 +98,10 @@ than fetching twice. A tag that isn't valid BCP 47 at all — `en-USA`, `en_US_`
 
 ### Pointing the SDK at another API
 
-`apiUrl` redirects every request — to a staging API, or to a test double in integration tests — without touching the built package. Defaults to `https://api.langsys.dev/api`.
+`apiUrl` redirects every request — to a staging API, or to a test server in integration tests — without touching the built package. Defaults to `https://api.langsys.dev/api`.
 
 ```ts
-await LangsysApp.init({ projectid, key, UserLocaleStore, apiUrl: 'https://api.langsys2.test/api' });
+await LangsysApp.init({ projectid, key, UserLocaleStore, apiUrl: 'https://staging.example.com/api' });
 ```
 
 Pass it to `init()` rather than calling `LangsysAppAPI.setBaseUrl()`. `setBaseUrl` only works if it runs **before** `init()`; called after, the SDK has already authorized against the default host and stays inert for the life of the page — nothing throws, and translations simply never arrive. `apiUrl` is applied inside `init()`, before authorization, so the order cannot go wrong.
@@ -638,6 +639,44 @@ When changing locale mid-session, you may want to re-run dependent code once the
 > **There is no reliable failure signal.** A fetch that failed and one that succeeded
 > 50 ms ago are indistinguishable from outside: both have a resolved promise and an
 > un-updated locale. If you need an error state, supply your own timeout.
+
+## Upgrading from 3.x
+
+4.0.0 runs on `langsys-js-typescript` 0.7, which `npm install` brings with it. What follows was measured against an app on 3.6.17, which runs on core 0.6.5.
+
+**What an app changes**
+
+- **SvelteKit 2.10 or later.** `@sveltejs/kit` is an optional peer from `^2.10.0`, the release that runs the `init` client hook, so npm refuses the install in an app on Kit 2.0–2.9. An app without SvelteKit is unaffected.
+- **The build-time transform, to keep registering content.** `<Translate>` and `<Phrase>` render every translation the catalog holds either way, but register new content only through `langsysPreprocess()` ([Variables in text](#variables-in-text--the-build-time-transform)). Svelte writes a variable straight into the DOM, where `Hello Ana` cannot be told from `Hello {name}`, so without the transform they register nothing rather than one phrase per user. `$t()` registers as before.
+- **Registration is the server's decision.** 3.6.17 registered whenever the key type was `write`. 4.0.0 registers only while the server says the session may write ([API key permissions](#api-key-permissions)). A `write` or `ip_write` key the server resolves read-only logs "this session cannot write" once per page load: allow-list the caller's address for an `ip_write` key, or give the session a write grant.
+- **Locale values are lowercase.** `$currentlyLoadedLocale`, `canonicalizeLocale()` and `detectPreferredLocale()` return `en-us` and `zh-hant-tw`, and a variant keeps its place (`en-US-POSIX` is `en-us-posix`). Compare against the lowercase form. Your own `UserLocaleStore` is read, never rewritten.
+- **`detectPreferredLocale()` returns `false`** when nothing in the supported list matches, where it returned the visitor's own first preference. Give it a fallback: `detectPreferredLocale(header, supported) || 'en-us'`.
+- **An explicit write without credentials rejects.** `LangsysAppAPI.post`, `put`, `patch`, `delete` and `createTranslatableItems` reject with `LangsysConfigurationError` when the client has no project id or key, where 3.6.17 resolved an error body.
+
+**Blocks looked up under a new id**
+
+The tokenizer now agrees with Langsys's other SDKs, so some blocks get a new id and show source text until they are translated again. Their old translation stays in the catalog, unused. A block moves when it holds:
+
+- an attribute value with a line break or a run of spaces;
+- one of twelve attributes now translated: `data-confirm`, `data-tooltip`, `data-title`, `data-content`, `data-original-title`, `data-bs-title`, `data-bs-content`, `data-loading-text`, `data-success-message`, `data-warning-message`, `data-empty-message`, `data-placeholder`;
+- a nested `<Translate>`;
+- a `<script>`, `<style>`, `<noscript>` or `<math>`, whose contents are no longer registered;
+- a control character, which is now removed.
+
+A block whose only text is one attribute (`<input placeholder="…">`) keeps its id but is looked up as a block, where 3.6.17 stored it as a phrase. A `<Phrase>` holding a `<DontTranslate>`, a `translate="no"` or `data-notrans` element, or a `<noscript>` registers a new key, with the excluded element as one empty markup pair (`Built with {m0o}{m0c} on`); a translation filed under the key 3.6.17 registered is still found. With the transform a moved block registers again; without it, nothing registers it.
+
+**What an app notices, with nothing to change**
+
+- Each visitor's first page load fetches the catalog once more: the cached catalog is keyed by project and locale, and the old `translations` storage key is removed.
+- A block registers after mount, once the first catalog has arrived; a block on the core's DOM class, such as one holding only `{@html}`, once it has also been stable for 500 ms.
+- A session that cannot write reports the page's URL, so Langsys can find the content on it, where the key's discovery setting allows. A URL carrying a credential-shaped query parameter is never reported.
+- New console lines with debug off: "this session cannot write" (above), "Discovery hint failed" for a hint that could not be sent, "Catalog fetch threw", "Ignoring non-category member" for a malformed catalog, a reference list asked for in a display locale not shaped as one, and a phrase the message formatter could not render.
+- The country, currency, dial-code and locale lists are read once per display locale and held. A failed read answers an empty list and is not sent again for a few seconds.
+- A `<Translate>` host carries its id in `data-ls-contentblock`.
+
+**What stays the same**
+
+Every name 3.6.17 exported is still exported, with its types, and so is every `LangsysApp` member it listed. `LangsysApp.init({ projectid, key, UserLocaleStore, … })`, `$t('Phrase', 'Category', params)`, the `t`, `currentlyLoadedLocale` and `sTranslations` stores, and `<Translate>`, `<Phrase>` and `<DontTranslate>` take what they took. Svelte 5 is still the floor. `%name%` markup gives the same ids, and a block whose id did not move finds its stored translation as before. The new entries — `langsys-js-svelte/kit`, `/kit/server` and `/preprocess` — do nothing unless imported.
 
 ## Migrating from v2.x
 

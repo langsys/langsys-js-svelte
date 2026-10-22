@@ -1,0 +1,224 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://langsys.dev/schemas/contract-fixture/setup.schema.json",
+    "title": "Contract fixture case setup",
+    "description": "The body of POST /__fixture/setup: names a test case by the keys, projects and seeded user tokens the clone was seeded with, and gives it a caller address, faults and crafted reference lists. A setup naming a key, project or token of an existing case updates that case: the fields it gives replace the case's, and the rest stay. A new case needs its caller. Nothing in it reaches the clone.",
+    "type": "object",
+    "additionalProperties": false,
+    "anyOf": [
+        {
+            "required": [
+                "keys"
+            ],
+            "properties": {
+                "keys": {
+                    "minItems": 1
+                }
+            }
+        },
+        {
+            "required": [
+                "projects"
+            ],
+            "properties": {
+                "projects": {
+                    "minItems": 1
+                }
+            }
+        },
+        {
+            "required": [
+                "tokens"
+            ],
+            "properties": {
+                "tokens": {
+                    "minItems": 1
+                }
+            }
+        }
+    ],
+    "properties": {
+        "keys": {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "minLength": 1
+            },
+            "description": "Raw API keys, as a request sends them in X-Authorization."
+        },
+        "projects": {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "minLength": 1
+            },
+            "description": "Project ids, as a request names them in the authorize path, or in project_id in its query or a JSON body."
+        },
+        "tokens": {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "minLength": 1
+            },
+            "description": "Seeded user tokens, `<id>|<secret>`, as a request sends them in Authorization: Bearer."
+        },
+        "caller": {
+            "type": "string",
+            "description": "The IP address the case's requests reach the clone from, sent as X-Forwarded-For. Every limit the API counts per address counts per case; a move is a setup giving another address."
+        },
+        "faults": {
+            "type": "array",
+            "description": "Replaces the case's faults: deterministic failures of its next matching requests, in order, answered in the forwarder before anything reaches the clone. Each models the network or infrastructure, not the application.",
+            "items": {
+                "type": "object",
+                "required": [
+                    "method",
+                    "path"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "method": {
+                        "enum": [
+                            "GET",
+                            "POST",
+                            "PATCH",
+                            "PUT",
+                            "DELETE"
+                        ]
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Route path after /api, without the query, e.g. /translatable-items."
+                    },
+                    "times": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "default": 1
+                    },
+                    "status": {
+                        "type": "integer",
+                        "description": "Answer with this status, with the error body the backend renders for it; with body, the status the body is sent with."
+                    },
+                    "drop": {
+                        "type": "boolean",
+                        "description": "Destroy the connection without a response."
+                    },
+                    "body": {
+                        "type": "string",
+                        "description": "Answer with this raw body instead of the route's, as something in front of the API would (a proxy's error page, a captive portal), with status (default 200) and content_type."
+                    },
+                    "content_type": {
+                        "type": "string",
+                        "default": "application/json",
+                        "description": "The Content-Type of a body fault."
+                    },
+                    "delay_ms": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Delay before the fault takes effect, or before the request is forwarded when neither status, body nor drop is set."
+                    }
+                }
+            }
+        },
+        "reference": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "additionalProperties": false,
+            "description": "The case's crafted reference tables, in table order, which answer the locale, country, dial-code and currency routes once the clone has accepted the request; null for the clone's own tables. A locale-list request that would append the project's target locales (append_target_locales not false or 0, or a project_id) is answered 501 with the fixture's own body, since only the clone holds them. Names are not given: each route names its rows in the display locale through ICU and Symfony Intl, as the backend does.",
+            "properties": {
+                "locales": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "default": [],
+                    "description": "The Locale table's codes, stored lowercase-hyphen (es-es). A display locale the table does not hold names nothing on the locale routes."
+                },
+                "countries": {
+                    "type": "array",
+                    "default": [],
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "code"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                            "code": {
+                                "type": "string",
+                                "description": "ISO 3166-1 alpha-2, as stored (ES).",
+                                "minLength": 1
+                            }
+                        }
+                    }
+                },
+                "dial_codes": {
+                    "type": "array",
+                    "default": [],
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "country_code",
+                            "dial_code"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                            "country_code": {
+                                "type": "string"
+                            },
+                            "dial_code": {
+                                "type": "string",
+                                "description": "Digits only, as stored (34); the answered name carries it as (+34)."
+                            }
+                        }
+                    }
+                },
+                "currencies": {
+                    "type": "array",
+                    "default": [],
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "code",
+                            "name"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                            "code": {
+                                "type": "string"
+                            },
+                            "name": {
+                                "type": "string",
+                                "description": "The stored name, answered where Symfony Intl throws a MissingResourceException: for a currency no currency bundle on the display locale's fallback chain holds (symfony-intl.json), as for und, und with one more subtag, and a one-subtag display locale of four or more letters, whose chains end at once."
+                            },
+                            "symbol": {
+                                "type": "string"
+                            },
+                            "symbol_native": {
+                                "type": "string"
+                            },
+                            "decimal_digits": {
+                                "type": "integer"
+                            },
+                            "rounding": {
+                                "type": "integer"
+                            }
+                        }
+                    }
+                },
+                "locale_code_format": {
+                    "enum": [
+                        "lowercase-hyphen",
+                        "bcp47",
+                        "posix"
+                    ],
+                    "default": "lowercase-hyphen",
+                    "description": "The organisation's settings.locales.locale_code_format, which the locale routes key and write codes in."
+                }
+            }
+        }
+    }
+}

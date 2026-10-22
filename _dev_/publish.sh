@@ -24,6 +24,50 @@ log_error() {
     echo -e "${RED}✖${NC} $1"
 }
 
+# The GitHub release body: the version's CHANGELOG section (`## X.Y.Z - unreleased` until the release
+# stamps its date), then the install line and the compare link. Fails, printing why, when the section
+# is missing or the body is over GitHub's limit, so a release can refuse before anything changes.
+RELEASE_NOTES_LIMIT=125000
+release_notes() {
+    local version=$1 previous=$2 section notes length
+    section=$(awk -v heading="## $version - " '
+        index($0, heading) == 1 { found = 1; next }
+        found && /^## / { exit }
+        found { print }
+    ' CHANGELOG.md)
+    if [ -z "$(printf '%s' "$section" | tr -d '[:space:]')" ]; then
+        log_error "CHANGELOG.md has no '## $version - unreleased' section" >&2
+        return 1
+    fi
+    notes="$(printf '%s\n' "$section" | sed '/./,$!d')
+
+## Installation
+
+\`\`\`bash
+npm install langsys-js-svelte@$version
+\`\`\`
+
+**Full changelog:** https://github.com/langsys/langsys-js-svelte/compare/v$previous...v$version"
+    length=$(printf '%s' "$notes" | node -e 'let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => console.log([...s].length))')
+    if [ "$length" -gt "$RELEASE_NOTES_LIMIT" ]; then
+        log_error "The release notes for $version are $length characters; GitHub takes at most $RELEASE_NOTES_LIMIT" >&2
+        return 1
+    fi
+    printf '%s\n' "$notes"
+}
+
+# `publish.sh --notes [VERSION]` prints the release body a release of VERSION would carry, and exits:
+# no checks, no version change, no tag. VERSION defaults to the CHANGELOG's unreleased section.
+if [ "${1:-}" = "--notes" ]; then
+    VERSION=${2:-$(sed -n 's/^## \([0-9][^ ]*\) - unreleased$/\1/p' CHANGELOG.md | head -1)}
+    if [ -z "$VERSION" ]; then
+        log_error "CHANGELOG.md has no '## X.Y.Z - unreleased' section, and no version was given" >&2
+        exit 1
+    fi
+    release_notes "$VERSION" "$(node -p "require('./package.json').version")" || exit 1
+    exit 0
+fi
+
 # Variables to track state for rollback
 ORIGINAL_VERSION=""
 NEW_VERSION=""
@@ -31,6 +75,7 @@ CHANGES_COMMITTED=false
 CHANGES_PUSHED=false
 TAG_CREATED=false
 TAG_PUSHED=false
+RELEASE_DATE=""
 
 # Function to rollback changes
 rollback() {
@@ -41,6 +86,12 @@ rollback() {
         if [ -f "package.json" ]; then
             sed -i.bak "s/\"version\": \"$NEW_VERSION\"/\"version\": \"$ORIGINAL_VERSION\"/" package.json
             rm -f package.json.bak
+        fi
+
+        # Un-stamp the CHANGELOG heading: an aborted release leaves no dated section behind.
+        if [ -n "$RELEASE_DATE" ] && [ -f "CHANGELOG.md" ]; then
+            sed -i.bak "s/^## $NEW_VERSION - $RELEASE_DATE$/## $NEW_VERSION - unreleased/" CHANGELOG.md
+            rm -f CHANGELOG.md.bak
         fi
         
         # Reset git if changes were committed (restore original commit before amend)
@@ -193,6 +244,14 @@ if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
     handle_error "Version v$NEW_VERSION already exists as a tag"
 fi
 
+# The release body, built and checked before anything changes, so a missing or oversized
+# CHANGELOG section refuses the release with no version bumped and no tag made.
+if ! RELEASE_NOTES=$(release_notes "$NEW_VERSION" "$ORIGINAL_VERSION"); then
+    log_error "Write the '## $NEW_VERSION - unreleased' section in CHANGELOG.md first; preview it with: bash _dev_/publish.sh --notes $NEW_VERSION"
+    exit 1
+fi
+log_success "Release notes: the CHANGELOG section for $NEW_VERSION"
+
 # Confirm before proceeding
 echo
 read -p "Ready to publish version $NEW_VERSION? (y/N): " -n 1 -r
@@ -215,29 +274,29 @@ else
 fi
 log_success "Updated package.json version to $NEW_VERSION"
 
-# Stamp the CHANGELOG's "## Unreleased" heading with the version and date.
+# Stamp the release date into the version's CHANGELOG heading, `## X.Y.Z - unreleased`.
 #
 # Authoring-time dates are wrong often enough to matter — four of this repo's
 # entries were off, one by a month — because a heading written days before the
 # release is dated from the author's clock, not the publish record. Writing
-# "## Unreleased" while work queues and stamping HERE fixes that: this runs
+# "unreleased" while work queues and stamping HERE fixes that: this runs
 # minutes before CI publishes, so the date matches the registry.
 #
 # Stamp here rather than after publishing so the date is carried by the git tag
 # and GitHub release rather than added afterwards. (This package's tarball ships
-# only dist/ and no CHANGELOG.md, so no npm artifact could read "Unreleased" —
+# only dist/ and no CHANGELOG.md, so no npm artifact could read "unreleased" —
 # that hazard applies to packages that do ship theirs.)
-if grep -q '^## Unreleased' CHANGELOG.md; then
+if grep -q "^## $NEW_VERSION - unreleased$" CHANGELOG.md; then
     RELEASE_DATE=$(date +%Y-%m-%d)
-    log_info "Stamping CHANGELOG: ## Unreleased -> ## $NEW_VERSION - $RELEASE_DATE"
+    log_info "Stamping CHANGELOG: ## $NEW_VERSION - unreleased -> ## $NEW_VERSION - $RELEASE_DATE"
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s/^## Unreleased$/## $NEW_VERSION - $RELEASE_DATE/" CHANGELOG.md
+        sed -i '' "s/^## $NEW_VERSION - unreleased$/## $NEW_VERSION - $RELEASE_DATE/" CHANGELOG.md
     else
-        sed -i "s/^## Unreleased$/## $NEW_VERSION - $RELEASE_DATE/" CHANGELOG.md
+        sed -i "s/^## $NEW_VERSION - unreleased$/## $NEW_VERSION - $RELEASE_DATE/" CHANGELOG.md
     fi
     log_success "CHANGELOG stamped ($RELEASE_DATE). Verify after publish: npm view langsys-js-svelte time --json"
 else
-    log_warning "No '## Unreleased' heading in CHANGELOG.md — is $NEW_VERSION documented?"
+    log_warning "The CHANGELOG heading for $NEW_VERSION is already dated; leaving it as written"
 fi
 
 # Run npm install to update package-lock.json
@@ -276,51 +335,6 @@ TAG_PUSHED=true
 
 # Create GitHub release
 log_info "Creating GitHub release..."
-
-# Get commit messages since last release
-COMMIT_MESSAGES=""
-if git rev-parse "v$ORIGINAL_VERSION" >/dev/null 2>&1; then
-    # Get commits since last version tag
-    COMMITS=$(git log --oneline "v$ORIGINAL_VERSION"..HEAD --reverse)
-else
-    # If no previous version tag, get all commits
-    COMMITS=$(git log --oneline --reverse)
-fi
-
-# Format commit messages for release notes
-if [ -n "$COMMITS" ]; then
-    COMMIT_MESSAGES="
-
-## Changes in this release
-
-"
-    while IFS= read -r commit; do
-        if [ -n "$commit" ]; then
-            COMMIT_HASH=$(echo "$commit" | cut -d' ' -f1)
-            COMMIT_MSG=$(echo "$commit" | cut -d' ' -f2-)
-            # Get the full commit message (including body) for better formatting
-            FULL_COMMIT_MSG=$(git log --format=%B -n 1 "$COMMIT_HASH")
-            COMMIT_MESSAGES="$COMMIT_MESSAGES- [\`$COMMIT_HASH\`](https://github.com/langsys/langsys-js-svelte/commit/$COMMIT_HASH)  
-  $FULL_COMMIT_MSG
-
-"
-        fi
-    done <<< "$COMMITS"
-fi
-
-RELEASE_NOTES="Release v$NEW_VERSION
-
-This release includes all changes since the previous version.
-
-## Installation
-
-\`\`\`bash
-npm install langsys-js-svelte@$NEW_VERSION
-\`\`\`$COMMIT_MESSAGES
-
-## Full Changelog
-
-See the [commit history](https://github.com/langsys/langsys-js-svelte/compare/v$ORIGINAL_VERSION...v$NEW_VERSION) for a complete diff of all changes."
 
 gh release create "v$NEW_VERSION" \
     --title "v$NEW_VERSION" \

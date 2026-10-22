@@ -1,0 +1,17 @@
+{
+    "projects": [
+        {
+            "id": "76000501-0000-4000-8000-000000000001",
+            "title": "srv-hydrate 1 app",
+            "base_locale": "en-us",
+            "target_locales": ["it-it"],
+            "phrases": [],
+            "blocks": [],
+            "user": { "token": "115011|svelte-token-115011", "device_id": "svelte-device-115011" }
+        }
+    ],
+    "keys": [
+        { "id": "76000501-0000-4000-8000-100000000001", "key": "svelte-05-01-server", "project": "76000501-0000-4000-8000-000000000001", "type": "read" },
+        { "id": "76000501-0000-4000-8000-100000000002", "key": "svelte-05-01-browser", "project": "76000501-0000-4000-8000-000000000001", "type": "write" }
+    ]
+}

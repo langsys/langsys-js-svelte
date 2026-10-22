@@ -3,67 +3,47 @@
  *
  * The user picks one locale and, before its catalog arrives, picks another. The page must end on
  * the second choice, never on the first one's late answer, and nothing may be stored under the
- * second locale but its own catalog. The contract double answers the first catalog request late
- * and the second one as the case needs:
+ * second locale but its own catalog. Against an SDK test clone through the contract fixture's
+ * forwarder, whose faults answer the first catalog request late and the second one as the case
+ * needs:
  *
  *   - a slow `fr-fr` overtaken by a `de-de` that FAILS: the page shows source text and nothing is
  *     stored under `de-de`;
  *   - a slow `it-it` overtaken by a `pt-pt` that SUCCEEDS: the page shows Portuguese.
  *
- *     npm run dev                                   # 127.0.0.1:5173, freshly started
- *     node _dev_/e2e/locale-race.mjs                # starts the double on :8787 itself
+ *     LANGSYS_FX_PORT=8787 npm run dev              # 127.0.0.1:5173, freshly started
+ *     node _dev_/e2e/locale-race.mjs                # starts the forwarder on 8787 itself
  *
+ * Each race is a case of its own on the clone (`_dev_/contract/cases.mjs`, suite 6), whose catalog
+ * holds the layout's phrase in all four locales.
  * The locale store is switched through the fixture layout's `__fxSetLocale`, the way an app's
  * locale picker sets its `Writable`.
  */
-import { spawn } from 'node:child_process';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { caseOf } from '../contract/cases.mjs';
+import { startClone } from '../contract/clone.mjs';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const BASE = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173';
-const FX = 'http://127.0.0.1:8787/__fixture';
 const SLOW_MS = 2500;
 const PHRASE = 'Layout phrase race';
-
-const PROJECT = {
-    id: 'p1',
-    base_locale: 'en-us',
-    target_locales: ['fr-fr', 'de-de', 'it-it', 'pt-pt'],
-    phrases: [{ category: 'FX', phrase: PHRASE, translations: { 'fr-fr': 'Bonjour', 'de-de': 'Hallo', 'it-it': 'Ciao', 'pt-pt': 'Olá' } }],
-};
-const KEYS = [{ key: 'k-public', project: 'p1', type: 'read' }];
 const CATALOG = { method: 'GET', path: '/translations' };
 
-const double = spawn(process.execPath, [join(ROOT, 'contract-fixture/server.mjs'), '--port', '8787'], { stdio: 'ignore' });
+const fx = await startClone();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const seed = (faults = []) =>
-    fetch(`${FX}/seed`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projects: [PROJECT], keys: KEYS, faults }) });
 
 const results = [];
 const check = (c, n, d) => results.push({ ok: !!c, n, d });
 
 try {
-    for (let i = 0; i < 40; i++) {
-        if (
-            await fetch(`${FX}/state`).then(
-                (r) => r.ok,
-                () => false
-            )
-        )
-            break;
-        await sleep(250);
-    }
     const browser = await chromium.launch();
 
-    async function race(first, second, secondFault) {
-        await seed();
+    async function race(c, first, second, secondFault) {
         const page = await browser.newPage();
-        await page.goto(`${BASE}/fixture/a?key=k-public&case=race`, { timeout: 90_000 }); // a cold dev server compiles on first request
+        // a cold dev server compiles on first request
+        await page.goto(`${BASE}/fixture/a?case=race&project=${c.projects.app.id}&key=${c.keys.read.key}`, { timeout: 90_000 });
         await page.waitForFunction(() => document.querySelector('[data-testid=fx-status]')?.textContent === 'ready', null, { timeout: 60_000 });
         // From here on: the first catalog request is answered late, the second as the case says.
-        await seed([{ ...CATALOG, delay_ms: SLOW_MS, times: 1 }, ...(secondFault ? [{ ...CATALOG, ...secondFault, times: 1 }] : [])]);
+        await fx.update(c, { faults: [{ ...CATALOG, delay_ms: SLOW_MS, times: 1 }, ...(secondFault ? [{ ...CATALOG, ...secondFault, times: 1 }] : [])] });
         await page.evaluate((l) => window.__fxSetLocale(l), first);
         await sleep(300);
         await page.evaluate((l) => window.__fxSetLocale(l), second);
@@ -80,11 +60,11 @@ try {
         return { shown, stored };
     }
 
-    const a = await race('fr-fr', 'de-de', { status: 500 });
+    const a = await race(caseOf(6, 1), 'fr-fr', 'de-de', { status: 500 });
     check(a.shown === PHRASE, 'fr overtaken by a failing de: the page shows source text, not the late French', a.shown);
     check(!a.stored.some(([, v]) => /Bonjour|Hallo/.test(v ?? '')), 'fr overtaken by a failing de: nothing is stored under de-de', JSON.stringify(a.stored));
 
-    const b = await race('it-it', 'pt-pt', null);
+    const b = await race(caseOf(6, 2), 'it-it', 'pt-pt', null);
     check(b.shown === 'Olá', 'it overtaken by a succeeding pt: the page shows Portuguese, not the late Italian', b.shown);
     check(
         b.stored.some(([, v]) => /Olá/.test(v ?? '')) && !b.stored.some(([, v]) => /Ciao/.test(v ?? '')),
@@ -94,7 +74,7 @@ try {
 
     await browser.close();
 } finally {
-    double.kill();
+    await fx.stop();
 }
 
 for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.n}${r.ok || r.d === undefined ? '' : `\n      ${r.d}`}`);

@@ -1,379 +1,66 @@
-## Unreleased
+## 4.0.0 - unreleased
 
-### Upgrading from 3.6.17
+Requires `langsys-js-typescript` 0.7, which installs with it. The README's [Upgrading from 3.x](https://github.com/langsys/langsys-js-svelte#upgrading-from-3x) has the detail behind each upgrade step.
 
-Measured against an app on 3.6.17 with core 0.6.5 (`_dev_/upgrade/AUDIT.md`). Four things need a
-change in the app, and one moves catalog entries:
+### Upgrading from 3.x
 
-- **`@sveltejs/kit` 2.10 or later.** `@sveltejs/kit` is an optional peer from `^2.10.0`, the
-  release that runs the `init` client hook. npm refuses the install in an app on Kit 2.0–2.9.
-- **Add `langsysPreprocess()` to keep registering content.** `<Translate>` and `<Phrase>` render
-  every translation the catalog holds either way, but register new content only through the
-  build-time transform (VAR-7). `$t()` registers as before.
-- **Locale values are lowercase.** `$currentlyLoadedLocale`, `canonicalizeLocale()` and
-  `detectPreferredLocale()` return `en-us`, `zh-hant-tw`, and a variant is kept as written
-  (`en-US-POSIX` is `en-us-posix`). Code comparing them with `'en-US'` compares with the lowercase
-  form instead. The app's own locale store is never rewritten.
-- **`detectPreferredLocale()` returns `false`** when nothing in the supported list matches, where
-  it returned the visitor's own first preference.
-- **Some blocks are looked up under a new id and render source text until translated again.** The
-  core's tokenizer converged with the other SDKs, so a block's id moves when it holds an attribute
-  value with a line break or a run of spaces, one of twelve attributes now translated
-  (`data-tooltip`, `data-bs-title`, `data-confirm` and others), a nested `<Translate>`, `<script>`,
-  `<style>`, `<noscript>` or `<math>`, or a C0 control character. A block whose only text is one
-  attribute (`<input placeholder="…">`) keeps its id but is looked up as a block, where 3.6.17
-  stored it as a phrase. The old translation stays in the catalog, unused. With the transform the
-  block registers again; without it, nothing registers it.
+- **SvelteKit 2.10 or later.** `@sveltejs/kit` is an optional peer from `^2.10.0`; on Kit 2.0–2.9 npm refuses the install.
+- **Add `langsysPreprocess()` to `svelte.config.js`** to keep `<Translate>` and `<Phrase>` registering new content. Without it they render translations but register nothing, which a debug notice names; `$t()` is unchanged.
+- **The server decides whether a session registers**, not the key type: allow-list the address for an `ip_write` key, or give the session a write grant.
+- **Locale values are lowercase** (`en-us`, `zh-hant-tw`) from `$currentlyLoadedLocale`, `canonicalizeLocale()` and `detectPreferredLocale()`: compare against the lowercase form.
+- **`detectPreferredLocale()` returns `false`** when nothing matches: give it a fallback, `detectPreferredLocale(header, supported) || 'en-us'`.
+- **`LangsysAppAPI` writes reject without credentials**, with `LangsysConfigurationError`, where they resolved an error body: catch it. An `init()` refused for missing credentials also forgets those an earlier `init()` set.
+- **Some blocks get a new id** and show source text until translated again; the README lists which. With the transform they register again.
 
-Visible and harmless: each visitor's first page load fetches the catalog once more, because the
-cache is now keyed by project and locale; a block registers after mount once the first catalog
-has arrived, and a block on the core's DOM class once it has also been stable for 500 ms. With
-debug off, a `write` or `ip_write` key the server resolves read-only logs "this session cannot
-write" once per page load, and a phrase the message formatter cannot render logs that it was
-rendered by the SDK's own branch selection. A key with discovery on that cannot send a hint logs
-"Discovery hint failed", a catalog fetch whose HTTP client throws logs "Catalog fetch threw", and
-a malformed catalog logs "Ignoring non-category member". A reference list asked for in a display
-locale not shaped as a locale, or answered in a shape that is not a list, logs why. A `<Phrase>` holding a
-`<DontTranslate>`, a `translate="no"` or `data-notrans` element, or a `<noscript>` registers a new
-key, the excluded element one empty markup pair (`Built with {m0o}{m0c} on`); a translation filed
-under the key 3.6.17 registered for the text written inside it is still found and rendered. The
-country, currency, dial-code and locale lists are read once per display locale and held, where
-3.6.17 held only the last locale's country, currency and dial-code lists and read `getLocales`
-and `getLocalesFlat` on every call; a failed read answers an empty list and is not sent again for a few seconds.
+### What's new
 
-### Changed
+**Registering content**
 
-- **The reference lists are held per display locale (REF-1).** `LangsysApp.getCountries()`,
-  `getCurrencies()`, `getDialCodes()` and the locale lists are the core's calls, forwarded
-  unchanged. Each reads its list once per display locale and holds it for the page session, or for
-  the server process; concurrent calls share one request, and each call answers its own copy. A
-  call with no locale names its list in the current locale, which inside a request
-  `createLangsysHandle` handles is the request's. No call throws: a failed read answers an empty
-  list and is not sent again under the same credentials until the catalog's failure window has
-  passed, and under `requireCredentials` an unconfigured client's list calls reject. Codes in the
-  locale lists are lowercase `xx-yy`. Measured against the contract double: a list the core holds
-  is answered through the binding with no request, and a request's lists are named in its locale.
-  README, _Utilities_.
+- `langsys-js-svelte/preprocess`: each `{expression}` in a `<Translate>` or `<Phrase>`, and in a `$t` template literal, registers as a named placeholder, one phrase for every user.
+- `writeEnabled`, a store of whether this session may write, and `writeGrant` (a string, a function or a Svelte store) with `setWriteGrant()` for apps behind a login.
+- A session that cannot write reports the page's URL so Langsys can find its content, where the key's discovery setting allows.
+- With the project's base-locale-only setting on, the SDK registers and reports only while the base locale is loaded.
+- Text inside an element marked `data-ls-resolved`, as a block rendered from the catalog is, is never registered or reported.
+- A block registers its content without its host element, and identical blocks mounting together share one request.
+- `requireCredentials` and `LangsysConfigurationError`: run without credentials and render source text, or fail loudly.
 
-- **`<Translate>` and `<Phrase>` register only what the build-time transform can read (VAR-7).**
-  Svelte compiles a variable straight into the DOM, so at runtime `Hello Ana` cannot be told from
-  `Hello {name}`, and a block registered from the DOM became one phrase per user. Without the
-  transform, and for a block it cannot read, the components still render every translation the
-  catalog holds but register nothing, on the server and in the browser; one debug notice names
-  the transform. `$t()` is unaffected. Measured through SvelteKit against the contract double: the
-  untransformed route registers nothing for two users, beside a transformed route that registers
-  in the same run.
+**SvelteKit and server rendering**
 
-### Added
+- `langsys-js-svelte/kit/server`: `createLangsysHandle()` renders each request in its own locale, catalog and, optionally, credentials, and registers its misses after the response.
+- `langsys-js-svelte/kit`: `hydrateFromServer()` hands the served catalog to the browser, which then never resends what the server registered.
+- `syncNavigation()` re-reads mounted content after a client-side navigation, so a layout's phrases count for every page; `notifyNavigation()` does the same from another router.
+- Transformed blocks are served translated and stamped with their id, and `<Translate custom_id>` carries its id in the served HTML.
+- With debug on, a server render says why a block is served as source text.
 
-- **`LangsysConfigurationError` and `requireCredentials`.** The core runs without credentials:
-  `init()` with no project id, key or locale store leaves the client unconfigured, `$t()` and the
-  components render the text as written, and `LangsysApp.isConfigured()` reports it. The error class
-  is re-exported by reference, so `instanceof` matches what the core throws. Under
-  `requireCredentials` each block that registers surfaces the error as an unhandled rejection in the
-  browser, including a block mounted before `init()`, as SvelteKit mounts a page before its layout,
-  and a `register: false` block, which only reads the catalog, never fails; measured by
-  `_dev_/e2e/credentials.mjs`. README, _Running without credentials_.
+**Rendering and API**
 
-- **`langsys-js-svelte/preprocess` — the build-time transform (VAR-6).** One line in
-  `svelte.config.js`: `preprocess: [vitePreprocess(), langsysPreprocess()]`. Each `{expression}`
-  inside a `<Translate>` or `<Phrase>` becomes a named placeholder, with its value as a typed
-  param, so `Hello {user.name}` registers `Hello {name}` once for every user, and a count stays a
-  number a plural form can select on. The content a block registers with holds `{name}` where a
-  marked value was, as its phrases do, and a nested `<Translate>` or `<Phrase>` as its element
-  alone. A `<Translate>` or `<Phrase>` nested in a block names its own values and renders with its
-  own values and `params` only, never the block's, so `<Phrase>By {owner.name}</Phrase>` registers
-  `By {name}` inside a block as it does standing alone, and a value it leaves unset shows empty.
-  A `%name%` written anywhere in a unit, in its text or in any attribute, is taken, as is a `{name}`
-  written there through a character reference (`&lbrace;name&rbrace;`), so the caller's
-  params never replace the unit's own value; a value in an attribute a translator reads (`title`,
-  `alt`, the `value` of a button or a submit or button input) is a placeholder; an `<input>` whose
-  `type` is an expression, beside a `value` holding text, makes its block a fallback; an attribute
-  written without a value renders empty, a boolean one present;
-  in a `<Phrase>` an element's attributes are not part of the phrase and show their values. Nothing inside a `<DontTranslate>`, or an element its author marks `translate="no"` or
-  `data-notrans`, is read, a nested `<Phrase>` included: in a block it is left out of the text, an
-  attribute's text there is rendered with its values, and a value inside it is stored as its
-  `{name}`, named without changing any other; in a `<Phrase>` it is one empty markup pair, rendered
-  as written. A `translate` or `data-notrans` attribute whose value is an expression makes the
-  block a fallback, and no unit inside such an element is read, unless the element sits inside an
-  exclusion or its other attribute excludes it as written, which keeps it excluded. The build
-  reads an exclusion written on the element itself: one a spread or another component applies is
-  decided at runtime, and a unit inside it registers. Names come from the core's `derivePlaceholderNames` and pass
-  all 32 shared naming vectors: an expression that names itself is one placeholder wherever it
-  repeats, and one that cannot be named is a placeholder of its own each time. `{#if}`/`{#key}` branches, event handlers, attributes, and nested
-  `<Phrase>`, `<Translate>` and `<DontTranslate>` are read; ``$t(`…${x}`)`` template literals are
-  rewritten to placeholders too, keeping the core's argument order (an object second argument,
-  `null` included, is the params; one that is not a literal, a spread included, is decided when
-  the call runs, as the core decides it, and the template's own values win over params of the
-  same name). The rewritten call reads `$t` before its arguments, as the call does, so in an async
-  template an `await` in an argument leaves the text following the locale; every key an object
-  literal argument writes is a taken name, so the registered phrase does not depend on the rest of
-  the call, and a `%name%` or `{name}` written in the template's text is the caller's, filled by its params;
-  anything else makes the block a fallback, named in a build warning, and a block inside a
-  fallback that the build can read is transformed on its own, under the category the fallback
-  block renders with unless it names one. A `<Translate>` or `<Phrase>` inside a `<DontTranslate>` is never read and
-  registers nothing. A block whose only dynamic parts are `{@html}` insertions is content, not a variable,
-  and registers its HTML's text through the DOM path.
-
-- **Transformed blocks render on the server (SRV-1, MARK-1, SRV-5).** A transformed block is
-  rendered through the core's `renderBlock`, so the served HTML carries the translation, the
-  block's id and the resolved marker, and a server render's misses are registered through the
-  request scope after the response. Outside a request scope a server render registers nothing, and
-  the block registers from the browser after hydration. The ids agree with a DOM reader's on the 35 rows of the
-  shared canonicalization fixture the build can express. Nested blocks are recorded once each; a
-  block holding `{#await}` is served as source and never captured.
-
-- **`syncNavigation()` in a new `langsys-js-svelte/kit` entry, and `notifyNavigation` on the main
-  entry.** A layout stays mounted across client-side navigation and nothing re-evaluated its
-  `$t(...)` calls, so a phrase rendered there was attributed to the first URL of the session only.
-  Called once in the root layout, `syncNavigation()` calls the core's `notifyNavigation()` from
-  SvelteKit's `afterNavigate`, and mounted content is looked up again at the new URL. It lives in
-  its own entry so the main one never imports `$app/*`; other routers call `notifyNavigation()`
-  from their own after-navigation hook. `@sveltejs/kit` is an optional peer dependency from `^2.10.0`, the release that runs the `init` client hook, for the kit entries only. Proven against the shared contract double: a persistent
-  layout's miss is stored as a hint for page B, and nothing is stored for B without the call.
-
-- **Server messages: `serverMessage`, `renderServerMessage` and `resolveServerMessages`.** The
-  core's resolver and renderer are re-exported by reference. `serverMessage` is a store derived
-  from `t`, so `{$serverMessage(entry)}` renders an entry's translated template — or its `message`
-  when there is no translation — and re-renders on a catalog or locale change, as `$t` does. Runs
-  the core's shared `render` vectors, and a page given the entries as an Inertia-style prop. `resolveServerMessages` reads entries only where
-  it is told — a `key` or a `resolver` — beside the framework's own error body, which it never
-  replaces; `code` and `field` are the framework's own, passed through unchanged.
-
-- **The core's legacy-key mode and catalog snapshots work through this binding unchanged.**
-  `init({ legacyKeys })` reaches the core as the same array, and `LangsysApp.loadSnapshot()` is
-  forwarded to the core, so a snapshot loaded through the binding renders through `$t` on the
-  next line and an edited one is refused with the core's `SnapshotError`. Both are pinned by
-  tests that fail if the binding copies or intercepts either.
-
-- **Server renders release every store subscription they open**, measured: 50 renders of every
-  exported store and component leave nothing open on the core's process-wide signals (`tSignal`
-  100 opened / 100 released, `currentlyLoadedLocale` and `sTranslations` 50 / 50). A subscription
-  that is never released reads as 50 open, so the measurement can fail.
-
-- **A server render says why a block is served as source.** A block the build-time transform did
-  not read reaches the server only as a render function, which the core's block renderer cannot
-  take, so it is served as its source and translated after mount. The core reports that once per
-  process at debug level, with the reason `variable`, or `raw-html` for a block of `{@html}`
-  content. Nothing is reported in the browser.
-
-- **`_dev_/e2e/svelte-dom.mjs`: what Svelte does to the text it holds, in real Chromium.** Reactive
-  content inside translated blocks — a `<Phrase>` wrapping an expression, and an `<option>` in a
-  block with other text — keeps updating after translation, each beside an in-place control; this
-  fails against a core that replaced those nodes. And the hydration facts the server-rendered block
-  path relies on: static text is claimed as served, an expression's text is rewritten to the
-  client's value, and a state change reaches a node written in place but not one that was replaced.
-
-- **`createLangsysHandle` and `hydrateFromServer`: a request scope per SvelteKit request.** A new
-  entry, `langsys-js-svelte/kit/server`, exports `createLangsysHandle({ locale, catalog?, credentials?,
-match?, seed?, storage? })` for `hooks.server.ts`: it opens the core's request scope for each request,
-  renders the whole response inside it — `load`, its awaits, every component — writes the scope's
-  catalog into the page and closes the scope after the response, sending the request's missed
-  phrases then when the key may write. `langsys-js-svelte/kit` gains `hydrateFromServer()` for
-  `hooks.client.ts`, which puts that catalog in place before hydration, together with the blocks
-  and phrases the server collected, so the browser never sends those again. Inside a scope `$t`,
-  `$currentlyLoadedLocale` and `$sTranslations` all read the request's own locale and catalog.
-  Measured: 800 concurrent Italian and German renders that await before they read serve none in
-  the wrong locale (400 without a scope); a hydrated page keeps the served text; with a 3 s flush,
-  the page still arrives in about 50 ms and the phrase registers afterwards, and a read-only key
-  sends nothing. `credentials` gives a request its own project id and API key, for an app that
-  serves several projects from one server (SRV-2): the request's catalog, its render's requests and
-  its misses go out under them, never under another request's, and a request given none sends under
-  the ones `init()` set. The key is never written into the page. README-SSR documents the pattern.
-
-- **`<Translate custom_id>` carries its id in the served HTML.** When the app supplies the id, the
-  host is stamped with it from the first render, server included, under the core's own attribute.
-  A derived id still arrives when the core mounts in the browser.
-
-- **`contract-fixture/`**, the shared API double, vendored byte-exact, with
-  `_dev_/contract/verify-contract.mjs` driving the `/fixture` testbed against it.
-
-- **`_dev_/e2e/srv-concurrency.mjs` measures whether README-SSR's seed leaks between concurrent
-  visitors.** It renders `it-it` and `de-de` eight at a time on a fresh dev server and reads the
-  served bytes, through the documented component-body seed and through a positive control that seeds
-  in `load` and then awaits. Sibling bindings measured a process-global seed leaking under SSR; this
-  one does not in Svelte's default mode, because the server render is one synchronous pass — so the
-  placement of the seed, not the seed itself, is what decides it. The counts are in `CONFORMANCE.md`
-  under SRV-1 and SRV-2. The `experimental.async` shape stays unmeasured here: a component that awaits
-  needs that compiler flag, and enabling it would change the renderer for every other testbed route.
+- `serverMessage`, `renderServerMessage` and `resolveServerMessages`: show a framework's validation and system messages translated.
+- `getCountries()`, `getCurrencies()`, `getDialCodes()` and the locale lists are read once per display locale, from the API's current routes, and held.
+- `init({ apiUrl })` points the SDK at another API; `init({ legacyKeys })` keeps an app's existing i18n keys; `LangsysApp.loadSnapshot()` renders from a catalog snapshot.
+- `LangsysApp` forwards every member of the core, so its newer calls, such as `localeHeaders()`, `isConfigured()` and `seedCatalog()`, are there too.
+- New exports: `OVERRIDDEN_MEMBERS`, and the types `WriteGrant`, `WriteGrantSource`, `ApiCredentials`, `ServerMessage`, `ResolveServerMessagesOptions` and, from `/kit/server`, `LangsysHandleOptions`.
 
 ### Fixed
 
-- **A Date or a boolean in an ICU phrase printed as the formatter's parts.** In a plain argument of
-  a phrase holding an ICU argument (`{count, plural, …} since {date}`), `$t()` returned an array
-  that a page printed as `since ,Sun Oct 18 2026 …`, a Date that is a branch's whole output came
-  back as the Date itself, and `false` came back as nothing. With the core this release requires, a
-  Date is a medium date for the locale and a boolean `true` or `false`, as in a plain phrase, in
-  `$t()`, `<Translate>` and `<Phrase>` alike; a boolean still selects its branch.
-
-- **An element right after an apostrophe in a `<Phrase>` holding an ICU argument showed its
-  markup tokens.** `Type '<code>DELETE</code>' to remove {n, plural, …}` showed
-  `Type {m0o}DELETE{m0c} to remove 2 files`: ICU reads an apostrophe before `{` as a quote, and the
-  phrase holds the element as `{m0o}`…`{m0c}`. The element renders, as source and translated, and
-  the quoting apostrophes do not show; README says how ICU's quoting reads a phrase.
-
-- **README-SSR's example `load` chose a locale from `Accept-Language` or a cookie without saying
-  so.** A CDN in front of the site would cache the first visitor's language and serve it to the
-  next. The example takes the first candidate the project serves, the URL, then the cookie or
-  session value, then `Accept-Language`, else the base locale, and sends
-  `Vary: Cookie, Accept-Language` unless the URL decided. It asks `detectPreferredLocale` only when
-  the request sends the header: without one the helper reads the runtime's own languages, and Node
-  has a `navigator`, so a request with no header would get the server's language.
-
-- **`LangsysApp.t` was a different function on every read.** The proxy bound every function it
-  forwarded, including the `TFunction` the core's `t` getter returns — so `LangsysApp.t ===
-LangsysApp.t` was `false` while the core's own `t` was stable. That identity is the reactivity
-  contract: `Signal.set` drops an `Object.is`-equal value, so a fresh function per emit is the only
-  thing that tells a subscriber anything changed. Values reached through a getter now pass through
-  unbound; methods are still bound, so destructuring keeps working. Pinned against a fixture — with a
-  bind-everything proxy as the control that fails first — and against the core's own accessors;
-  removing the check reds 3.
-
-- **The `'server'` strategy's allow-list precondition was a trailing sentence.** In both `README.md`
-  and `README-SSR.md` it closed a callout about something else. It is now an `[!IMPORTANT]` callout
-  of its own in each, pinned by `src/docs.test.ts`, whose control rejects the old footnote shape.
-
-- **`apiUrl` was undocumented in this README.** `README.md` gains "Pointing the SDK at another API",
-  including why `LangsysAppAPI.setBaseUrl()` called after `init()` leaves the SDK inert. The testbed
-  had been using exactly that order-sensitive call; it now uses `apiUrl`.
-
-- **Three new or existing checks could not fail.** E2E TEST 5's shallow-routing check read the first
-  `.mono.muted` on the page — the layout's re-entry phrase, not the nav card — so both regexes matched
-  nothing and `undefined === undefined` passed; it is now scoped by text and has a premise. TEST 8's
-  "store re-read" row checked only the value after the swap, so a mutation that dropped the grant from
-  `init` passed it as `false -> false`; it now requires the flip at init as well. And a new
-  served-bytes assertion imported `CONTENT_BLOCK_MARKER_ATTR` from the core's main entry, where it is
-  `undefined`, so `not.toContain(undefined)` passed against any body. The unit run was green;
-  `svelte-check` caught it. It now imports from `langsys-js-typescript/pure`, with a control.
-
-- **`docs-api-coverage` was validating an eleven-day-old build.** It located the binding's surface by
-  parsing a class declaration that no longer exists, and `dist/` is gitignored — so the stale artifact
-  on disk still contained it and the gate reported success against a build nobody had produced from
-  the tree it ran on. It now resolves the surface through the exported **type**, and refuses a `dist`
-  older than the newest file in `src/lib`. Real count against a fresh build: 57.
-
-### Changed
-
-- **`_dev_/enumerate-core-surface.mjs`** — publishes the core-surface measurement rather than
-  leaving it as a one-off command. Prints the module path it actually imports plus that checkout's
-  branch and SHA (the shared clone has moved four times this ticket), carries a `--self-test`
-  positive control that hides a real member and proves the detector detects, and prints a
-  **PRIVATE-IN-DTS** column — the column that turns "13 dropped members" into "13 members
-  TypeScript erased, 0 public dropped".
-
-- **`LangsysApp` is now a Proxy over the core singleton rather than a hand-enumerated wrapper
-  class.** Only `init` and `setWriteGrant` are overridden — the two that adapt Svelte stores;
-  everything else forwards, bound to the core so destructuring keeps working and getters resolve
-  against the real instance.
-
-    The reason is forward-looking, and the fleet report that prompted it does not hold here. A
-    runtime prototype scan shows 33 core members against the old wrapper's 20, which reads as
-    thirteen dropped methods — five matching names other bindings reported missing. **All thirteen
-    are `private` in the core's `.d.ts`.** TypeScript's `private` is erased at runtime, so a
-    prototype scan surfaces implementation detail and cannot distinguish it from API. The old
-    wrapper exposed every public member; no public surface was ever unreachable.
-
-    What the change actually buys: a public member the core adds later is exposed automatically,
-    where the enumerated version would have omitted it silently with nothing failing. Pinned by
-    per-member assertions generated from the core prototype, an exactly-two override set, and an
-    unbound-forwarding check. Three distinct mutations, each naming the rows it fires:
-    - **Hide `init` from the exported `OVERRIDDEN_MEMBERS` list** while the override itself stays
-      active → **1 red**, the set-equality row. The name-based row still passes, correctly: `init`
-      really is still the override.
-    - **Delete the `init` override** so it falls through to the core → **2 reds**, set-equality
-      _and_ the name-based row, because `init` becomes a bound forward. The pair is the point —
-      the two rows fail on different mutations, so neither is redundant.
-    - **Hide a forwarded member (`getCountries`) behind the Proxy** → **1 red**, the generated
-      reachability row for that member.
-
-### Documentation
-
-- **Removed a placeholder test that was being counted as coverage.** `src/index.test.ts` asserted
-  `1 + 2 === 3` — scaffold from the project template, testing nothing about this package and
-  incapable of failing meaningfully, while contributing to the suite count quoted in docs.
-  `src/lib/surface.test.ts` now covers the package index by asserting which exports are the core's
-  own objects and which is deliberately wrapped.
-
-- **Discoverable content belongs in `+page`, not `+layout`.** Discovery records a miss per URL,
-  and a layout does not remount on a client-side navigation — measured at **+0 re-entries** across
-  a real navigation, with the layout provably not remounted. So a layout-level phrase is attributed
-  to the first URL of the session and no other. Nothing is lost (the phrase registers, the first URL
-  is reported), but discovery cannot tell you which _other_ pages contain it. A property of the
-  rendering model rather than of the SDK, and equally true of any persistent component.
-
-- **`<DontTranslate>`'s `data-ls-dont-translate` attribute is inert and now says so.** Exclusion is
-  decided entirely by `translate="no"` — the base SDK's `isTranslationExcluded()` checks that and
-  `data-notrans`, and does not know the bespoke attribute at all. Documented as presentational with
-  a deprecation note rather than removed: this line is published and a `[data-ls-dont-translate]`
-  selector may exist in consumer CSS, so removal belongs to a release wave with its own entry.
-
-### Fixed
-
-- **Locale canonicalization was documented backwards, in shipped source and in the README.**
-  `src/lib/index.ts` and `README.md` both said `canonicalizeLocale` produces `en-US`. It produces
-  **`en-us`** — `Intl.getCanonicalLocales()` followed by `.toLowerCase()`, on both the valid and
-  the invalid-tag branch. Lowercase is the wire form the SDK spec requires (WIRE-3) and the form
-  used internally for cache keys and equality, so a host store holding `en-US` resolves to the
-  same catalog entry rather than fetching twice.
-
-    Found by calling the function, not by re-reading either the doc or the code — the same way two
-    sibling SDKs found the identical defect in a test double and a docstring. Now pinned by
-    `src/lib/locale.test.ts`, which asserts against the **re-exported function**; a fixture that
-    restated the expected casing would have agreed with the wrong doc perfectly.
-
-    The 3.2.0 entry below still contains the old claim. It is left as released history rather than
-    rewritten — correcting a shipped section is the defect corrected earlier on this branch.
-
-- **`<Phrase>` hardcoded the core's marker attribute.** The host emitted the literal
-  `data-ls-phrase`. `Translate` skips a marked subtree via the core's `isPhraseMarked()`, which
-  reads the core's own constant — so a literal that drifted from it would have stopped the host
-  being skipped and split a markup-bearing run, silently, which is precisely what `<Phrase>`
-  exists to prevent. The attribute **name** now comes from the imported `PHRASE_MARKER_ATTR`.
-
-### Added
-
-- **Write-key gating and content discovery (838).** Public API keys are read-only. Whether a
-  session may register newly-discovered content is now decided **by the server, per session** —
-  the same key is write-enabled from an allow-listed address and read-only from everywhere else,
-  so nothing on the client can infer it. Three additions carry this:
-    - `writeEnabled` — a `Readable<boolean | undefined>`. The tri-state is load-bearing:
-      `undefined` means _not known yet_, and is what the store reports during SSR and throughout
-      hydration. Treating it as `false` tells a write-enabled session it is read-only, which it
-      cannot recover from without a reload. A one-shot read (`get(writeEnabled)`) is the live value
-      from the task after a component first renders the store, or after the first page mounts in
-      an app that calls `syncNavigation()` (the first page's `onMount` still reads `undefined`),
-      and stays `undefined` in an app with neither. The universal `load` that runs before
-      hydration reads `undefined`, as the server rendered it; one on a later navigation reads the
-      live value.
-    - `writeGrant` on `init()` — for authenticated apps, whose backend mints a short-lived JWT at
-      login that the SDK sends as `X-Write-Grant`. Accepts the base SDK's `string` or provider
-      function, **plus a Svelte store**, which is this binding's only addition to the surface.
-      The store is resolved per request and cached nowhere, so `grantStore.set(next)` takes effect
-      on the very next request — a token that expires while the app runs is the normal case, not
-      the exception.
-    - `setWriteGrant()` — for when the token only exists after `init()`. It re-authorizes, so the
-      server re-evaluates the session; `await` it if you need `writeEnabled` settled.
-
-    `writeEnabled` is deliberately the one store **not** re-exported by reference. Reading the base
-    signal during hydration is a mismatch hazard specific to SvelteKit: a universal `load` re-runs
-    on the client and is awaited _before_ mount, so `await LangsysApp.init()` in a load resolves
-    authorization before the first client render. The wrapper changes only _when_ the value is
-    observable, never what it is. Everything else (`t`, `currentlyLoadedLocale`, `sTranslations`)
-    is still the base signal itself, so no code in this package sits in the catalog-miss path.
-
-### Fixed (documentation)
-
-- **`ssrTokenStrategy: 'client'` does not queue on the server and flush from the client.** Both
-  `README.md` and `README-SSR.md` described behavior that cannot occur. Under SSR the server
-  instance declines to collect at all (`shouldQueueForWrite()` returns `false`), and the
-  post-hydration flush runs in the browser's module instance — a different object in a different
-  process, with no channel carrying a queue client-ward.
-
-    The consequence is worth stating plainly because it is invisible: **content that renders only
-    on the server is discovered by neither lane**, with no error, no failed request, and no hint,
-    since SSR does not hint. `'server'` covers those pages, and now carries its own precondition in
-    the same breath rather than as a footnote — the flush originates from the origin server's IP,
-    which must be allow-listed or every registration is silently refused.
+- A translated `<Phrase>`, and `<option>` text in a `<Translate>` block, kept showing their first value after Svelte updated them.
+- An `<option>` in a translated `<select>` did not follow a locale switch.
+- `<Translate>` destroyed the markup inside a single-token block, and an element whose only text was an attribute.
+- `<Translate>` re-rendered on a locale change but not on a new catalog.
+- `<Translate>` and `<Phrase>` waited forever when no catalog could arrive.
+- A locale switch during a catalog load showed the previous locale's catalog, and a failed catalog fetch was retried on every locale change.
+- An API outage set off a burst of registrations, and a write-enabled first visit re-registered phrases while its catalog loaded.
+- A translation that arrived while a block's registration was out was lost, and the block showed source text.
+- An ICU phrase showed its raw source when given no params, printed a Date argument as the formatter's parts, and printed `false` as nothing.
+- In a `<Phrase>` holding an ICU argument, an element right after an apostrophe showed its markup tokens (`{m0o}DELETE{m0c}`).
+- A phrase the message formatter could not render showed its raw ICU source; it now renders through the SDK's own branch selection, and says so in the console.
+- `%name%` in a stored translation was not filled in.
+- `$t()` rejected the gender argument Langsys asks for, and a phrase shaped like a 32-character hex id was not registered.
+- A stored block was matched to an older id of a different block.
+- `<style>`, `<script>`, `<noscript>` and `<math>` contents were registered as phrases and sent for translation.
+- README and README-SSR said the `'client'` strategy queues on the server and sends from the browser; content rendered only on the server is registered by neither, and they now say so.
+- README-SSR's example `load` let a CDN cache one visitor's language for the next, gave a request with no `Accept-Language` the server's own language, and did not type-check.
+- README described the locale matcher as matching the language only (it matches the script too), and numbers as always formatted (a plain ICU argument is written as given).
+- `<DontTranslate>`'s `data-ls-dont-translate` attribute is documented as presentational, and deprecated: `translate="no"` is what excludes.
 
 ---
 

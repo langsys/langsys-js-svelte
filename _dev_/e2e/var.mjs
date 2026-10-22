@@ -2,111 +2,55 @@
  * VAR — variables in registered text, through SvelteKit end to end.
  *
  * `/fixture/var` is compiled with the transform (VAR-6), `/fixture/var-plain` without it (VAR-7).
- * Both render under the package's `createLangsysHandle`, with the catalog the core fetches from
- * the contract double, and hydrate in Chromium against the same double.
+ * Both render under the package's `createLangsysHandle`, with the catalog the core fetches from an
+ * SDK test clone through the contract fixture's forwarder, and hydrate in Chromium against the
+ * same clone. Each request names its case's project and key in its query, and the server renders
+ * under them (`credentials`, SRV-2).
  *
- *     node _dev_/e2e/var.mjs --serve                                      # terminal 1: the double on :8787
- *     node _dev_/e2e/var.mjs --seed                                       # optional: seed it for a manual look, then exit
- *     SRV_API=http://127.0.0.1:8787/api SRV_KEY=k-write npm run dev       # terminal 2, fresh
- *     node _dev_/e2e/var.mjs
+ *     SRV_API=http://127.0.0.1:8787/api SRV_PROJECT=… SRV_KEY=… LANGSYS_FX_PORT=8787 npm run dev   # fresh
+ *     node _dev_/e2e/var.mjs                        # starts the forwarder on 8787 itself
  *
- * The double's state is what registered. Zeros are only meaningful beside the positive control:
- * the transformed block DOES register, in the same run, through the same double.
+ * Any case's key serves for `SRV_KEY`; `node _dev_/e2e/srv-flush.mjs --env write` prints one. Each
+ * case is a project of its own on the clone (`_dev_/contract/cases.mjs`, suite 2), and what
+ * registered is what the clone's catalog serves afterwards. The parts that read share their read
+ * cases; the browser parts that register share case 2.2 — the two users, the `{#await}` blocks and
+ * the route without the transform, whose zero is the difference its own visits make to that
+ * catalog. Zeros are only meaningful beside the positive control: the transformed block DOES
+ * register, in the same run, in the same project.
  */
-import { spawn } from 'node:child_process';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { generateCustomId } from 'langsys-js-typescript';
+import { caseOf } from '../contract/cases.mjs';
+import { startClone } from '../contract/clone.mjs';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const BASE = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173';
-const FX = 'http://127.0.0.1:8787/__fixture';
 
-if (process.argv.includes('--serve')) {
-    spawn(process.execPath, [join(ROOT, 'contract-fixture/server.mjs'), '--port', '8787'], { stdio: 'inherit' });
-} else {
-    const GREET = 'Hello {name}, welcome back';
-    const CART = 'You have {items_count} items';
-    const CLIENT_BLOCK = 'Shown in the browser to {name}';
-    const PLAIN_ANA = 'Hello Ana, welcome back'; // what the plain route's DOM reads
-    const cartBlock = generateCustomId('VAR', [CART, 'Add one']);
-    const PHOTO = 'Photo of {name}'; // a readable block inside a fallback block, its only text an attribute
-    const PICTURE = 'Picture of {name}'; // the same, naming no category: it takes the fallback block's
-    const BUILT = 'Built with'; // a unit's one token, beside an excluded element at the paragraph's edge
-    const SEED = {
-        projects: [
-            {
-                id: 'p1',
-                base_locale: 'en-us',
-                target_locales: ['it-it'],
-                phrases: [
-                    { category: 'VAR', phrase: GREET, translations: { 'it-it': 'Ciao {name}, bentornato' } },
-                    { category: 'VAR', phrase: PLAIN_ANA, translations: { 'it-it': 'Ciao Ana, bentornato' } },
-                    { category: 'VAR', phrase: PHOTO, translations: { 'it-it': 'Foto di {name}' } },
-                    { category: 'VAR', phrase: PICTURE, translations: { 'it-it': 'Immagine di {name}' } },
-                    { category: 'VAR2', phrase: PICTURE, translations: { 'it-it': 'Figura di {name}' } },
-                    { category: 'VAR', phrase: BUILT, translations: { 'it-it': 'Costruito con' } },
-                ],
-                blocks: [
-                    {
-                        category: 'VAR',
-                        custom_id: cartBlock,
-                        content: '<p>You have {items_count} items</p><button>Add one</button>',
-                        phrases: [
-                            { phrase: CART, translations: { 'it-it': '{items_count, plural, one {Hai # articolo} other {Hai # articoli}}' } },
-                            { phrase: 'Add one', translations: { 'it-it': 'Aggiungi' } },
-                        ],
-                    },
-                    {
-                        category: 'VAR',
-                        custom_id: generateCustomId('VAR', [PHOTO]),
-                        content: '<img alt="Photo of {name}">',
-                        phrases: [{ phrase: PHOTO, translations: { 'it-it': 'Foto di {name}' } }],
-                    },
-                    ...[
-                        ['VAR', 'Immagine di {name}'],
-                        ['VAR2', 'Figura di {name}'],
-                    ].map(([category, translation]) => ({
-                        category,
-                        custom_id: generateCustomId(category, [PICTURE]),
-                        content: '<img alt="Picture of {name}">',
-                        phrases: [{ phrase: PICTURE, translations: { 'it-it': translation } }],
-                    })),
-                ],
-            },
-        ],
-        keys: [
-            { key: 'k-write', project: 'p1', type: 'write' },
-            { key: 'k-read', project: 'p1', type: 'read' },
-        ],
-    };
+const GREET = 'Hello {name}, welcome back';
+const CART = 'You have {items_count} items';
+const CLIENT_ONLY = 'Rendered in the browser for {name}';
+const CLIENT_BLOCK = 'Shown in the browser to {name}';
+const cartBlock = generateCustomId('VAR', [CART, 'Add one']);
 
-    const results = [];
-    const check = (c, n, d) => results.push({ ok: !!c, n, d });
-    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-    const seed = (doc) => fetch(`${FX}/seed`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(doc) });
-    const state = async () => (await (await fetch(`${FX}/state`)).json()).projects.p1;
-    /** Every registered text: phrases, and each block's phrases. */
-    const registered = async () => {
-        const p = await state();
-        return [...p.phrases.map((x) => x.phrase), ...p.blocks.flatMap((b) => b.phrases.map((x) => x.phrase))];
-    };
-    const text = (html, id) => (html.match(new RegExp(`id="${id}"[^>]*>([^]*?)</`)) ?? [])[1]?.replace(/<!--[^]*?-->/g, '').replace(/<[^>]+>/g, '');
+const results = [];
+const check = (c, n, d) => results.push({ ok: !!c, n, d });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const text = (html, id) => (html.match(new RegExp(`id="${id}"[^>]*>([^]*?)</`)) ?? [])[1]?.replace(/<!--[^]*?-->/g, '').replace(/<[^>]+>/g, '');
 
-    if (process.argv.includes('--seed')) {
-        // For looking by hand (_dev_/LOCAL-TESTING.md): the catalog this harness runs against, nothing else.
-        await seed(SEED);
-        console.log('seeded: project p1 (en-us → it-it), keys k-write and k-read, the VAR phrases and blocks');
-        process.exit(0);
-    }
+const fx = await startClone();
+const C = Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map((n) => [n, caseOf(2, n)]));
+/** The query naming a case's project and one of its keys. */
+const as = (c, key) => `project=${c.projects.app.id}&key=${c.keys[key].key}`;
+/** Every registered text in a case's project: its phrases, and each block's phrases. */
+const registered = async (c, key) => {
+    const held = await fx.held(c.keys[key].key, c.projects.app.id, 'it-it');
+    return [...held.phrases, ...Object.values(held.blocks).flat()];
+};
 
-    await seed(SEED);
-
-    // --- Served bytes (SRV-1, MARK-1 on the tree path) ---------------------------------------
-    const res = await fetch(`${BASE}/fixture/var?locale=it-it&user=Ana&n=1&key=k-write`);
+// --- Served bytes (SRV-1, MARK-1 on the tree path) ---------------------------------------
+{
+    const res = await fetch(`${BASE}/fixture/var?locale=it-it&user=Ana&n=1&${as(C[1], 'read')}`);
     const html = await res.text();
-    check(res.headers.get('x-srv-init') === 'ok:k-write', 'premise: the server initialised against the double', res.headers.get('x-srv-init'));
+    check(res.headers.get('x-srv-init')?.startsWith('ok:'), 'premise: the server initialised against the clone', res.headers.get('x-srv-init'));
     check(text(html, 'greet') === 'Ciao Ana, bentornato', 'served: the block is translated, with the value in place', text(html, 'greet'));
     const greetId = generateCustomId('VAR', [GREET]);
     check(
@@ -117,47 +61,53 @@ if (process.argv.includes('--serve')) {
     check(text(html, 'cart') === 'Hai 1 articolo', 'served: the ICU plural the catalog holds, for 1', text(html, 'cart'));
     const photoAlt = (html.match(/id="photo"[^>]*alt="([^"]*)"|alt="([^"]*)"[^>]*id="photo"/) ?? []).slice(1).find(Boolean);
     check(photoAlt === 'Foto di Ana', 'premise: a readable block inside a fallback block is served translated', photoAlt);
-    const five = await (await fetch(`${BASE}/fixture/var?locale=it-it&user=Ana&n=5&key=k-write`)).text();
+    const five = await (await fetch(`${BASE}/fixture/var?locale=it-it&user=Ana&n=5&${as(C[1], 'read')}`)).text();
     check(text(five, 'cart') === 'Hai 5 articoli', 'served: … and for 5', text(five, 'cart'));
     check(text(html, 'built') === 'Costruito con Kangen', "TOK-1: served, a unit's one token keeps its space beside an excluded element", text(html, 'built'));
     // The page, not the hydration seed: the seed carries the catalog's source keys by design.
     const page = html.replace(/<script[^]*?<\/script>/g, '');
     check(!/Hello Ana/.test(page) && !/You have/.test(page), 'served: no source text left in the transformed blocks');
+}
 
-    // --- Two users register one phrase (VAR-1, VAR-6) -----------------------------------------
-    const RUN = `r${Date.now() % 1_000_000}`;
-    await seed({ ...SEED, projects: [{ ...SEED.projects[0], phrases: [], blocks: [] }] });
-    // SRV-3 on the tree path: a server render alone, no browser, registers the placeholder phrase
-    // after the response, through the request scope.
-    await fetch(`${BASE}/fixture/var?user=Zoe&key=k-write&run=${RUN}`).then((r) => r.text());
+const RUN = `r${Date.now() % 1_000_000}`;
+
+// --- SRV-3 on the tree path: a server render alone, no browser, registers the placeholder phrase
+// after the response, through the request scope. Its page is kept for the hydration check below.
+const serverOnlyUrl = `${BASE}/fixture/var?user=Zoe&${as(C[3], 'write')}&run=${RUN}`;
+const servedByScope = await (await fetch(serverOnlyUrl)).text();
+{
     let serverOnly = [];
     for (let i = 0; i < 10 && !serverOnly.includes(GREET); i++) {
         await sleep(1000);
-        serverOnly = await registered();
+        serverOnly = await registered(C[3], 'write');
     }
     check(
         serverOnly.includes(GREET) && !serverOnly.some((p) => /Zoe/.test(p)),
         'SRV-3: a server render registers the placeholder phrase after the response',
         JSON.stringify(serverOnly)
     );
+}
 
-    const browser = await chromium.launch();
-    const notices = [];
-    // ICU-5: the capability header on every catalog request the browser makes through the binding.
-    const catalogHeaders = [];
-    const visit = async (path) => {
-        const page = await browser.newPage();
-        page.on('console', (m) => notices.push(m.text()));
-        page.on('request', (r) => {
-            if (r.method() === 'GET' && /\/api\/translations(\/data)?(\?|$)/.test(r.url()))
-                catalogHeaders.push(r.allHeaders().then((h) => h['x-langsys-capabilities'] ?? ''));
-        });
-        await page.goto(`${BASE}${path}`);
-        await page.waitForFunction(() => document.querySelector('[data-testid=fx-status]')?.textContent === 'ready', null, { timeout: 60_000 });
-        return page;
-    };
-    const ana = await visit(`/fixture/var?user=Ana&key=k-write&run=${RUN}`);
-    await visit(`/fixture/var?user=Luis&key=k-write&run=${RUN}`);
+const browser = await chromium.launch();
+const notices = [];
+// ICU-5: the capability header on every catalog request the browser makes through the binding.
+const catalogHeaders = [];
+const visit = async (path) => {
+    const page = await browser.newPage();
+    page.on('console', (m) => notices.push(m.text()));
+    page.on('request', (r) => {
+        if (r.method() === 'GET' && /\/api\/translations(\/data)?(\?|$)/.test(r.url()))
+            catalogHeaders.push(r.allHeaders().then((h) => h['x-langsys-capabilities'] ?? ''));
+    });
+    await page.goto(`${BASE}${path}`);
+    await page.waitForFunction(() => document.querySelector('[data-testid=fx-status]')?.textContent === 'ready', null, { timeout: 60_000 });
+    return page;
+};
+
+// --- Two users register one phrase (VAR-1, VAR-6) -----------------------------------------
+{
+    const ana = await visit(`/fixture/var?user=Ana&${as(C[2], 'write')}&run=${RUN}`);
+    await visit(`/fixture/var?user=Luis&${as(C[2], 'write')}&run=${RUN}`);
     check((await ana.textContent('#greet')) === 'Hello Ana, welcome back', 'browser: the value renders in the base locale', await ana.textContent('#greet'));
     check(
         (await ana.textContent('#built')) === 'Built with Kangen',
@@ -177,96 +127,139 @@ if (process.argv.includes('--serve')) {
     let got = [];
     for (let i = 0; i < 20 && !got.includes(GREET); i++) {
         await sleep(3000);
-        got = await registered();
+        got = await registered(C[2], 'write');
     }
     check(got.filter((p) => p === GREET).length === 1, 'VAR-6: two users register the one placeholder phrase', JSON.stringify(got));
     check(got.includes(CART), 'VAR-2: the count registers under its derived name', JSON.stringify(got));
     check(!got.some((p) => /Ana|Luis/.test(p)), 'VAR-1: no per-user phrase is registered', JSON.stringify(got));
     // The content a block registers with: the count's block from the server's flush, and a block
     // only the browser renders, mounted before init() has answered. Each marked value is its {NAME}
-    // as text, the marker removed (VAR-3).
+    // as text, the marker removed (VAR-3). Read as the project's owner reads a block.
     let stored = [];
-    const contentOf = (phrase) => stored.find((b) => b.phrases.some((p) => p.phrase === phrase))?.content ?? '';
+    let held = { blocks: {} };
+    const contentOf = (phrase) => stored.find((b) => held.blocks[b.custom_id]?.includes(phrase))?.content ?? '';
     const holds = (phrase) => contentOf(phrase) !== '';
     for (let i = 0; i < 10 && !(holds(CART) && holds(CLIENT_BLOCK)); i++) {
         if (i) await sleep(1000);
-        stored = (await state()).blocks;
+        held = await fx.held(C[2].keys.write.key, C[2].projects.app.id, 'it-it');
+        stored = await fx.storedBlocks(C[2].projects.app, C[2].keys.write.key, 'it-it');
     }
     const contents = stored.map((b) => b.content ?? '');
     check(holds(CART) && holds(CLIENT_BLOCK), 'premise: both blocks registered content, from the server and from the browser', JSON.stringify(contents));
     check(
         contentOf(CART).includes('You have {items_count} items') &&
             contentOf(CLIENT_BLOCK).includes('Shown in the browser to {name}') &&
-            !contents.some((c) => /Ana|Luis|Zoe|<!--ls:/.test(c)),
+            !contents.some((c) => /Ana|Luis|<!--ls:/.test(c)),
         "VAR-1, VAR-3: a block's registered content holds each value as its placeholder, the marker removed",
         JSON.stringify(contents)
+    );
+    check(
+        stored.some((b) => b.custom_id === cartBlock),
+        "premise: the count's block is stored under the id derived from its phrases",
+        JSON.stringify(stored.map((b) => b.custom_id))
     );
     check(!got.some((p) => /^Item\b/.test(p)), 'VAR-7: the {#each} block (a fallback) registers nothing', JSON.stringify(got));
     // VAR-7's carve-out: raw HTML is content. The {@html}-only block registers its text; the block
     // that also interpolates a variable registers nothing.
     for (let i = 0; i < 10 && !got.includes('From the CMS, section one'); i++) {
         await sleep(3000);
-        got = await registered();
+        got = await registered(C[2], 'write');
     }
     check(got.includes('From the CMS, section one'), 'VAR-7: a block whose only dynamic part is {@html} registers its HTML as content', JSON.stringify(got));
     check(!got.some((p) => /Mixed CMS text|^Hi\b/.test(p)), 'VAR-7: a block mixing {@html} with a variable registers nothing', JSON.stringify(got));
+}
 
-    // --- The client does not resend what the server collected (SRV-3, SRV-4) ---------------
-    // The server renders, collects its misses and sends them after the response, and its seed marks
-    // them collected. The double is then emptied, and the browser hydrates the SAME served HTML (no
-    // second server render): a phrase the server collected must not come back from the client.
-    // Control: a block rendered only in the browser registers through the same client.
-    {
-        const CLIENT_ONLY = 'Rendered in the browser for {name}';
-        await seed({ ...SEED, projects: [{ ...SEED.projects[0], phrases: [], blocks: [] }] });
-        const url = `${BASE}/fixture/var?user=Ana&key=k-write&run=${RUN}-seed`;
-        const served = await (await fetch(url)).text();
-        let collected = [];
-        for (let i = 0; i < 10 && !collected.includes(GREET); i++) {
-            await sleep(1000);
-            collected = await registered();
+// --- The client does not resend what the server collected (SRV-3, SRV-4) ---------------
+// A clause that something is never sent, read at the browser's transport seam. The page is the one
+// the server rendered above, under a write key: its scope sent the phrases it missed after the
+// response and its seed marks them collected. The browser hydrates those same served bytes (no
+// second server render) with every API request answered inside the browser and recorded, for a
+// write-enabled session whose registrations are all accepted: a phrase the server collected must
+// not be sent again. Control: a block rendered only in the browser is sent through the same client.
+{
+    const ctx = await browser.newContext();
+    const sent = [];
+    await ctx.route(
+        (url) => url.pathname.startsWith('/__fx/api/'),
+        (route) => {
+            const req = route.request();
+            const path = new URL(req.url()).pathname.slice('/__fx/api'.length);
+            if (req.method() === 'POST') sent.push(req.postData() ?? '');
+            // The API's answers for a write key, in its shapes, as `_dev_/e2e/seam.mjs` gives them.
+            const project = {
+                id: C[3].projects.app.id,
+                title: 'Seam',
+                base_locale: 'en-us',
+                target_locales: ['it-it'],
+                default_locales: { it: 'it-it' },
+                key_type: 'write',
+                write_enabled: true,
+                auto_discovery: false,
+                discovery_base_locale_only: false,
+                langsys_settings: { translatable_items: { batch_limit: 200 } },
+            };
+            const body =
+                req.method() === 'GET' && /^\/authorize-project\/[^/]+$/.test(path)
+                    ? { status: true, data: project }
+                    : req.method() === 'POST' && path === '/translatable-items'
+                      ? { status: true, data: { human_translations_saved: 0, human_translations_skipped: 0 } }
+                      : {
+                            status: true,
+                            words: 0,
+                            untranslated_words: 0,
+                            untranslatedWords: 0,
+                            write_enabled: true,
+                            discovery_base_locale_only: false,
+                            data: [],
+                        };
+            return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
         }
-        check(collected.includes(GREET), 'premise: the server collected and sent the placeholder phrase', JSON.stringify(collected));
-        await seed({ ...SEED, projects: [{ ...SEED.projects[0], phrases: [], blocks: [] }] });
-        const page = await browser.newPage();
-        await page.route(url, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: served }));
-        await page.goto(url);
-        await page.waitForFunction(() => document.querySelector('[data-testid=fx-status]')?.textContent === 'ready', null, { timeout: 60_000 });
-        let after = [];
-        for (let i = 0; i < 20 && !after.includes(CLIENT_ONLY); i++) {
-            await sleep(3000);
-            after = await registered();
-        }
-        check(after.includes(CLIENT_ONLY), 'control: the hydrated client registers a block only it rendered', JSON.stringify(after));
-        const resent = collected.filter((p) => after.includes(p));
-        check(
-            collected.includes(GREET) && resent.length === 0,
-            'the hydrated client resends nothing the server collected',
-            `collected ${JSON.stringify(collected)}; resent ${JSON.stringify(resent)}`
-        );
-        await page.close();
-    }
+    );
+    const page = await ctx.newPage();
+    await page.route(serverOnlyUrl, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: servedByScope }));
+    await page.goto(serverOnlyUrl);
+    await page.waitForFunction(() => document.querySelector('[data-testid=fx-status]')?.textContent === 'ready', null, { timeout: 60_000 });
+    for (let i = 0; i < 30 && !sent.join('\n').includes(CLIENT_ONLY); i++) await sleep(500);
+    await sleep(3000); // past another debounce, for anything after it
+    const all = sent.join('\n');
+    const seed = JSON.parse(servedByScope.match(/window\.__LANGSYS_SEED__=(\{[^]*?\})<\/script>/)?.[1] ?? '{}');
+    // What the server's scope sends itself: the blocks it rendered and the `t()` misses, each
+    // marked `collected` in the seed.
+    const collected = [
+        ...Object.values(seed.blocks ?? {})
+            .filter((b) => b.collected)
+            .flatMap((b) => b.tokens),
+        ...(seed.phrases ?? []).filter((p) => p.collected).map((p) => p.phrase),
+    ];
+    check(
+        collected.includes(GREET) && collected.includes('Layout phrase 0'),
+        'premise: the served seed marks collected the placeholder phrase and the layout’s t() miss',
+        JSON.stringify(collected)
+    );
+    check(all.includes(CLIENT_ONLY), 'control: the hydrated client sends a block only it rendered', CLIENT_ONLY);
+    const resent = [...new Set(collected)].filter((t) => all.includes(JSON.stringify(t)));
+    check(resent.length === 0, 'SRV-4: the hydrated client resends nothing the server collected', JSON.stringify(resent));
+    await ctx.close();
+}
 
-    // --- Without the transform (VAR-7) --------------------------------------------------------
-    // The {#await} block is a fallback: a placeholder never keys or registers anything, whether it
-    // resolves inside the core's settle window or after it.
-    for (const ms of [100, 2000]) {
-        const page = await visit(`/fixture/var?user=Await${ms}&key=k-write&await=${ms}&run=${RUN}`);
-        await page
-            .waitForFunction(() => document.querySelector('#awaiting')?.textContent === 'Loaded after a moment', null, { timeout: 15_000 })
-            .catch(() => {});
-        check(
-            (await page.textContent('#awaiting')) === 'Loaded after a moment',
-            `{#await} resolving after ${ms} ms renders the content`,
-            await page.textContent('#awaiting')
-        );
-    }
-
-    const before = await registered();
-    const plain = await visit(`/fixture/var-plain?user=Ana&key=k-write&debug=1&run=${RUN}`);
-    await visit(`/fixture/var-plain?user=Luis&key=k-write&debug=1&run=${RUN}`);
+// --- Without the transform (VAR-7) --------------------------------------------------------
+// The {#await} block is a fallback: a placeholder never keys or registers anything, whether it
+// resolves inside the core's settle window or after it.
+for (const ms of [100, 2000]) {
+    const page = await visit(`/fixture/var?user=Await${ms}&${as(C[2], 'write')}&await=${ms}&run=${RUN}`);
+    await page.waitForFunction(() => document.querySelector('#awaiting')?.textContent === 'Loaded after a moment', null, { timeout: 15_000 }).catch(() => {});
+    check(
+        (await page.textContent('#awaiting')) === 'Loaded after a moment',
+        `{#await} resolving after ${ms} ms renders the content`,
+        await page.textContent('#awaiting')
+    );
+}
+{
+    const before = await registered(C[2], 'write');
+    const plain = await visit(`/fixture/var-plain?user=Ana&${as(C[2], 'write')}&debug=1&run=${RUN}`);
+    await visit(`/fixture/var-plain?user=Luis&${as(C[2], 'write')}&debug=1&run=${RUN}`);
     await sleep(35_000); // past the client's 5–30 s flush jitter
-    const after = await registered();
+    const after = await registered(C[2], 'write');
     const added = after.filter((p) => !before.includes(p));
     check(
         !after.some((p) => /Loading|Loaded after/.test(p)),
@@ -283,9 +276,11 @@ if (process.argv.includes('--serve')) {
         notices.filter((n) => /transform/.test(n)).join(' | ')
     );
     await plain.close();
+}
 
-    await seed(SEED);
-    const it = await visit(`/fixture/var-plain?user=Ana&key=k-write&locale=it-it`);
+// --- Rendered from the catalog (TOK-1, MARK-4, VAR-7) --------------------------------------
+{
+    const it = await visit(`/fixture/var-plain?user=Ana&${as(C[4], 'read')}&locale=it-it`);
     await it.waitForFunction(() => document.querySelector('#greet')?.textContent === 'Ciao Ana, bentornato', null, { timeout: 15_000 }).catch(() => {});
     check(
         (await it.textContent('#greet')) === 'Ciao Ana, bentornato',
@@ -300,7 +295,7 @@ if (process.argv.includes('--serve')) {
     );
 
     // The binding renders the nested block itself; the fallback around it must leave it alone.
-    const nested = await visit(`/fixture/var?user=Ana&key=k-write&locale=it-it&run=${RUN}-nested`);
+    const nested = await visit(`/fixture/var?user=Ana&${as(C[4], 'read')}&locale=it-it&run=${RUN}-nested`);
     await sleep(1500);
     check(
         (await nested.getAttribute('#photo', 'alt')) === 'Foto di Ana',
@@ -313,7 +308,7 @@ if (process.argv.includes('--serve')) {
         await nested.textContent('#built')
     );
     // The same unit rendered by the client alone, switched from the base locale.
-    const built = await visit(`/fixture/var?user=Ana&key=k-read&run=${RUN}-built`);
+    const built = await visit(`/fixture/var?user=Ana&${as(C[4], 'read')}&run=${RUN}-built`);
     await built.evaluate(() => window.__fxSetLocale('it-it'));
     await built.waitForFunction(() => document.querySelector('#built')?.textContent?.startsWith('Costruito'), null, { timeout: 15_000 }).catch(() => {});
     check(
@@ -322,9 +317,11 @@ if (process.argv.includes('--serve')) {
         await built.textContent('#built')
     );
     await built.close();
+}
 
-    // VAR-6 in the browser: a block read on its own inside a fallback block takes the category the
-    // block renders with. A client that read no category would render it as a miss, in English.
+// --- VAR-6 in the browser: a block read on its own inside a fallback block takes the category the
+// block renders with. A client that read no category would render it as a miss, in English.
+{
     const picture = async (path) => {
         const p = await visit(path);
         const alt = () => p.getAttribute('#picture', 'alt');
@@ -332,7 +329,7 @@ if (process.argv.includes('--serve')) {
             p.waitForFunction((v) => document.querySelector('#picture')?.getAttribute('alt') === v, value, { timeout: 15_000 }).catch(() => {});
         return { p, alt, until };
     };
-    const served = await picture(`/fixture/var/category?user=Ana&key=k-write&locale=it-it`);
+    const served = await picture(`/fixture/var/category?user=Ana&${as(C[5], 'read')}&locale=it-it`);
     await served.until('Immagine di Ana');
     await sleep(1500);
     check(
@@ -343,9 +340,11 @@ if (process.argv.includes('--serve')) {
     // The same page in the base locale, switched to Italian in the browser: rendered by the client
     // alone. A read-only session, and a write session, whose registration of what it showed in the
     // base locale answers around the switch and must not undo the catalog it switched to.
-    for (const key of ['k-read', 'k-write']) {
-        await seed(SEED);
-        const client = await picture(`/fixture/var/category?user=Ana&key=${key}`);
+    for (const [c, key] of [
+        [C[6], 'read'],
+        [C[7], 'write'],
+    ]) {
+        const client = await picture(`/fixture/var/category?user=Ana&${as(c, key)}`);
         await client.p.evaluate(() => window.__fxSetLocale('it-it'));
         await client.until('Immagine di Ana');
         check(
@@ -359,16 +358,17 @@ if (process.argv.includes('--serve')) {
         check((await client.alt()) === 'Figura di Ana', `VAR-6 (${key}): … and follows the block's category when it changes`, await client.alt());
         await client.p.close();
     }
-    const capabilities = await Promise.all(catalogHeaders);
-    check(
-        capabilities.length >= 1 && capabilities.every((h) => h === 'icu'),
-        'ICU-5: every catalog request the browser makes carries X-Langsys-Capabilities: icu',
-        JSON.stringify(capabilities)
-    );
-
-    await browser.close();
-    for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.n}${r.ok || r.d === undefined ? '' : `\n      ${r.d}`}`);
-    const failed = results.filter((r) => !r.ok).length;
-    console.log(`\n${results.length - failed}/${results.length} passed`);
-    process.exit(failed ? 1 : 0);
 }
+const capabilities = await Promise.all(catalogHeaders);
+check(
+    capabilities.length >= 1 && capabilities.every((h) => h === 'icu'),
+    'ICU-5: every catalog request the browser makes carries X-Langsys-Capabilities: icu',
+    JSON.stringify(capabilities)
+);
+
+await browser.close();
+await fx.stop();
+for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.n}${r.ok || r.d === undefined ? '' : `\n      ${r.d}`}`);
+const failed = results.filter((r) => !r.ok).length;
+console.log(`\n${results.length - failed}/${results.length} passed`);
+process.exit(failed ? 1 : 0);

@@ -1,7 +1,8 @@
 <script lang="ts">
     /**
-     * Contract-fixture testbed: the SDK talks to `contract-fixture/server.mjs` (through the
-     * dev server's `/__fx` proxy), never to a real API. Driven by `_dev_/contract/verify-contract.mjs`.
+     * Contract-fixture testbed: the SDK talks to `contract-fixture/forwarder.mjs`, in front of an
+     * SDK test clone, through the dev server's `/__fx` proxy. Each page names its case's project and
+     * key in its query. Driven by `_dev_/contract/verify-contract.mjs` and the `_dev_/e2e` harnesses.
      *
      * The layout is the persistent shape HINT-13 is about: it stays mounted across the
      * client-side navigation from `/fixture/a` to `/fixture/b`, and it renders a phrase.
@@ -21,6 +22,7 @@
 
     // Read once: the layout outlives every navigation, and the SDK is initialised once.
     const params = page.url.searchParams;
+    const project = params.get('project') ?? 'p1';
     const key = params.get('key') ?? 'k-public';
     const testCase = params.get('case') ?? '0';
     const userLocale = writable(params.get('locale') ?? 'en-us');
@@ -32,7 +34,7 @@
         // For `_dev_/e2e/locale-race.mjs`: switch the user's locale as an app's picker would.
         (window as unknown as { __fxSetLocale: (locale: string) => void }).__fxSetLocale = (locale) => userLocale.set(locale);
         const res = await LangsysApp.init({
-            projectid: 'p1',
+            projectid: project,
             key,
             UserLocaleStore: userLocale,
             baseLocale: 'en-us',

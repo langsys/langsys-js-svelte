@@ -1,0 +1,15 @@
+{
+    "projects": [
+        {
+            "id": "76000701-0000-4000-8000-000000000001",
+            "title": "reference-reads 1 app",
+            "base_locale": "en-us",
+            "target_locales": ["fr-fr"],
+            "locale_code_format": "lowercase-hyphen",
+            "phrases": [],
+            "blocks": [],
+            "user": { "token": "117011|svelte-token-117011", "device_id": "svelte-device-117011" }
+        }
+    ],
+    "keys": [{ "id": "76000701-0000-4000-8000-100000000001", "key": "svelte-07-01-read", "project": "76000701-0000-4000-8000-000000000001", "type": "read" }]
+}

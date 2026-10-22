@@ -124,10 +124,16 @@ to erode:
   `node _dev_/conformance-summary.mjs --check` reads the ids out of the cited blob. Re-derive the
   blob with `git ls-tree` on every write — never carry it. `CONFORMANCE.md` is in
   `.prettierignore` on purpose: Prettier pads every row to the widest evidence cell.
-- **Contract evidence is `contract-fixture/`**, vendored byte-exact from langsys-js-typescript and
-  cited by tree id; never edit or reformat it. `_dev_/contract/verify-contract.mjs` drives the
-  `/fixture` testbed against it through the dev server's `/__fx` proxy (the double sends no CORS
-  headers). Mutations run in a copy of the tree on another port, after that copy passes unmutated.
+- **Contract evidence is an SDK test clone** (CONF-2), a real Langsys API seeded before each run
+  from `_dev_/contract/seeds/`, reached through `contract-fixture/forwarder.mjs`, vendored
+  byte-exact from langsys-js-typescript and cited by tree id; never edit or reformat it. Each case
+  has projects of its own (`_dev_/contract/cases.mjs`; `make-seeds.mjs --check` after any change),
+  and reads what the API accepted back through its routes. The `/fixture` testbed reaches the
+  forwarder through the dev server's `/__fx` proxy (it sends no CORS headers). A run reseeds the
+  clone for every SDK, so it goes under `test-suite-lock run -- …`. A clause that something is
+  never sent is read at the transport seam (`_dev_/e2e/seam.mjs`). Mutations run in a copy of the
+  tree on another port, after that copy passes unmutated, each on cases fresh from a reseed: mutants
+  on cases of their own share one.
 - **Delegated rows cite the core row's grade**, and `delegation-probe.mjs --check` compares it with
   the resolved core checkout's CONFORMANCE.md. Verify against a clean build of the core SHA you
   cite, not the shared checkout, which may carry another lane's uncommitted work.
@@ -166,7 +172,7 @@ Releases are CI-driven via npm **trusted publishing** (OIDC). There is no long-l
 
 The flow:
 
-1. **Local:** `npm run release` (alias for `./_dev_/publish.sh`) — prompts for the new version, bumps `package.json`, amends the last commit with the version bump, force-pushes `main`, creates a tag `vX.Y.Z`, creates a GitHub Release. **It does not publish to npm.**
+1. **Local:** `npm run release` (alias for `./_dev_/publish.sh`) — prompts for the new version, bumps `package.json`, stamps the date into the CHANGELOG heading `## X.Y.Z - unreleased`, amends the last commit with the version bump, force-pushes `main`, creates a tag `vX.Y.Z`, creates a GitHub Release whose body is that version's CHANGELOG section, the install line and the compare link. Before changing anything it refuses a version with no such section, or one over GitHub's 125,000-character limit; `bash _dev_/publish.sh --notes` prints the body without releasing. **It does not publish to npm.**
 2. **CI:** the `release: published` event triggers `.github/workflows/publish.yml`, which runs `npm ci` → `npm run check` → `npm test` → `npm run package` → `npm publish --provenance`. Publishing happens inside the `npm-publish` GitHub Environment so only tag-ref runs can mint the OIDC token.
 3. **PR/push gate:** `.github/workflows/ci.yml` runs `check` + `test` on every PR and every push to `main`, independent of the release flow.
 

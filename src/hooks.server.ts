@@ -20,14 +20,15 @@ const isVarRoute = (url: URL) => url.pathname === '/fixture/var' || url.pathname
 
 /**
  * For the post-response flush (SRV-3) the SDK needs a key and a write lane, so a run that tests
- * it starts the dev server with `SRV_API` (the contract double) and `SRV_KEY`. The server-side
- * `init()` happens once per process, as a real app's would.
+ * it starts the dev server with `SRV_API` (the contract fixture's forwarder, in front of an SDK
+ * test clone), `SRV_PROJECT` and `SRV_KEY`. The server-side `init()` happens once per process, as a
+ * real app's would.
  */
 let serverInit: Promise<{ status?: boolean }> | undefined;
 function initOnce(): Promise<{ status?: boolean }> | undefined {
     if (!env.SRV_API) return undefined;
     serverInit ??= LangsysApp.init({
-        projectid: 'p1',
+        projectid: env.SRV_PROJECT ?? 'p1',
         key: env.SRV_KEY ?? '',
         UserLocaleStore: writable('en-us'),
         baseLocale: 'en-us',
@@ -46,9 +47,17 @@ const packageHandle = createLangsysHandle(options);
 // `?noseed=1`: the same handle without the seed — the control for the hydration hand-off (SRV-4).
 const packageHandleNoSeed = createLangsysHandle({ ...options, seed: false });
 
+// A VAR request names its own project and key in its query, as the page's client does (SRV-2):
+// each contract case has a project of its own on the clone. `server_key` renders under another key
+// of that project than the browser's.
 const varHandle = createLangsysHandle({
     match: (event) => isVarRoute(event.url),
     locale: (event) => event.url.searchParams.get('locale') ?? 'en-us',
+    credentials: (event) => {
+        const projectid = event.url.searchParams.get('project');
+        const key = event.url.searchParams.get('server_key') ?? event.url.searchParams.get('key');
+        return projectid && key ? { projectid, key } : undefined;
+    },
 });
 
 const seamName = env.SRV_SEAM ?? 'core';
