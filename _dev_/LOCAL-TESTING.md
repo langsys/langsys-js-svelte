@@ -6,25 +6,33 @@ re-running it_, and the harness details are in [`e2e/README.md`](./e2e/README.md
 
 You need Node 18+ and Chromium for the harnesses (`npx playwright install chromium`, once).
 
-## 1. Link the core this branch needs
+## 1. Install the core this branch needs
 
 This branch uses core API that is not on npm yet: the published `langsys-js-typescript@0.6.5`
 predates it, so a plain `npm install` gives you a core that cannot run this code. Build the core
-at the SHA in `CONFORMANCE.md`'s **Core under test** row and link it in place:
+at the SHA in `CONFORMANCE.md`'s **Core under test** row, pack it, and install the tarball:
 
 ```bash
-CORE_SHA=48910e8205e3f5e67a8b529801cd830860bde545     # the "Core under test" row
-git -C ../langsys-js-typescript fetch origin
-git -C ../langsys-js-typescript worktree add --detach /tmp/langsys-core $CORE_SHA
-(cd /tmp/langsys-core && npm ci && npm run build)
-
-rm -rf node_modules/langsys-js-typescript
-ln -s /tmp/langsys-core node_modules/langsys-js-typescript
+CORE_SHA=6a855d0d10f141326a4254b3926b0ed06fa12ba1     # the "Core under test" row
+git clone https://github.com/langsys/langsys-js-typescript.git /tmp/langsys-core
+git -C /tmp/langsys-core checkout --detach $CORE_SHA
+(cd /tmp/langsys-core && npm ci && npm run build && npm pack)
+npm install --no-save /tmp/langsys-core/langsys-js-typescript-*.tgz
 ```
 
-A clean worktree, not `../langsys-js-typescript` itself: the shared checkout may carry another
-lane's uncommitted work. `npm install` replaces the link with the registry version, so run the two
-link lines again after any install.
+A fresh clone, not `../langsys-js-typescript` itself: the shared checkout may carry another
+lane's uncommitted work. The tarball is what npm will serve, and `--no-save` keeps
+`package.json` and the lockfile on the published range. A later `npm install` puts the registry
+version back, so install the tarball again after one.
+
+`node _dev_/delegation-probe.mjs` reads the core's sources and `CONFORMANCE.md`, which the
+tarball does not carry. Run it with the checkout linked in place, then install the tarball again:
+
+```bash
+rm -rf node_modules/langsys-js-typescript
+ln -s /tmp/langsys-core node_modules/langsys-js-typescript
+node _dev_/delegation-probe.mjs --check
+```
 
 Check it took:
 
@@ -155,5 +163,5 @@ stores nothing under `de-de`; a slow Italian overtaken by a Portuguese that succ
 The full run, each suite on a freshly started server, is the command block in `CONFORMANCE.md` under
 _Evidence — and re-running it_. On the core above every suite passes: unit 372, transport seam 31,
 live E2E 61, Svelte DOM 17, SRV concurrency 6, SRV-7 scope 9, running without credentials 8; and
-on the SDK test clone, contract unit 9, HINT-13 12, VAR 42, hydration 11, SRV-3 flush 6 + 6,
+on the SDK test clone, contract unit 9, HINT-13 12, VAR 43, hydration 11, SRV-3 flush 6 + 6,
 locale race 4.

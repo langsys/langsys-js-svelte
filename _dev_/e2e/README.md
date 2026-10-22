@@ -17,20 +17,13 @@ npm install
 npx playwright install chromium
 ```
 
-It was deliberately undeclared at first, to keep `package.json` and the lockfile
-pristine while the base SDK came from the registry. That reason expired once the SDK
-moved to a gitignored symlink — there was no longer a `file:` dep that could leak into
-a commit — and keeping it out had a real cost: the out-of-tree copy was garbage-collected
-twice between sessions, leaving the harness unrunnable both times.
+It is declared so that `npm install` gives every harness its driver: a copy kept outside
+the tree, in a temporary directory, disappears when that directory is cleaned.
 
-**One local caveat.** While this branch consumes an unpublished base SDK via a symlink,
-a plain `npm install` reconciles the whole tree and replaces that symlink with the
-registry version — which does not carry the 838 surface. Re-create it afterwards:
-
-```bash
-rm -rf node_modules/langsys-js-typescript
-ln -s ../../langsys-js-typescript node_modules/langsys-js-typescript
-```
+**One local caveat.** This branch needs a core that is not on npm yet, installed from its tarball
+with `npm install --no-save` (`_dev_/LOCAL-TESTING.md`, section 1). A plain `npm install`
+reconciles the whole tree and puts the registry version back, which does not carry the 838
+surface: install the tarball again afterwards.
 
 ## Running
 

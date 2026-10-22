@@ -107,8 +107,13 @@ const visit = async (path) => {
 // --- Two users register one phrase (VAR-1, VAR-6) -----------------------------------------
 {
     const ana = await visit(`/fixture/var?user=Ana&${as(C[2], 'write')}&run=${RUN}`);
-    await visit(`/fixture/var?user=Luis&${as(C[2], 'write')}&run=${RUN}`);
+    const luis = await visit(`/fixture/var?user=Luis&${as(C[2], 'write')}&run=${RUN}`);
     check((await ana.textContent('#greet')) === 'Hello Ana, welcome back', 'browser: the value renders in the base locale', await ana.textContent('#greet'));
+    check(
+        (await luis.textContent('#greet')) === 'Hello Luis, welcome back',
+        "premise: the second user's page renders the same block with their own name",
+        await luis.textContent('#greet')
+    );
     check(
         (await ana.textContent('#built')) === 'Built with Kangen',
         '… and a one-token unit keeps its space beside an excluded element',
