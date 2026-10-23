@@ -84,7 +84,7 @@
     "types": "./dist/index.d.ts",
     "type": "module",
     "dependencies": {
-        "langsys-js-typescript": "^0.6.4",
+        "langsys-js-typescript": "^0.7.0",
         "magic-string": "^0.30.0"
     }
 }

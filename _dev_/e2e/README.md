@@ -20,11 +20,6 @@ npx playwright install chromium
 It is declared so that `npm install` gives every harness its driver: a copy kept outside
 the tree, in a temporary directory, disappears when that directory is cleaned.
 
-**One local caveat.** This branch needs a core that is not on npm yet, installed from its tarball
-with `npm install --no-save` (`_dev_/LOCAL-TESTING.md`, section 1). A plain `npm install`
-reconciles the whole tree and puts the registry version back, which does not carry the 838
-surface: install the tarball again afterwards.
-
 ## Running
 
 ```bash
