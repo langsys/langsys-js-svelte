@@ -27,7 +27,7 @@
     import type { Snippet } from 'svelte';
     import { onDestroy } from 'svelte';
     import RenderedNodes from './RenderedNodes.svelte';
-    import { NO_TRANSFORM, blockCategory, paramsOf, unitParams, type TransformOutput } from './transform.js';
+    import { NO_TRANSFORM, blockCategory, paramsOf, prepareNodes, unitParams, type TransformOutput } from './transform.js';
 
     interface Props {
         class?: string;
@@ -73,6 +73,9 @@
         $tSignal;
         return renderBlock(tree, options);
     });
+    const nodes = $derived(rendered ? prepareNodes(rendered.nodes, dyn) : []);
+    // Declared in the component the block is written in, so its elements take that component's scoped styles.
+    const render = $derived(__ls && 'tree' in __ls ? __ls.render : undefined);
 
     /**
      * MARK-1 on the vanilla path. There the id is derived by the core's DOM tokenizer in the
@@ -134,7 +137,9 @@
 </script>
 
 {#if rendered}
-    <svelte:element this={tag} {...rendered.hostAttrs} class={clazz} bind:this={host}><RenderedNodes nodes={rendered.nodes} {dyn} /></svelte:element>
+    <svelte:element this={tag} {...rendered.hostAttrs} class={clazz} bind:this={host}
+        >{#if render}{@render render(nodes)}{:else}<RenderedNodes {nodes} />{/if}</svelte:element
+    >
 {:else}
     <svelte:element this={tag} {...stamp} class={clazz} bind:this={host}>
         {@render children?.()}

@@ -29,8 +29,8 @@ src/lib/
     components/
         Translate.svelte          # tree path (renderBlock/registerBlock) when the transform ran; else the vanilla DOM Translate, register: false
         Phrase.svelte             # the same two paths over the vanilla Phrase rich-text handler
-        RenderedNodes.svelte      # writes a rendered block's nodes as Svelte-owned elements, handlers back by `source` index
-        transform.ts              # the `__ls` prop's type, param normalisation, and the category a fallback block hands its units
+        RenderedNodes.svelte      # writes prepared nodes as Svelte-owned elements, for an `__ls` the build handed no `render` snippet
+        transform.ts              # the `__ls` prop's type, param normalisation, `prepareNodes`, and the category a fallback block hands its units
         DontTranslate.svelte      # pure glue — emits translate="no"; no vanilla handler behind it
 ```
 
@@ -46,7 +46,7 @@ That's the entire surface. Every other concern — HTTP, missing-token registrat
     - Reactivity comes from the store re-emitting → the template re-runs `$t(...)`
 
 3. **`<Translate>` / `<Phrase>`** — two paths.
-    - **With the transform** (`langsysPreprocess()` in svelte.config.js), the build hands the component its content as a `BlockNode` tree in the `__ls` prop: every `{expression}` a VAR-3 marker pair (`{comment:'ls:NAME'}`, value, `{comment:'/ls'}`) with the typed value in `params`; a `<Phrase>` or `<Translate>` nested in a block names its own values and carries its own `params` on its host's node; handlers and non-text attributes beside it in `dyn`, by pre-order element index. The component calls the core's `renderBlock` (server and browser) and renders the result through `RenderedNodes.svelte`; it calls `registerBlock` on the server inside the request scope, and after mount in the browser.
+    - **With the transform** (`langsysPreprocess()` in svelte.config.js), the build hands the component its content as a `BlockNode` tree in the `__ls` prop: every `{expression}` a VAR-3 marker pair (`{comment:'ls:NAME'}`, value, `{comment:'/ls'}`) with the typed value in `params`; a `<Phrase>` or `<Translate>` nested in a block names its own values and carries its own `params` on its host's node; handlers and non-text attributes beside it in `dyn`, by pre-order element index; and `render`, a recursive snippet the build declares once in that file. The component calls the core's `renderBlock` (server and browser), merges `dyn` back by `source` index (`prepareNodes` in `transform.ts`), and writes the nodes through `render`: the elements are then created in the component the block is written in, so they carry its scoped-style class. RenderedNodes writes them only for an `__ls` without `render`. It calls `registerBlock` on the server inside the request scope, and after mount in the browser.
     - **Without it, or for a block the transform marks as a fallback** (`__ls = { fallback }`), the vanilla `Translate`/`Phrase` class is constructed in an `$effect` with `register: false`: it translates from the catalog and registers nothing (VAR-7), because Svelte's compiled output interleaves variables with text the runtime cannot separate. `warnUnregistered` gives a debug notice naming the transform, beside the core's own for `register: false`.
 
 ## Public API

@@ -1,13 +1,7 @@
 /**
- * The forwarding handler used by the `LangsysApp` proxy — extracted so tests
- * exercise **the shipped code** rather than a re-implementation of it.
- *
- * It was previously inline in `index.ts`, with the `#private` fixture test
- * asserting against a locally re-declared copy of the same shape. That copy
- * agreed with the shipped handler right up until they diverged: mutating
- * `index.ts` to forward with the PROXY as receiver — the exact bug the fixture
- * exists to catch — left the whole suite green, because the fixture was testing
- * its own copy. A verifier that restates the implementation cannot fail with it.
+ * The forwarding handler used by the `LangsysApp` proxy, in a module of its own so
+ * the tests exercise the shipped handler rather than a copy of it: a test that
+ * restates the implementation cannot fail with it.
  */
 
 /** Receiver rule, and why it is the target rather than the proxy.
@@ -51,9 +45,9 @@ export function createForwardingHandler<T extends object, O extends object>(over
  * is returned as-is. `LangsysApp.t` is the case that matters: it returns the current
  * `TFunction`, and that function's identity is the reactivity contract — `Signal.set`
  * drops an `Object.is`-equal value, so a fresh function per emit is the only thing
- * that tells a subscriber anything changed. Binding it minted a new function on
- * every read: measured before this check, `core.t === core.t` held while
- * `LangsysApp.t === LangsysApp.t` did not, each read a distinct `bound fn`.
+ * that tells a subscriber anything changed. Binding it would mint a new function on
+ * every read, so `LangsysApp.t === LangsysApp.t` would fail where `core.t === core.t`
+ * holds.
  */
 function isAccessor(obj: object, prop: PropertyKey): boolean {
     for (let o: object | null = obj; o; o = Object.getPrototypeOf(o)) {

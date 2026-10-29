@@ -12,6 +12,11 @@
  * expression's text is rewritten to the client's value; a later state change reaches a node whose
  * value was rewritten in place, and does not reach a node that was replaced.
  *
+ * SCOPED STYLES (`/fixture/var-styled`, compiled with the transform). A transformed block's elements
+ * are written in the component the block is written in, so they carry its scoped-style class and its
+ * styles apply, inside `<Translate>` and `<Phrase>`, hydrated and mounted after hydration; an unset
+ * value inside an attribute's text prints nothing.
+ *
  *     npm run dev                          # 127.0.0.1:5173, freshly started
  *     node _dev_/e2e/svelte-dom.mjs
  */
@@ -109,6 +114,55 @@ const T = (p, id) =>
 
     const { p: plain } = await page('/e2e/hydration-facts?plain=1');
     check((await T(plain, 'static')) === 'Hello friend', 'control: unrewritten, the same page hydrates to source', await T(plain, 'static'));
+}
+
+// ---------- SCOPED STYLES ----------
+// A transformed block renders its elements in the component it is written in, so they take its
+// scoped styles (`/fixture/var-styled`, `VarStyled.svelte`): served and hydrated, and mounted in the
+// browser after hydration. `p.outside`, written outside the blocks, gives the component's class.
+{
+    const p = await (await browser.newContext()).newPage();
+    p.setDefaultNavigationTimeout(90_000);
+    const errors = [];
+    const mismatches = [];
+    p.on('pageerror', (e) => errors.push(String(e)));
+    p.on('console', (m) => /hydration_mismatch/.test(m.text()) && mismatches.push(m.text()));
+    await p.goto(`${BASE}/fixture/var-styled`, { waitUntil: 'networkidle' });
+    await p.waitForSelector('#mounted h1');
+    const read = (root) =>
+        p.evaluate((root) => {
+            const el = (s) => document.querySelector(`${root} ${s}`);
+            const scope = [...(el('p.outside')?.classList ?? [])].find((c) => c.startsWith('svelte-')) ?? '';
+            const [h1, b, a] = [el('h1'), el('b'), el('a')];
+            return {
+                scope,
+                h1: [...(h1?.classList ?? [])],
+                b: [...(b?.classList ?? [])],
+                color: h1 && getComputedStyle(h1).color,
+                weight: b && getComputedStyle(b).fontWeight,
+                href: a?.getAttribute('href'),
+            };
+        }, root);
+    for (const [root, how] of [
+        ['#served', 'hydrated'],
+        ['#mounted', 'mounted in the browser'],
+    ]) {
+        const r = await read(root);
+        const d = JSON.stringify(r);
+        check(/^svelte-/.test(r.scope), `styles (${how}): premise: the component has a scoped-style class`, d);
+        check(
+            r.h1.includes('title') && r.h1.includes(r.scope) && r.color === 'rgb(255, 0, 0)',
+            `styles (${how}): an element inside <Translate> carries it, and its style applies`,
+            d
+        );
+        check(
+            r.b.includes('em') && r.b.includes(r.scope) && r.weight === '900',
+            `styles (${how}): an element inside <Phrase> carries it, and its style applies`,
+            d
+        );
+        check(r.href === '/u/', `styles (${how}): an unset value inside an attribute's text prints nothing`, d);
+    }
+    check(!errors.length && !mismatches.length, 'styles: no page errors and no hydration mismatch', JSON.stringify([...errors, ...mismatches].slice(0, 2)));
 }
 
 await browser.close();

@@ -309,7 +309,7 @@ The component:
 - Registers the whole thing as a **content block** that translators handle as one unit while still translating the individual phrases inside — with each variable as a placeholder, through the [build-time transform](#variables-in-text--the-build-time-transform).
 - Re-renders on locale change.
 
-With the transform, the block is rendered from its content as a tree: translated in the served HTML, its host stamped with its id, event handlers and bindings to state kept on their elements, and `{#if}` branches rendered as Svelte renders them. A block the transform cannot read, or any block without it, is translated by the base SDK's DOM handler after mount and registers nothing.
+With the transform, the block is rendered from its content as a tree: translated in the served HTML, its host stamped with its id, event handlers and attributes that read state kept on their elements, the component's scoped styles applied to them, and `{#if}` branches rendered as Svelte renders them. A block the transform cannot read, or any block without it, is translated by the base SDK's DOM handler after mount and registers nothing.
 
 Use `<Translate>` for prose, marketing copy, forms with placeholders — anything where the structure matters. Use `$t()` for individual strings.
 

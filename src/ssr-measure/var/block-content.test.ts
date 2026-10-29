@@ -1,5 +1,6 @@
 import { createRequestScope, generateCustomId, type iCategories, type iContentBlock, type RenderedNode } from 'langsys-js-typescript';
 import RenderedNodes from '$lib/components/RenderedNodes.svelte';
+import { prepareNodes } from '$lib/components/transform.js';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import VarContent from './VarContent.svelte';
@@ -102,7 +103,7 @@ describe('a nested unit inside a block (VAR-2)', () => {
             { tag: 'input', attrs: { type: 'submit', value: true }, children: [], source: 0 },
             { tag: 'p', attrs: { title: true }, children: [{ text: 'x' }], source: 1 },
         ] as unknown as RenderedNode[];
-        expect(render(RenderedNodes, { props: { nodes, dyn: [] } }).body.replace(/<!--[^]*?-->/g, '')).toMatch(
+        expect(render(RenderedNodes, { props: { nodes: prepareNodes(nodes, []) } }).body.replace(/<!--[^]*?-->/g, '')).toMatch(
             /<input type="submit" value=""\/?>\s*<p title="">x<\/p>/
         );
     });

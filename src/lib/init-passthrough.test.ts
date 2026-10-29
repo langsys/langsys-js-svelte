@@ -59,3 +59,18 @@ describe('init hands the migration config, and every other unadapted key, to the
         expect('legacyKeys' in received).toBe(false);
     });
 });
+
+describe('a missing locale store is the core to report', () => {
+    it('init without UserLocaleStore resolves as the core refuses it, and does not throw', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        const config = { projectid: 'p1', key: 'k' } as unknown as iLangsysInitConfig;
+        let result: Promise<unknown> | undefined;
+        expect(() => (result = LangsysApp.init(config))).not.toThrow();
+        await expect(result).resolves.toMatchObject({ status: false });
+    });
+
+    it('the core is handed no store, as it was given none', () => {
+        const received = captureCoreInit({ projectid: 'p1', key: 'k' } as unknown as iLangsysInitConfig);
+        expect(received.UserLocaleStore).toBeUndefined();
+    });
+});

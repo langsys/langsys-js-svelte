@@ -174,6 +174,11 @@ then changes state: the new value must reach the page, as it does for the in-pla
 beside them. `/e2e/hydration-facts` is served with its text rewritten, as a server-translated
 block would arrive: static text must hydrate as served, an expression as the client's value, and
 a state change must reach a node written in place and not one that was replaced.
+`/fixture/var-styled`, compiled with the transform, renders a component whose `<style>` targets
+elements inside its `<Translate>` and `<Phrase>`, served and hydrated and again mounted after
+hydration: each element carries the component's scoped-style class and its style applies, and an
+unset value inside an attribute's text prints nothing. It needs no API: the blocks render their
+source.
 
 ```bash
 npm run dev                          # fresh
@@ -216,7 +221,8 @@ and starts the contract fixture's forwarder itself; `credentials.mjs` sends no r
   `$t` and through a block.
 - `_dev_/e2e/locale-race.mjs` — a locale switch overtaken by another: a slow French overtaken by a
   failing German leaves source and stores nothing under `de-de`; a slow Italian overtaken by a
-  succeeding Portuguese shows Portuguese.
+  succeeding Portuguese shows Portuguese. The faults go in once the page's own requests have
+  settled, and each race checks first that they hit its two requests in order.
 - `_dev_/e2e/freeze.mjs` — what Svelte's updates show in a block on the core's DOM class
   (`/fixture/freeze`, hydrated, and `/fixture/freeze-csr`, client-only). Prints a table, asserts
   nothing; README.md's _Blocks the transform cannot read_ is that table.

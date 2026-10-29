@@ -72,7 +72,9 @@ function treeOf(markup: string, category: string, scope: Record<string, unknown>
     };
     const ls = ast.fragment.nodes.flatMap((n) => n.attributes ?? []).find((a) => a.name === '__ls')!;
     const body = code.slice(ls.value.expression.start, ls.value.expression.end);
-    return new Function(...Object.keys(scope), `return (${body});`)(...Object.values(scope));
+    // The snippet the file declares to write a block's nodes: what the tree is checked for here does not use it.
+    const withRender = { __lsNodes: undefined, ...scope };
+    return new Function(...Object.keys(withRender), `return (${body});`)(...Object.values(withRender));
 }
 
 /** What a request scope sends for `run`: its phrase misses, and the content of each block. */

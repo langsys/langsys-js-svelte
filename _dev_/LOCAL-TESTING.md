@@ -25,7 +25,7 @@ npm ci
 Check it took:
 
 ```bash
-npm test -- --run        # 372 tests, no network
+npm test -- --run        # 385 tests, no network
 npm run check            # 0 errors
 ```
 
@@ -145,11 +145,14 @@ and `requireCredentials` on.
 test clone. It picks one locale and, before its
 catalog arrives, another. A slow French overtaken by a German that fails leaves the source text and
 stores nothing under `de-de`; a slow Italian overtaken by a Portuguese that succeeds shows `Olá`.
+Each race first checks, from the requests the browser saw, that the first locale's catalog request
+was the slow one and the second's answered first; when it was not, the race reports its premise
+unmet and does not evaluate the rest.
 
 ## 9. Everything at once
 
 The full run, each suite on a freshly started server, is the command block in `CONFORMANCE.md` under
-_Evidence — and re-running it_. On the core above every suite passes: unit 372, transport seam 31,
-live E2E 61, Svelte DOM 17, SRV concurrency 6, SRV-7 scope 9, running without credentials 8; and
+_Evidence — and re-running it_. On the core above every suite passes: unit 385, transport seam 31,
+live E2E 61, Svelte DOM 26, SRV concurrency 6, SRV-7 scope 9, running without credentials 8; and
 on the SDK test clone, contract unit 9, HINT-13 12, VAR 43, hydration 11, SRV-3 flush 6 + 6,
-locale race 4.
+locale race 6.

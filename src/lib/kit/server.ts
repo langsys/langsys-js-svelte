@@ -72,7 +72,8 @@ export function createLangsysHandle(options: LangsysHandleOptions): Handle {
                 transformPageChunk:
                     options.seed === false
                         ? undefined
-                        : ({ html }) => (html.includes('</head>') ? html.replace('</head>', `${seedScript(scope.seed())}</head>`) : html),
+                        : // A function, not a string: the seed is data, and a replacement string expands `$'`, `$&`, `$$`.
+                          ({ html }) => (html.includes('</head>') ? html.replace('</head>', () => `${seedScript(scope.seed())}</head>`) : html),
             })
         );
 

@@ -145,18 +145,11 @@ export interface iLangsysInitConfig extends Omit<iVanillaInitConfig, 'UserLocale
  * two methods that genuinely need Svelte adaptation are overridden; everything
  * else forwards.
  *
- * **The reason is forward-looking, not a present defect — and the first version of
- * this note got that wrong.** A runtime scan of the core's prototype reports 33
- * members against the old wrapper's 20, which looks like thirteen dropped methods,
- * five of them matching names another binding had reported missing. All thirteen
- * are declared `private` in the core's `.d.ts`. TypeScript's `private` is erased at
- * runtime, so `getOwnPropertyNames` surfaces implementation detail and cannot tell
- * it from API. The old wrapper covered **every public member**; nothing public was
- * ever unreachable.
- *
- * What the proxy actually buys: a public member the core adds tomorrow is exposed
- * automatically. The enumerated version would have omitted it silently, and no test
- * would have failed — which is a real hazard, just not one that had already fired.
+ * Every public member of the core is reachable through it, including one the core
+ * adds later, without this file listing it. A runtime scan of the core's prototype
+ * lists more members than its API: TypeScript's `private` is erased at runtime, so
+ * `getOwnPropertyNames` also returns implementation detail. The core's `.d.ts`
+ * says which members are public.
  *
  * Forwarding rules that matter:
  * - `Reflect.get(target, prop, target)` — the receiver is the CORE, never the
@@ -186,9 +179,12 @@ type LangsysAppSvelte = Omit<typeof _LangsysApp, 'init' | 'setWriteGrant'> & {
  */
 const SVELTE_OVERRIDES = {
     init(config: iLangsysInitConfig): Promise<iLangsysResponse> {
+        // A store left out is the core's to report, as a missing project id or key is: init resolves
+        // `{ status: false, errors }` (README, _Running without credentials_).
+        const store = config.UserLocaleStore as Writable<string> | undefined;
         return _LangsysApp.init({
             ...config,
-            UserLocaleStore: adaptStore(config.UserLocaleStore),
+            UserLocaleStore: (store && adaptStore(store)) as iVanillaInitConfig['UserLocaleStore'],
             writeGrant: adaptWriteGrant(config.writeGrant),
         });
     },

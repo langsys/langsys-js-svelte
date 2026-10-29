@@ -219,8 +219,9 @@ the wrong locale.
   waits; a read-only key sends nothing.
 - **Options.** `catalog` hands the scope a catalog you already have (otherwise it is fetched, at
   most once per locale per request); `match` limits which requests get a scope; `seed: false`
-  skips the inline script — under a CSP that forbids inline scripts — and you pass
-  `scope.seed()` to the client yourself; `storage` supplies your own `AsyncLocalStorage`.
+  skips the inline script, for a CSP that forbids inline scripts: the client then has no seed,
+  and `hydrateFromServer()` finds none and returns `false`; `storage` supplies your own
+  `AsyncLocalStorage`.
 - **More than one project.** `credentials` gives a request its own project id and API key, for
   an app that serves several projects from one server:
 

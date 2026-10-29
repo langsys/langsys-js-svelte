@@ -14,11 +14,14 @@ function run(markup: string, script = '') {
 
 /**
  * Evaluates the `__ls` each block was given, with `scope` as the component's variables and each
- * context key the component declares as an object of its own.
+ * context key the component declares as an object of its own. A block read as a tree is handed the
+ * snippet the file declares to write its nodes; that is checked here and left out of what is returned.
  */
 function blocks(code: string, variables: Record<string, unknown> = {}): unknown[] {
     const keys = Object.fromEntries([...new Set(code.match(/__lsScope\d+/g) ?? [])].map((name) => [name, { key: name }]));
-    const scope = { ...keys, ...variables };
+    const renderName = code.match(/\{#snippet (__lsNodes_*)\(/)?.[1];
+    const render = { snippet: renderName };
+    const scope = { ...keys, ...(renderName ? { [renderName]: render } : {}), ...variables };
     const ast = parse(code, { modern: true }) as unknown as { fragment: { nodes: unknown[] } };
     const found: unknown[] = [];
     const walk = (nodes: unknown[]) => {
@@ -27,7 +30,12 @@ function blocks(code: string, variables: Record<string, unknown> = {}): unknown[
             if (ls) {
                 const expr = (ls.value as { expression: { start: number; end: number } }).expression;
                 const body = code.slice(expr.start, expr.end);
-                found.push(new Function(...Object.keys(scope), `return (${body});`)(...Object.values(scope)));
+                const value = new Function(...Object.keys(scope), `return (${body});`)(...Object.values(scope)) as Record<string, unknown>;
+                if ('tree' in value) {
+                    expect(value.render, "a tree is handed the file's snippet").toBe(render);
+                    delete value.render;
+                }
+                found.push(value);
             }
             for (const k of ['fragment', 'consequent', 'alternate', 'body']) walk(((n[k] as { nodes?: unknown[] }) ?? {}).nodes ?? []);
         }
@@ -690,5 +698,35 @@ describe('VAR-6 — the preprocessor', () => {
             'let name = $state("Ana"); let vip = $state(false); let n = $state(0);'
         );
         for (const generate of ['server', 'client'] as const) expect(() => compile(code, { generate, filename: 'Test.svelte' })).not.toThrow();
+    });
+});
+
+describe("the snippet a block's nodes are written with", () => {
+    const block = '<Translate category="S"><b class="x">Hi {name}</b></Translate>';
+
+    it('is declared once per file, typed in a TypeScript component and not in a JavaScript one, and compiles', () => {
+        const ts = run(block + block, "let name = 'A';").code;
+        expect(ts.match(/\{#snippet __lsNodes\(/g)).toHaveLength(1);
+        expect(ts).toContain('{#snippet __lsNodes(nodes: any[])}');
+        const js = langsysPreprocess({ warn: () => {} }).markup({
+            content: `<script>${IMPORT} let name = 'A';</script>\n${block}`,
+            filename: 'Js.svelte',
+        })!.code;
+        expect(js).toContain('{#snippet __lsNodes(nodes)}');
+        for (const generate of ['server', 'client'] as const) {
+            expect(() => compile(ts, { generate, filename: 'Ts.svelte' })).not.toThrow();
+            expect(() => compile(js, { generate, filename: 'Js.svelte' })).not.toThrow();
+        }
+    });
+
+    it('takes a name the file does not use', () => {
+        const code = run(block, "let name = 'A'; const __lsNodes = 1;").code;
+        expect(code).toContain('{#snippet __lsNodes_(nodes: any[])}');
+        expect(code).toContain('render: __lsNodes_ }');
+    });
+
+    it('is not declared in a file with no block read as a tree', () => {
+        const code = run('<Translate category="S">{#each xs as x}<i>{x}</i>{/each}</Translate>', 'let xs: string[] = [];').code;
+        expect(code).not.toContain('{#snippet __lsNodes');
     });
 });

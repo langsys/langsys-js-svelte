@@ -117,6 +117,10 @@ class Transform {
     private readonly scopes: Scope[] = [];
     /** Their keys' names start with this, which no name in the file does. */
     private readonly keyPrefix: string;
+    /** The snippet that writes a block's rendered nodes in this component, named as no name in the file is. */
+    private readonly renderName: string;
+    /** A block hands it `render`, so the file declares it. */
+    private renders = false;
     /** Snippets the module script exports, and those they render: they reach only what it declares. */
     private readonly exported = new Set<string>();
     /** Inside an exported snippet. */
@@ -134,6 +138,9 @@ class Transform {
         let prefix = '__lsScope';
         while (content.includes(prefix)) prefix += '_';
         this.keyPrefix = prefix;
+        let render = '__lsNodes';
+        while (content.includes(render)) render += '_';
+        this.renderName = render;
     }
 
     run(): boolean {
@@ -172,7 +179,27 @@ class Transform {
         }
         this.visit(this.ast.fragment.nodes);
         this.declareScopes();
+        if (this.renders) this.s.append(this.renderSnippet());
         return this.changed;
+    }
+
+    /**
+     * The snippet a block writes its rendered nodes with, declared at the top level of this component
+     * so that its elements are this component's: Svelte gives them its scoped-style class, as it gives
+     * the ones written here. It reaches nothing of the instance, so an exported snippet may use it.
+     */
+    private renderSnippet(): string {
+        const name = this.renderName;
+        const ts = [this.ast.instance, this.ast.module].some((script) =>
+            ((script as (Node & { attributes?: Node[] }) | undefined)?.attributes ?? []).some(
+                (a) => a.name === 'lang' && Array.isArray(a.value) && (a.value as Node[]).some((v) => v.data === 'ts')
+            )
+        );
+        return (
+            `\n{#snippet ${name}(nodes${ts ? ': any[]' : ''})}{#each nodes as n, i (i)}{#if 'text' in n}{n.text}` +
+            `{:else if n.void}<svelte:element this={n.tag} {...n.attrs} />` +
+            `{:else}<svelte:element this={n.tag} {...n.attrs}>{@render ${name}(n.children)}</svelte:element>{/if}{/each}{/snippet}\n`
+        );
     }
 
     /**
@@ -323,7 +350,8 @@ class Transform {
         }
         const g = new Gen(this, names);
         const params = g.ownParams(ir, spreads);
-        inject(`tree: ${g.tree(ir)}, dyn: ${g.dyn(ir)}, params: ${params}`);
+        inject(`tree: ${g.tree(ir)}, dyn: ${g.dyn(ir)}, params: ${params}, render: ${this.renderName}`);
+        this.renders = true;
     }
 
     private explicitKeys(attribute: Node | undefined, into: Set<string>): void {
@@ -674,7 +702,7 @@ class Gen {
     private dynOf(n: IR): string[] {
         if (n.k === 'el') {
             const own = n.dyn.length
-                ? `{ ${n.dyn.map(({ name, parts }) => `${JSON.stringify(name)}: ${parts.length === 1 && typeof parts[0] !== 'string' ? `(${this.t.code(parts[0])})` : '`' + parts.map((p) => (typeof p === 'string' ? p.replace(/[`\\$]/g, '\\$&') : `\${${this.t.code(p)}}`)).join('') + '`'}`).join(', ')} }`
+                ? `{ ${n.dyn.map(({ name, parts }) => `${JSON.stringify(name)}: ${parts.length === 1 && typeof parts[0] !== 'string' ? `(${this.t.code(parts[0])})` : '`' + parts.map((p) => (typeof p === 'string' ? p.replace(/[`\\$]/g, '\\$&') : `\${(${this.t.code(p)}) ?? ''}`)).join('') + '`'}`).join(', ')} }`
                 : 'null';
             return [own, ...n.children.flatMap((c) => this.dynOf(c))];
         }

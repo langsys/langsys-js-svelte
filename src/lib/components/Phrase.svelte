@@ -33,7 +33,7 @@
     import type { Snippet } from 'svelte';
     import { onDestroy } from 'svelte';
     import RenderedNodes from './RenderedNodes.svelte';
-    import { NO_TRANSFORM, blockCategory, paramsOf, unitParams, type TransformOutput } from './transform.js';
+    import { NO_TRANSFORM, blockCategory, paramsOf, prepareNodes, unitParams, type TransformOutput } from './transform.js';
 
     interface Props {
         class?: string;
@@ -99,6 +99,9 @@
         const node = renderBlock(tree, options).nodes[0];
         return node && 'tag' in node ? node : undefined;
     });
+    const nodes = $derived(root ? prepareNodes(root.children, dyn) : []);
+    // Declared in the component the phrase is written in, so its elements take that component's scoped styles.
+    const render = $derived(__ls && 'tree' in __ls ? __ls.render : undefined);
 
     let host = $state<HTMLElement>();
     let instance: VanillaPhrase | undefined;
@@ -138,7 +141,9 @@
 </script>
 
 {#if root}
-    <svelte:element this={root.tag} {...root.attrs} bind:this={host}><RenderedNodes nodes={root.children} {dyn} /></svelte:element>
+    <svelte:element this={root.tag} {...root.attrs} bind:this={host}
+        >{#if render}{@render render(nodes)}{:else}<RenderedNodes {nodes} />{/if}</svelte:element
+    >
 {:else}
     <svelte:element this={tag} {...markerAttr} class={clazz} bind:this={host}>
         {@render children?.()}
