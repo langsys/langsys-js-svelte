@@ -53,9 +53,10 @@ gh auth login --with-token < token.txt
 gh auth status
 ```
 
-## How the Publishing Scripts Use GitHub CLI
+## How the Release Script Uses GitHub CLI
 
-The scripts use these `gh` commands:
+The release script (`_dev_/publish.sh`) stops when `gh` is not installed, and offers `gh auth login`
+when it is not authenticated. It uses these `gh` commands:
 
 1. **Check authentication**:
 
@@ -63,12 +64,12 @@ The scripts use these `gh` commands:
     gh auth status
     ```
 
-2. **Create release**:
+2. **Create release**, whose body is the version's CHANGELOG section, the install line and the
+   compare link (`bash _dev_/publish.sh --notes X.Y.Z` prints it):
     ```bash
     gh release create v1.2.3 \
-      --title "Release v1.2.3" \
-      --notes "Release notes here" \
-      --target main
+      --title "v1.2.3" \
+      --notes "<release body>"
     ```
 
 ## Security Notes
@@ -77,23 +78,3 @@ The scripts use these `gh` commands:
 - No API keys or tokens are stored in your repository
 - Authentication persists across terminal sessions
 - You can revoke access anytime from GitHub settings
-
-## Alternative: Using Environment Variables
-
-If you prefer not to install GitHub CLI, you can modify the scripts to use the GitHub API directly with a Personal Access Token:
-
-```bash
-export GITHUB_TOKEN="your-personal-access-token"
-```
-
-Then use curl to create releases:
-
-```bash
-curl -X POST \
-  -H "Authorization: token $GITHUB_TOKEN" \
-  -H "Accept: application/vnd.github.v3+json" \
-  https://api.github.com/repos/OWNER/REPO/releases \
-  -d '{"tag_name":"v1.2.3","name":"Release v1.2.3","body":"Description"}'
-```
-
-However, the GitHub CLI is recommended as it's more secure and easier to use.

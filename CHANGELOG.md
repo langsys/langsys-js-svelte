@@ -1,3 +1,70 @@
+## 4.0.0 - 2026-10-30
+
+Requires `langsys-js-typescript` 0.7, which installs with it. The README's [Upgrading from 3.x](https://github.com/langsys/langsys-js-svelte#upgrading-from-3x) has the detail behind each upgrade step.
+
+### Upgrading from 3.x
+
+- **SvelteKit 2.10 or later.** `@sveltejs/kit` is an optional peer from `^2.10.0`; on Kit 2.0–2.9 npm refuses the install.
+- **Add `langsysPreprocess()` to `svelte.config.js`** to keep `<Translate>` and `<Phrase>` registering new content. Without it they render translations but register nothing, which a debug notice names; `$t()` is unchanged.
+- **The server decides whether a session registers**, not the key type: allow-list the address for an `ip_write` key, or give the session a write grant.
+- **Locale values are lowercase** (`en-us`, `zh-hant-tw`) from `$currentlyLoadedLocale`, `canonicalizeLocale()` and `detectPreferredLocale()`: compare against the lowercase form.
+- **`detectPreferredLocale()` returns `false`** when nothing matches: give it a fallback, `detectPreferredLocale(header, supported) || 'en-us'`.
+- **`LangsysAppAPI` writes reject without credentials**, with `LangsysConfigurationError`, where they resolved an error body: catch it. An `init()` refused for missing credentials also forgets those an earlier `init()` set.
+- **Some blocks get a new id** and show source text until translated again; the README lists which. With the transform they register again.
+
+### What's new
+
+**Registering content**
+
+- `langsys-js-svelte/preprocess`: each `{expression}` in a `<Translate>` or `<Phrase>`, and in a `$t` template literal, registers as a named placeholder, one phrase for every user.
+- `writeEnabled`, a store of whether this session may write, and `writeGrant` (a string, a function or a Svelte store) with `setWriteGrant()` for apps behind a login.
+- A session that cannot write reports the page's URL so Langsys can find its content, where the key's discovery setting allows.
+- With the project's base-locale-only setting on, the SDK registers and reports only while the base locale is loaded.
+- Text inside an element marked `data-ls-resolved`, as a block rendered from the catalog is, is never registered or reported.
+- A block registers its content without its host element, and identical blocks mounting together share one request.
+- `requireCredentials` and `LangsysConfigurationError`: run without credentials and render source text, or fail loudly.
+
+**SvelteKit and server rendering**
+
+- `langsys-js-svelte/kit/server`: `createLangsysHandle()` renders each request in its own locale, catalog and, optionally, credentials, and registers its misses after the response.
+- `langsys-js-svelte/kit`: `hydrateFromServer()` hands the served catalog to the browser, which then never resends what the server registered.
+- `syncNavigation()` re-reads mounted content after a client-side navigation, so a layout's phrases count for every page; `notifyNavigation()` does the same from another router.
+- Transformed blocks are served translated and stamped with their id, and `<Translate custom_id>` carries its id in the served HTML.
+- With debug on, a server render says why a block is served as source text.
+
+**Rendering and API**
+
+- `serverMessage`, `renderServerMessage` and `resolveServerMessages`: show a framework's validation and system messages translated.
+- `getCountries()`, `getCurrencies()`, `getDialCodes()` and the locale lists are read once per display locale, from the API's current routes, and held.
+- `init({ apiUrl })` points the SDK at another API; `init({ legacyKeys })` keeps an app's existing i18n keys; `LangsysApp.loadSnapshot()` renders from a catalog snapshot.
+- `LangsysApp` forwards every member of the core, so its newer calls, such as `localeHeaders()`, `isConfigured()` and `seedCatalog()`, are there too.
+- New exports: `OVERRIDDEN_MEMBERS`, and the types `WriteGrant`, `WriteGrantSource`, `ApiCredentials`, `ServerMessage` and `ResolveServerMessagesOptions`; from `/kit/server`, `LangsysHandleOptions`; from `/preprocess`, `LangsysPreprocessOptions` and `LangsysPreprocessorGroup`.
+
+### Fixed
+
+- A translated `<Phrase>`, and `<option>` text in a `<Translate>` block, kept showing their first value after Svelte updated them.
+- An `<option>` in a translated `<select>` did not follow a locale switch.
+- `<Translate>` destroyed the markup inside a single-token block, and an element whose only text was an attribute.
+- `<Translate>` re-rendered on a locale change but not on a new catalog.
+- `<Translate>` and `<Phrase>` waited forever when no catalog could arrive.
+- A locale switch during a catalog load showed the previous locale's catalog, and a failed catalog fetch was retried on every locale change.
+- An API outage set off a burst of registrations, and a write-enabled first visit re-registered phrases while its catalog loaded.
+- A translation that arrived while a block's registration was out was lost, and the block showed source text.
+- An ICU phrase showed its raw source when given no params, printed a Date argument as the formatter's parts, and printed `false` as nothing.
+- In a `<Phrase>` holding an ICU argument, an element right after an apostrophe showed its markup tokens (`{m0o}DELETE{m0c}`).
+- A phrase the message formatter could not render showed its raw ICU source; it now renders through the SDK's own branch selection, and says so in the console.
+- `%name%` in a stored translation was not filled in.
+- `$t()` rejected the gender argument Langsys asks for, and a phrase shaped like a 32-character hex id was not registered.
+- A stored block was matched to an older id of a different block.
+- `<style>`, `<script>`, `<noscript>` and `<math>` contents were registered as phrases and sent for translation.
+- `LangsysApp.init()` without a `UserLocaleStore` threw a `TypeError`; it resolves `{ status: false, errors }`, as it does without a project id or key.
+- README and README-SSR said the `'client'` strategy queues on the server and sends from the browser; content rendered only on the server is registered by neither, and they now say so.
+- README-SSR's example `load` let a CDN cache one visitor's language for the next, gave a request with no `Accept-Language` the server's own language, and did not type-check.
+- README described the locale matcher as matching the language only (it matches the script too), and numbers as always formatted (a plain ICU argument is written as given).
+- `<DontTranslate>`'s `data-ls-dont-translate` attribute is documented as presentational, and deprecated: `translate="no"` is what excludes.
+
+---
+
 ## 3.6.17 - 2026-09-01
 
 ### Changed (documentation)

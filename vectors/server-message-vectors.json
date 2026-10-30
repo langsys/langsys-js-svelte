@@ -1,0 +1,875 @@
+{
+ "": "Server message vectors (spec MSG family), shared across Langsys SDKs. AUTHORED in langsys-js-typescript, the owner named by the spec; other lanes vendor this file by blob and never edit their copy.",
+ "spec_blob": "5d7e6890b733a50fb6f5f5c30e0056c6ef7bcf45 (langsys2 a95af2c2, specVersion 8.2.18)",
+ "how_to_row_against_it": {
+  "canonical_entries": "Real framework messages, each naming the framework, its version and the sentence it comes from. template is that sentence unfilled with the field's label written in (MSG-3); message is the framework's own rendered text, and fill(template, params ?? {}) must reproduce it (MSG-4). field and code are the framework's own, passed through unchanged (MSG-1, MSG-2); framework and source are this file's annotations, not wire pieces.",
+  "markers": "templateMarkers(template) must equal expected: marker names once each, in first-appearance order. A marker matches /\\{([a-z][a-z0-9_]*)\\}/.",
+  "fill": "fill(template, params) must equal expected. A marker with no param, a null param, or a structure stays as its literal marker.",
+  "resolve": "Resolving entries from body through options (key: the dotted path the server attached them under; pieces: the entries' piece names) must yield exactly expected, in order, in the SDK's piece names. body_unchanged: resolving never changes the body. An entry needs a string template or a string message.",
+  "render": "With catalog published for locale (null means no catalog at all), rendering entry under category must yield expected: t(entry.template, category, entry.params ?? {}) when the catalog holds a translation for the template in that category, else entry.message. An entry with no template is not looked up and shows its message. entry.message is never a lookup key."
+ },
+ "canonical_entries": [
+  {
+   "framework": "Laravel 10.50.2 (src/Illuminate/Translation/lang/en/validation.php)",
+   "source": "'required' => 'The :attribute field is required.'",
+   "field": "password",
+   "code": "Required",
+   "template": "The password field is required.",
+   "message": "The password field is required."
+  },
+  {
+   "framework": "Laravel 10.50.2 (src/Illuminate/Translation/lang/en/validation.php)",
+   "source": "'min.string' => 'The :attribute field must be at least :min characters.'",
+   "field": "password",
+   "code": "Min",
+   "template": "The password field must be at least {min} characters.",
+   "params": {
+    "min": 12
+   },
+   "message": "The password field must be at least 12 characters."
+  },
+  {
+   "framework": "Laravel 10.50.2 (src/Illuminate/Translation/lang/en/validation.php)",
+   "source": "'in' => 'The selected :attribute is invalid.'",
+   "field": "plan",
+   "code": "In",
+   "template": "The selected plan is invalid.",
+   "message": "The selected plan is invalid."
+  },
+  {
+   "framework": "Laravel 10.50.2 (src/Illuminate/Translation/lang/en/validation.php)",
+   "source": "'email' => 'The :attribute field must be a valid email address.'",
+   "field": "email",
+   "code": "Email",
+   "template": "The email field must be a valid email address.",
+   "message": "The email field must be a valid email address."
+  },
+  {
+   "framework": "Pydantic 2.13.5 (pydantic-core 2.46.5), measured from ValidationError.errors()",
+   "source": "type string_too_short: 'String should have at least {min_length} characters'",
+   "field": [
+    "name"
+   ],
+   "code": "string_too_short",
+   "template": "String should have at least {min_length} characters",
+   "params": {
+    "min_length": 3
+   },
+   "message": "String should have at least 3 characters"
+  },
+  {
+   "framework": "Pydantic 2.13.5 (pydantic-core 2.46.5), measured from ValidationError.errors()",
+   "source": "type missing: 'Field required'",
+   "field": [
+    "email"
+   ],
+   "code": "missing",
+   "template": "Field required",
+   "message": "Field required"
+  },
+  {
+   "framework": "Django 4.2.30 forms, measured from Form.errors.get_json_data()",
+   "source": "min_length: 'Ensure this value has at least %(limit_value)d characters (it has %(show_value)d).'",
+   "field": "username",
+   "code": "min_length",
+   "template": "Ensure this value has at least {limit_value} characters (it has {show_value}).",
+   "params": {
+    "limit_value": 4,
+    "show_value": 2
+   },
+   "message": "Ensure this value has at least 4 characters (it has 2)."
+  },
+  {
+   "framework": "Django 4.2.30 forms, measured from Form.errors.get_json_data()",
+   "source": "invalid (EmailValidator): 'Enter a valid email address.'",
+   "field": "email",
+   "code": "invalid",
+   "template": "Enter a valid email address.",
+   "message": "Enter a valid email address."
+  },
+  {
+   "framework": "Django REST framework 3.16.1, measured from Serializer.errors",
+   "source": "min_length: 'Ensure this field has at least {min_length} characters.'",
+   "field": "username",
+   "code": "min_length",
+   "template": "Ensure this field has at least {min_length} characters.",
+   "params": {
+    "min_length": 4
+   },
+   "message": "Ensure this field has at least 4 characters."
+  },
+  {
+   "framework": "Django REST framework 3.16.1, measured from Serializer.errors",
+   "source": "required: 'This field is required.'",
+   "field": "email",
+   "code": "required",
+   "template": "This field is required.",
+   "message": "This field is required."
+  },
+  {
+   "framework": "ActiveModel 8.1.3.1 (lib/active_model/locale/en.yml), full message format \"%{attribute} %{message}\"",
+   "source": "too_short.other: 'is too short (minimum is %{count} characters)'",
+   "field": "password",
+   "code": "too_short",
+   "template": "Password is too short (minimum is {count} characters)",
+   "params": {
+    "count": 12
+   },
+   "message": "Password is too short (minimum is 12 characters)"
+  },
+  {
+   "framework": "ActiveModel 8.1.3.1 (lib/active_model/locale/en.yml), full message format \"%{attribute} %{message}\"",
+   "source": "blank: \"can't be blank\"",
+   "field": "email",
+   "code": "blank",
+   "template": "Email can't be blank",
+   "message": "Email can't be blank"
+  }
+ ],
+ "markers": [
+  {
+   "id": "laravel-min",
+   "template": "The password field must be at least {min} characters.",
+   "expected": [
+    "min"
+   ]
+  },
+  {
+   "id": "laravel-required-no-marker",
+   "template": "The password field is required.",
+   "expected": []
+  },
+  {
+   "id": "django-two-markers-in-order",
+   "template": "Ensure this value has at least {limit_value} characters (it has {show_value}).",
+   "expected": [
+    "limit_value",
+    "show_value"
+   ]
+  },
+  {
+   "id": "pydantic-snake-case",
+   "template": "String should have at least {min_length} characters",
+   "expected": [
+    "min_length"
+   ]
+  },
+  {
+   "id": "repeated-marker-once",
+   "template": "{count} of {count} used, {max} allowed.",
+   "expected": [
+    "count",
+    "max"
+   ]
+  },
+  {
+   "id": "digits-in-name",
+   "template": "Upload {file_2} before {due_at}.",
+   "expected": [
+    "file_2",
+    "due_at"
+   ]
+  },
+  {
+   "id": "laravel-colon-placeholder-is-not-a-marker",
+   "template": "The :attribute field is required.",
+   "expected": []
+  },
+  {
+   "id": "rails-percent-brace-is-not-a-marker",
+   "template": "is too short (minimum is %{count} characters)",
+   "expected": [
+    "count"
+   ],
+   "note": "The {count} inside %{count} matches the grammar; a server converts the framework's placeholders before a template is emitted (MSG-3)."
+  },
+  {
+   "id": "capitalised-is-not-a-marker",
+   "template": "Hello {Name}.",
+   "expected": []
+  },
+  {
+   "id": "spaced-is-not-a-marker",
+   "template": "At least { min } characters.",
+   "expected": []
+  },
+  {
+   "id": "leading-digit-is-not-a-marker",
+   "template": "Size {1x} is not allowed.",
+   "expected": []
+  },
+  {
+   "id": "icu-argument-is-not-a-marker",
+   "template": "{count, plural, one {# item} other {# items}}",
+   "expected": []
+  },
+  {
+   "id": "empty-template",
+   "template": "",
+   "expected": []
+  }
+ ],
+ "fill": [
+  {
+   "id": "laravel-number",
+   "template": "The password field must be at least {min} characters.",
+   "params": {
+    "min": 12
+   },
+   "expected": "The password field must be at least 12 characters."
+  },
+  {
+   "id": "django-two-numbers",
+   "template": "Ensure this value has at least {limit_value} characters (it has {show_value}).",
+   "params": {
+    "limit_value": 4,
+    "show_value": 2
+   },
+   "expected": "Ensure this value has at least 4 characters (it has 2)."
+  },
+  {
+   "id": "string-value",
+   "template": "The value {input} is not a valid email address.",
+   "params": {
+    "input": "ada@"
+   },
+   "expected": "The value ada@ is not a valid email address."
+  },
+  {
+   "id": "missing-param-stays-marker",
+   "template": "Ensure this value has at least {limit_value} characters (it has {show_value}).",
+   "params": {
+    "limit_value": 4
+   },
+   "expected": "Ensure this value has at least 4 characters (it has {show_value})."
+  },
+  {
+   "id": "no-params",
+   "template": "String should have at least {min_length} characters",
+   "params": {},
+   "expected": "String should have at least {min_length} characters"
+  },
+  {
+   "id": "null-param-stays-marker",
+   "template": "Ensure this field has at least {min_length} characters.",
+   "params": {
+    "min_length": null
+   },
+   "expected": "Ensure this field has at least {min_length} characters."
+  },
+  {
+   "id": "structure-param-stays-marker",
+   "template": "Ensure this field has at least {min_length} characters.",
+   "params": {
+    "min_length": [
+     1,
+     2
+    ]
+   },
+   "expected": "Ensure this field has at least {min_length} characters."
+  },
+  {
+   "id": "repeated-marker-filled-everywhere",
+   "template": "{count} of {count} used.",
+   "params": {
+    "count": 2
+   },
+   "expected": "2 of 2 used."
+  },
+  {
+   "id": "non-marker-braces-untouched",
+   "template": "Hello {Name}, at least { min }.",
+   "params": {
+    "Name": "Ada",
+    "min": 3
+   },
+   "expected": "Hello {Name}, at least { min }."
+  },
+  {
+   "id": "decimal-number",
+   "template": "The maximum is {max}.",
+   "params": {
+    "max": 2.5
+   },
+   "expected": "The maximum is 2.5."
+  }
+ ],
+ "resolve": [
+  {
+   "id": "laravel-422-body",
+   "body": {
+    "message": "The password field must be at least 12 characters. (and 1 more error)",
+    "errors": {
+     "password": [
+      "The password field must be at least 12 characters."
+     ],
+     "plan": [
+      "The selected plan is invalid."
+     ]
+    },
+    "langsys_errors": [
+     {
+      "field": "password",
+      "code": "Min",
+      "template": "The password field must be at least {min} characters.",
+      "params": {
+       "min": 12
+      },
+      "message": "The password field must be at least 12 characters."
+     },
+     {
+      "field": "plan",
+      "code": "In",
+      "template": "The selected plan is invalid.",
+      "message": "The selected plan is invalid."
+     }
+    ]
+   },
+   "options": {
+    "key": "langsys_errors"
+   },
+   "expected": [
+    {
+     "field": "password",
+     "code": "Min",
+     "template": "The password field must be at least {min} characters.",
+     "params": {
+      "min": 12
+     },
+     "message": "The password field must be at least 12 characters."
+    },
+    {
+     "field": "plan",
+     "code": "In",
+     "template": "The selected plan is invalid.",
+     "message": "The selected plan is invalid."
+    }
+   ],
+   "body_unchanged": true
+  },
+  {
+   "id": "fastapi-422-body",
+   "body": {
+    "detail": [
+     {
+      "type": "string_too_short",
+      "loc": [
+       "body",
+       "name"
+      ],
+      "msg": "String should have at least 3 characters",
+      "input": "ab",
+      "ctx": {
+       "min_length": 3
+      }
+     },
+     {
+      "type": "missing",
+      "loc": [
+       "body",
+       "email"
+      ],
+      "msg": "Field required",
+      "input": {
+       "name": "ab"
+      }
+     }
+    ],
+    "langsys_errors": [
+     {
+      "field": [
+       "name"
+      ],
+      "code": "string_too_short",
+      "template": "String should have at least {min_length} characters",
+      "params": {
+       "min_length": 3
+      },
+      "message": "String should have at least 3 characters"
+     },
+     {
+      "field": [
+       "email"
+      ],
+      "code": "missing",
+      "template": "Field required",
+      "message": "Field required"
+     }
+    ]
+   },
+   "options": {
+    "key": "langsys_errors"
+   },
+   "expected": [
+    {
+     "field": [
+      "name"
+     ],
+     "code": "string_too_short",
+     "template": "String should have at least {min_length} characters",
+     "params": {
+      "min_length": 3
+     },
+     "message": "String should have at least 3 characters"
+    },
+    {
+     "field": [
+      "email"
+     ],
+     "code": "missing",
+     "template": "Field required",
+     "message": "Field required"
+    }
+   ],
+   "body_unchanged": true
+  },
+  {
+   "id": "drf-body-nested-key-field-map",
+   "body": {
+    "username": [
+     "Ensure this field has at least 4 characters."
+    ],
+    "email": [
+     "This field is required."
+    ],
+    "meta": {
+     "langsys": {
+      "username": [
+       {
+        "field": "username",
+        "code": "min_length",
+        "template": "Ensure this field has at least {min_length} characters.",
+        "params": {
+         "min_length": 4
+        },
+        "message": "Ensure this field has at least 4 characters."
+       }
+      ],
+      "email": [
+       {
+        "field": "email",
+        "code": "required",
+        "template": "This field is required.",
+        "message": "This field is required."
+       }
+      ]
+     }
+    }
+   },
+   "options": {
+    "key": "meta.langsys"
+   },
+   "expected": [
+    {
+     "field": "username",
+     "code": "min_length",
+     "template": "Ensure this field has at least {min_length} characters.",
+     "params": {
+      "min_length": 4
+     },
+     "message": "Ensure this field has at least 4 characters."
+    },
+    {
+     "field": "email",
+     "code": "required",
+     "template": "This field is required.",
+     "message": "This field is required."
+    }
+   ],
+   "body_unchanged": true
+  },
+  {
+   "id": "rails-body-renamed-pieces",
+   "body": {
+    "errors": {
+     "password": [
+      "is too short (minimum is 12 characters)"
+     ],
+     "email": [
+      "can't be blank"
+     ]
+    },
+    "i18n": [
+     {
+      "sentence": "Password is too short (minimum is {count} characters)",
+      "values": {
+       "count": 12
+      },
+      "text": "Password is too short (minimum is 12 characters)",
+      "attribute": "password",
+      "error": "too_short"
+     },
+     {
+      "sentence": "Email can't be blank",
+      "text": "Email can't be blank",
+      "attribute": "email",
+      "error": "blank"
+     }
+    ]
+   },
+   "options": {
+    "key": "i18n",
+    "pieces": {
+     "template": "sentence",
+     "params": "values",
+     "message": "text",
+     "field": "attribute",
+     "code": "error"
+    }
+   },
+   "expected": [
+    {
+     "field": "password",
+     "code": "too_short",
+     "template": "Password is too short (minimum is {count} characters)",
+     "params": {
+      "count": 12
+     },
+     "message": "Password is too short (minimum is 12 characters)"
+    },
+    {
+     "field": "email",
+     "code": "blank",
+     "template": "Email can't be blank",
+     "message": "Email can't be blank"
+    }
+   ],
+   "body_unchanged": true
+  },
+  {
+   "id": "key-absent",
+   "body": {
+    "message": "The password field is required.",
+    "errors": {
+     "password": [
+      "The password field is required."
+     ]
+    }
+   },
+   "options": {
+    "key": "langsys_errors"
+   },
+   "expected": []
+  },
+  {
+   "id": "framework-body-not-searched",
+   "body": {
+    "message": "Server Error",
+    "errors": [
+     {
+      "template": "Looks like an entry.",
+      "message": "Looks like an entry."
+     }
+    ]
+   },
+   "options": {
+    "key": "langsys_errors"
+   },
+   "expected": [],
+   "note": "An entry found only by its shape elsewhere in the body is not resolved: the body is the framework's."
+  },
+  {
+   "id": "message-without-template-is-an-entry",
+   "body": {
+    "langsys_errors": [
+     {
+      "message": "Something went wrong."
+     }
+    ]
+   },
+   "options": {
+    "key": "langsys_errors"
+   },
+   "expected": [
+    {
+     "message": "Something went wrong."
+    }
+   ]
+  },
+  {
+   "id": "neither-template-nor-message-is-not",
+   "body": {
+    "langsys_errors": [
+     {
+      "code": "Required",
+      "field": "email"
+     },
+     {
+      "template": 5,
+      "message": null
+     }
+    ]
+   },
+   "options": {
+    "key": "langsys_errors"
+   },
+   "expected": []
+  },
+  {
+   "id": "no-code-where-framework-has-none",
+   "body": {
+    "langsys_errors": [
+     {
+      "field": "status",
+      "template": "Archived is not a valid status.",
+      "message": "Archived is not a valid status."
+     }
+    ]
+   },
+   "options": {
+    "key": "langsys_errors"
+   },
+   "expected": [
+    {
+     "template": "Archived is not a valid status.",
+     "message": "Archived is not a valid status.",
+     "field": "status"
+    }
+   ]
+  },
+  {
+   "id": "single-entry-at-key",
+   "body": {
+    "langsys_error": {
+     "field": "password",
+     "code": "Required",
+     "template": "The password field is required.",
+     "message": "The password field is required."
+    }
+   },
+   "options": {
+    "key": "langsys_error"
+   },
+   "expected": [
+    {
+     "field": "password",
+     "code": "Required",
+     "template": "The password field is required.",
+     "message": "The password field is required."
+    }
+   ]
+  }
+ ],
+ "render": [
+  {
+   "id": "no-catalog-falls-back-to-message",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": null,
+   "entry": {
+    "field": "password",
+    "code": "Min",
+    "template": "The password field must be at least {min} characters.",
+    "params": {
+     "min": 12
+    },
+    "message": "The password field must be at least 12 characters."
+   },
+   "expected": "The password field must be at least 12 characters."
+  },
+  {
+   "id": "template-not-translated-falls-back-to-message",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": {
+    "Errors": {}
+   },
+   "entry": {
+    "field": "password",
+    "code": "Min",
+    "template": "The password field must be at least {min} characters.",
+    "params": {
+     "min": 12
+    },
+    "message": "The password field must be at least 12 characters."
+   },
+   "expected": "The password field must be at least 12 characters."
+  },
+  {
+   "id": "laravel-translation-with-param",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": {
+    "Errors": {
+     "The password field must be at least {min} characters.": "El campo contraseña debe tener al menos {min} caracteres."
+    }
+   },
+   "entry": {
+    "field": "password",
+    "code": "Min",
+    "template": "The password field must be at least {min} characters.",
+    "params": {
+     "min": 12
+    },
+    "message": "The password field must be at least 12 characters."
+   },
+   "expected": "El campo contraseña debe tener al menos 12 caracteres."
+  },
+  {
+   "id": "laravel-translation-no-params",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": {
+    "Errors": {
+     "The password field is required.": "El campo contraseña es obligatorio."
+    }
+   },
+   "entry": {
+    "field": "password",
+    "code": "Required",
+    "template": "The password field is required.",
+    "message": "The password field is required."
+   },
+   "expected": "El campo contraseña es obligatorio."
+  },
+  {
+   "id": "pydantic-translation",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": {
+    "Errors": {
+     "Field required": "Campo obligatorio"
+    }
+   },
+   "entry": {
+    "field": [
+     "email"
+    ],
+    "code": "missing",
+    "template": "Field required",
+    "message": "Field required"
+   },
+   "expected": "Campo obligatorio"
+  },
+  {
+   "id": "icu-plural-translation-count-one",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": {
+    "Errors": {
+     "Password is too short (minimum is {count} characters)": "{count, plural, one {La contraseña es demasiado corta (mínimo # carácter)} other {La contraseña es demasiado corta (mínimo # caracteres)}}"
+    }
+   },
+   "entry": {
+    "field": "password",
+    "code": "too_short",
+    "template": "Password is too short (minimum is {count} characters)",
+    "params": {
+     "count": 1
+    },
+    "message": "Password is too short (minimum is 1 characters)"
+   },
+   "expected": "La contraseña es demasiado corta (mínimo 1 carácter)"
+  },
+  {
+   "id": "icu-plural-translation-count-many",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": {
+    "Errors": {
+     "Password is too short (minimum is {count} characters)": "{count, plural, one {La contraseña es demasiado corta (mínimo # carácter)} other {La contraseña es demasiado corta (mínimo # caracteres)}}"
+    }
+   },
+   "entry": {
+    "field": "password",
+    "code": "too_short",
+    "template": "Password is too short (minimum is {count} characters)",
+    "params": {
+     "count": 12
+    },
+    "message": "Password is too short (minimum is 12 characters)"
+   },
+   "expected": "La contraseña es demasiado corta (mínimo 12 caracteres)"
+  },
+  {
+   "id": "message-is-never-the-key",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": {
+    "Errors": {
+     "The password field must be at least 12 characters.": "WRONG: rendered from message as a key"
+    }
+   },
+   "entry": {
+    "field": "password",
+    "code": "Min",
+    "template": "The password field must be at least {min} characters.",
+    "params": {
+     "min": 12
+    },
+    "message": "The password field must be at least 12 characters."
+   },
+   "expected": "The password field must be at least 12 characters."
+  },
+  {
+   "id": "other-category-misses",
+   "locale": "es",
+   "category": "Validation",
+   "catalog": {
+    "Errors": {
+     "The password field must be at least {min} characters.": "El campo contraseña debe tener al menos {min} caracteres."
+    }
+   },
+   "entry": {
+    "field": "password",
+    "code": "Min",
+    "template": "The password field must be at least {min} characters.",
+    "params": {
+     "min": 12
+    },
+    "message": "The password field must be at least 12 characters."
+   },
+   "expected": "The password field must be at least 12 characters."
+  },
+  {
+   "id": "code-does-not-choose-text",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": {
+    "Errors": {
+     "The selected plan is invalid.": "El plan seleccionado no es válido."
+    }
+   },
+   "entry": {
+    "field": "plan",
+    "code": "Exists",
+    "template": "The selected plan is invalid.",
+    "message": "The selected plan is invalid."
+   },
+   "expected": "El plan seleccionado no es válido.",
+   "note": "Laravel's in, exists and enum rules share one sentence; the code differs and the text does not."
+  },
+  {
+   "id": "server-localised-message-kept-on-miss",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": {
+    "Errors": {}
+   },
+   "entry": {
+    "field": "password",
+    "code": "Min",
+    "template": "The password field must be at least {min} characters.",
+    "params": {
+     "min": 12
+    },
+    "message": "El campo contraseña debe tener al menos 12 caracteres."
+   },
+   "expected": "El campo contraseña debe tener al menos 12 caracteres."
+  },
+  {
+   "id": "no-template-shows-message",
+   "locale": "es",
+   "category": "Errors",
+   "catalog": {
+    "Errors": {
+     "Something went wrong.": "Algo salió mal."
+    }
+   },
+   "entry": {
+    "message": "Something went wrong."
+   },
+   "expected": "Something went wrong."
+  }
+ ]
+}

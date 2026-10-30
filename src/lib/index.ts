@@ -38,6 +38,7 @@ import {
     type iCountryList,
     type iCurrency,
     type iCurrencyList,
+    type WriteGrant,
     type iLangsysInitConfig as iVanillaInitConfig,
     type iLangsysResponse,
     type iLanguageName,
@@ -48,7 +49,8 @@ import {
     type iTranslations,
 } from 'langsys-js-typescript';
 import type { Readable, Writable } from 'svelte/store';
-import { adaptStore } from './adapters.js';
+import { adaptStore, adaptWriteGrant, type WriteGrantSource } from './adapters.js';
+import { createForwardingHandler } from './proxy-handler.js';
 
 // Stores — re-exported unchanged. They are `Signal<T>`, which is what an IDE
 // hover shows; `Signal` structurally satisfies Svelte's `Readable` contract, so
@@ -56,10 +58,35 @@ import { adaptStore } from './adapters.js';
 // JSDoc above and README-SSR.md before writing to them.
 export { currentlyLoadedLocale, sTranslations, tSignal as t } from 'langsys-js-typescript';
 
+// Route-change entry point (HINT-13), re-exported by reference. After a call, content that
+// stays mounted across routes — a persistent layout — is looked up again, so its misses are
+// recorded for the new URL. SvelteKit apps call `syncNavigation()` from `langsys-js-svelte/kit`
+// once in the root layout; other routers call this from their after-navigation hook.
+export { notifyNavigation } from 'langsys-js-typescript';
+
+// Server messages (MSG family). Resolving entries out of a response body and deciding what an
+// entry renders as — its template's translation, or its `message` — are the core's, re-exported
+// by reference. `serverMessage` is the Svelte-reactive wrapper over the core's renderer.
+export { renderServerMessage, resolveServerMessages } from 'langsys-js-typescript';
+export { serverMessage } from './messages.js';
+
+// `writeEnabled` is the one store we do NOT re-export by reference — reading the
+// live signal during hydration is a mismatch hazard in SvelteKit. See stores.ts.
+export { writeEnabled } from './stores.js';
+
 // API client (vanilla — no Svelte concerns)
 export { LangsysAppAPI } from 'langsys-js-typescript';
 
-// Locale canonicalization (vanilla) — BCP 47 casing, e.g. 'en-us' → 'en-US'.
+// The client has no credentials (WIRE-4): an explicit write throws it, and so do `$t()` and a
+// block's registration under `requireCredentials`. Re-exported by reference, so `instanceof`
+// matches what the core throws.
+export { LangsysConfigurationError } from 'langsys-js-typescript';
+
+// Locale canonicalization (vanilla). Canonicalizes via `Intl.getCanonicalLocales`
+// and then LOWERCASES: 'en_us', 'en-US' and 'EN-us' all become 'en-us'. Lowercase
+// is the wire form the spec requires (WIRE-3) and the form used internally for
+// cache keys and equality, so 'en-US' from a host app's locale store resolves to
+// the same entry rather than fetching twice.
 export { canonicalizeLocale } from 'langsys-js-typescript';
 
 // Components
@@ -69,6 +96,9 @@ export { default as DontTranslate } from './components/DontTranslate.svelte';
 
 // Type re-exports — these are all framework-agnostic so consumers can rely on
 // them directly without reaching into langsys-js-typescript.
+export type { WriteGrantSource } from './adapters.js';
+export type { ApiCredentials, ResolveServerMessagesOptions, ServerMessage } from 'langsys-js-typescript';
+
 export type {
     ExtractParamKeys,
     ParamPrimitive,
@@ -76,6 +106,7 @@ export type {
     TArgs,
     TFunction,
     TranslationParams,
+    WriteGrant,
     iCategories,
     iContentBlock,
     iCountry,
@@ -98,91 +129,81 @@ export type {
  * store shape) — the wrapper adapts it to the base SDK's `Signal<string>`
  * automatically.
  */
-export interface iLangsysInitConfig extends Omit<iVanillaInitConfig, 'UserLocaleStore'> {
+export interface iLangsysInitConfig extends Omit<iVanillaInitConfig, 'UserLocaleStore' | 'writeGrant'> {
     UserLocaleStore: Writable<string>;
+    /**
+     * Short-lived write grant for login-walled apps. Accepts everything the base
+     * SDK does, plus a Svelte store — refresh by writing to the store.
+     */
+    writeGrant?: WriteGrantSource;
 }
 
 /**
- * Svelte SDK entry point. Delegates everything to the underlying `langsys-js-typescript`
- * singleton; the only behavior change is that `init` accepts a Svelte
- * `Writable<string>` for the user locale and adapts it before passing through.
+ * Svelte SDK entry point.
+ *
+ * A **Proxy over the core singleton**, not a hand-written wrapper class. Only the
+ * two methods that genuinely need Svelte adaptation are overridden; everything
+ * else forwards.
+ *
+ * Every public member of the core is reachable through it, including one the core
+ * adds later, without this file listing it. A runtime scan of the core's prototype
+ * lists more members than its API: TypeScript's `private` is erased at runtime, so
+ * `getOwnPropertyNames` also returns implementation detail. The core's `.d.ts`
+ * says which members are public.
+ *
+ * Forwarding rules that matter:
+ * - `Reflect.get(target, prop, target)` — the receiver is the CORE, never the
+ *   proxy, so getters resolve against the real instance and any future `#private`
+ *   field keeps working. Passing the proxy as receiver is the standard way this
+ *   breaks.
+ * - Functions are bound to the core before being handed out, so a destructured
+ *   `const { refresh } = LangsysApp` still works.
  */
-class LangsysAppSvelte {
+type LangsysAppSvelte = Omit<typeof _LangsysApp, 'init' | 'setWriteGrant'> & {
     /** Initialize Langsys. Pass a Svelte `writable<string>` as `UserLocaleStore`. */
-    public init(config: iLangsysInitConfig): Promise<iLangsysResponse> {
+    init(config: iLangsysInitConfig): Promise<iLangsysResponse>;
+    /**
+     * Supply the write grant after `init()` — for apps whose token only exists
+     * once the user has logged in. Re-authorizes so the server re-evaluates the
+     * session with the new grant, so `await` it if you need `writeEnabled`
+     * settled before the next assertion.
+     */
+    setWriteGrant(grant: WriteGrantSource | undefined): Promise<void>;
+};
+
+/**
+ * The only members this binding overrides. Kept as a named set so a test can
+ * assert set-equality against it: an override that quietly stops being one, or a
+ * new one added without thought, both show up as a failing count rather than as
+ * nothing at all.
+ */
+const SVELTE_OVERRIDES = {
+    init(config: iLangsysInitConfig): Promise<iLangsysResponse> {
+        // A store left out is the core's to report, as a missing project id or key is: init resolves
+        // `{ status: false, errors }` (README, _Running without credentials_).
+        const store = config.UserLocaleStore as Writable<string> | undefined;
         return _LangsysApp.init({
             ...config,
-            UserLocaleStore: adaptStore(config.UserLocaleStore),
+            UserLocaleStore: (store && adaptStore(store)) as iVanillaInitConfig['UserLocaleStore'],
+            writeGrant: adaptWriteGrant(config.writeGrant),
         });
-    }
+    },
+    setWriteGrant(grant: WriteGrantSource | undefined): Promise<void> {
+        return _LangsysApp.setWriteGrant(adaptWriteGrant(grant));
+    },
+} as const;
 
-    public get Translations() {
-        return _LangsysApp.Translations;
-    }
+/**
+ * The members whose behaviour differs from the core's documentation.
+ *
+ * Public on purpose, and described as *behaviour* rather than mechanism: a
+ * consumer whose `init` does not match the core's docs gets a definitive answer
+ * here. Deliberately NOT described as "what the proxy overrides" — that would
+ * publish the adaptation mechanism and make changing it a breaking change.
+ */
+export const OVERRIDDEN_MEMBERS = Object.keys(SVELTE_OVERRIDES) as ReadonlyArray<string>;
 
-    public get translationsLoadingPromise() {
-        return _LangsysApp.translationsLoadingPromise;
-    }
-
-    /** Current translation function. Reads fresh state on every call (not reactive on its own — use `$t` in templates). */
-    public get t(): TFunction {
-        return _LangsysApp.t;
-    }
-
-    public get debug() {
-        return _LangsysApp.debug;
-    }
-
-    public refresh() {
-        return _LangsysApp.refresh();
-    }
-
-    public getCountries(inLocale?: string) {
-        return _LangsysApp.getCountries(inLocale);
-    }
-    public getCountryName(forCountryCode: string, inLocale?: string) {
-        return _LangsysApp.getCountryName(forCountryCode, inLocale);
-    }
-    public getCurrencies(inLocale?: string) {
-        return _LangsysApp.getCurrencies(inLocale);
-    }
-    public getCurrencyName(forCurrencyCode: string, inLocale?: string) {
-        return _LangsysApp.getCurrencyName(forCurrencyCode, inLocale);
-    }
-    public getDialCodes(inLocale?: string) {
-        return _LangsysApp.getDialCodes(inLocale);
-    }
-
-    public getLocales(inLocale?: string) {
-        return _LangsysApp.getLocales(inLocale);
-    }
-    public getLocalesFlat(inLocale?: string) {
-        return _LangsysApp.getLocalesFlat(inLocale);
-    }
-    public getLocalesData(inLocale?: string, forceRefresh?: boolean) {
-        return _LangsysApp.getLocalesData(inLocale, forceRefresh);
-    }
-    public getLocalesFormat(format: '' | 'flat' | 'data' = '', inLocale?: string) {
-        return _LangsysApp.getLocalesFormat(format, inLocale);
-    }
-    public getLocaleName(forLocale: string, shortName?: boolean, inLocale?: string) {
-        return _LangsysApp.getLocaleName(forLocale, shortName, inLocale);
-    }
-    public getLocaleNameWithLookup(forLocale: string, shortName?: boolean, inLocale?: string) {
-        return _LangsysApp.getLocaleNameWithLookup(forLocale, shortName, inLocale);
-    }
-
-    /** @deprecated use `getLocaleNameWithLookup` or `getLocaleName` */
-    public getLanguageName(forLocale: string, shortName?: boolean, inLocale?: string) {
-        return _LangsysApp.getLanguageName(forLocale, shortName, inLocale);
-    }
-
-    public detectPreferredLocale(acceptLanguageHeader?: string | null, supportedLocales?: string[]) {
-        return _LangsysApp.detectPreferredLocale(acceptLanguageHeader, supportedLocales);
-    }
-}
-
-export const LangsysApp = new LangsysAppSvelte();
+export const LangsysApp = new Proxy(_LangsysApp, createForwardingHandler(SVELTE_OVERRIDES)) as unknown as LangsysAppSvelte;
 
 /**
  * Read-only Svelte view of the `t` store.

@@ -8,6 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Version compatibility:**
 
+- v4.x — Svelte 5 + `$t()`, over `langsys-js-typescript` 0.7: the build-time transform (`/preprocess`), the SvelteKit entries (`/kit`, `/kit/server`), and registration only where the server lets the session write.
 - v3.x — Svelte 5 + the function-call `$t()` API. Depends on `langsys-js-typescript`.
 - v2.x — Svelte 5, proxy-based `$_['Cat']['Phrase']` API, self-contained.
 - Pre-v2 — Svelte 3/4 client-only. Tag `v-last-svelte4-compat`.
@@ -20,30 +21,44 @@ README-SSR.md                     # ships in the tarball (since 3.6.15); SSR pat
 src/lib/
     index.ts                      # public exports — LangsysApp wrapper, t store, components, type re-exports
     adapters.ts                   # writable<T> → Signal<T> adapter (svelte/store get → .get())
+    proxy-handler.ts              # the forwarding handler behind the LangsysApp proxy
+    stores.ts                     # writeEnabled — the core's signal, wrapped so hydration reads it as the server rendered it
+    messages.ts                   # `serverMessage` — a store derived from `t` over the core's renderServerMessage
+    kit.ts                        # `langsys-js-svelte/kit` entry — syncNavigation() (afterNavigate), hydrateFromServer()
+    kit/server.ts                 # `langsys-js-svelte/kit/server` — createLangsysHandle(): the core's request scope per request, with the request's own credentials when given
+    kit/seed.ts                   # the global the server writes a request's hydration seed to, and hydrateFromServer() reads
+    preprocess/
+        index.ts                  # `langsys-js-svelte/preprocess` — langsysPreprocess(), the build-time transform (VAR-6)
+        naming.ts                 # Svelte AST → the core's expression shape; names come from the core's derivePlaceholderNames
     components/
-        Translate.svelte          # Svelte 5 thin wrapper around langsys-js-typescript's vanilla DOM Translate class
-        Phrase.svelte             # thin wrapper around the vanilla Phrase rich-text handler
+        Translate.svelte          # tree path (renderBlock/registerBlock) when the transform ran; else the vanilla DOM Translate, register: false
+        Phrase.svelte             # the same two paths over the vanilla Phrase rich-text handler
+        RenderedNodes.svelte      # writes prepared nodes as Svelte-owned elements, for an `__ls` the build handed no `render` snippet
+        transform.ts              # the `__ls` prop's type, param normalisation, `prepareNodes`, and the category a fallback block hands its units
         DontTranslate.svelte      # pure glue — emits translate="no"; no vanilla handler behind it
 ```
 
-That's the entire surface. Every other concern — HTTP, missing-token registration, persistence, SSR strategies, the proxy/lookup/interpolation logic — lives in `langsys-js-typescript`.
+That's the entire surface. Every other concern — HTTP, missing-token registration, persistence, SSR strategies, the proxy/lookup/interpolation logic, block rendering and placeholder naming — lives in `langsys-js-typescript`.
 
 ## How the wrapping works
 
-1. **`LangsysApp.init({ UserLocaleStore: writable })`** — the wrapper class (`LangsysAppSvelte` in `index.ts`) accepts a Svelte `Writable<string>` for the user locale. Internally it adapts it via `adaptStore` (in `adapters.ts`) to satisfy the base SDK's `Signal<string>` contract (Svelte writables expose `subscribe/set/update` — the adapter synthesizes `.get()` via `svelte/store`'s `get` helper). Every other `LangsysApp.*` method is a direct delegation.
+1. **`LangsysApp.init({ UserLocaleStore: writable })`** — `LangsysApp` is a **Proxy over the core singleton** (`index.ts`, handler in `proxy-handler.ts`), not a wrapper class. `init` is one of exactly two overrides: it accepts a Svelte `Writable<string>` and adapts it via `adaptStore` (in `adapters.ts`) to the base SDK's `Signal<string>` contract (Svelte writables expose `subscribe/set/update` — the adapter synthesizes `.get()` via `svelte/store`'s `get` helper). `setWriteGrant` is the other. Every other member forwards to the core, bound to it, so a member the core gains later is exposed without anyone remembering to list it.
 
 2. **`t` as a Svelte store** — the underlying `tSignal` from `langsys-js-typescript` is a `Signal<TFunction>` that re-emits a fresh closure on every translations/locale change. `Signal` structurally satisfies Svelte's `Readable<T>` contract (subscribe-fires-immediately semantics), so we re-export it under the type `Readable<TFunction>` with no runtime wrapping. `$t('Phrase', 'Cat')` works because:
     - `$t` unboxes the store, returning the current `TFunction`
     - The function is called with `('Phrase', 'Cat')`, returning the current translation
     - Reactivity comes from the store re-emitting → the template re-runs `$t(...)`
 
-3. **`<Translate>`** — wraps `langsys-js-typescript`'s vanilla `Translate` DOM class. `bind:this` on a `svelte:element` gets us the host node; an `$effect` constructs `new Translate(host, opts)` on mount; `onDestroy` calls `instance.destroy()`. The DOM walking, content-block registration, attribute harvesting, and re-translation on locale change all live in the underlying class.
+3. **`<Translate>` / `<Phrase>`** — two paths.
+    - **With the transform** (`langsysPreprocess()` in svelte.config.js), the build hands the component its content as a `BlockNode` tree in the `__ls` prop: every `{expression}` a VAR-3 marker pair (`{comment:'ls:NAME'}`, value, `{comment:'/ls'}`) with the typed value in `params`; a `<Phrase>` or `<Translate>` nested in a block names its own values and carries its own `params` on its host's node; handlers and non-text attributes beside it in `dyn`, by pre-order element index; and `render`, a recursive snippet the build declares once in that file. The component calls the core's `renderBlock` (server and browser), merges `dyn` back by `source` index (`prepareNodes` in `transform.ts`), and writes the nodes through `render`: the elements are then created in the component the block is written in, so they carry its scoped-style class. RenderedNodes writes them only for an `__ls` without `render`. It calls `registerBlock` on the server inside the request scope, and after mount in the browser.
+    - **Without it, or for a block the transform marks as a fallback** (`__ls = { fallback }`), the vanilla `Translate`/`Phrase` class is constructed in an `$effect` with `register: false`: it translates from the catalog and registers nothing (VAR-7), because Svelte's compiled output interleaves variables with text the runtime cannot separate. `warnUnregistered` gives a debug notice naming the transform, beside the core's own for `register: false`.
 
 ## Public API
 
 ```typescript
 // Main entry point — wraps init to accept Writable, delegates everything else
-LangsysApp.init({ projectid, key, UserLocaleStore, baseLocale?, debug?, ssrTokenStrategy?, initialTranslations?, initialTranslationsLocale? })
+LangsysApp.init({ projectid, key, UserLocaleStore, baseLocale?, apiUrl?, requireCredentials?, debug?, ssrTokenStrategy?, legacyKeys?, messagesCategory?, initialTranslations?, initialTranslationsLocale?, writeGrant? })
+LangsysApp.setWriteGrant(grant)  // async — re-authorizes so the server re-evaluates the session
 LangsysApp.t                     // current TFunction (snapshot — not reactive on its own)
 LangsysApp.getCountries() / getCurrencies() / getDialCodes() / getLocales*() / ...
 LangsysApp.detectPreferredLocale(acceptLanguageHeader?, supportedLocales?)
@@ -54,14 +69,30 @@ LangsysApp.translationsLoadingPromise
 t                                // Readable<TFunction> — read with $t('Phrase', 'Cat', params?)
 currentlyLoadedLocale            // Signal<string>      — readable as $store, and WRITABLE
 sTranslations                    // Signal<iCategories>  — readable as $store, and WRITABLE
+writeEnabled                     // Readable<boolean | undefined> — tri-state, and READ-ONLY:
+                                 // the one store wrapped rather than re-exported, so unlike the
+                                 // two above it is genuinely not writable. undefined = not known yet
 
 // Components
 <Translate category? custom_id? label? tag? class? params? children />
 <Phrase category? params? tag? class? children />          // one markup-bearing sentence kept whole
 <DontTranslate tag? class? children />                     // never translated (translate="no")
 
-// Markup placeholders are %name%, not {name} — Svelte compiles a bare {name}
-// as its own expression tag. $t() keeps {name} (JS string, no collision).
+// Build-time transform (optional, svelte.config.js): langsys-js-svelte/preprocess
+langsysPreprocess({ from?, warn? })   // {expr} inside <Translate>/<Phrase> → {name} placeholder + typed param;
+                                      // $t(`…${x}`) → $t('…{x}…', cat, { x }). Without it, write %name% + params.
+
+// SvelteKit (optional peer @sveltejs/kit ^2.10.0)
+syncNavigation()                      // langsys-js-svelte/kit — once in the root layout; notifyNavigation() after each navigation
+hydrateFromServer()                   // langsys-js-svelte/kit — hooks.client.ts `init`: the served seed in place before hydration
+createLangsysHandle({ locale, catalog?, credentials?, match?, seed?, storage? })
+                                      // langsys-js-svelte/kit/server — hooks.server.ts `handle`: a request scope per request
+
+// Also from the main entry
+notifyNavigation(), canonicalizeLocale(), LangsysConfigurationError   // the core's, by reference
+serverMessage                         // Readable store: $serverMessage(entry) renders a server message entry
+renderServerMessage(), resolveServerMessages()                        // the core's, by reference
+OVERRIDDEN_MEMBERS                    // the LangsysApp members whose behaviour differs from the core's docs
 
 // Direct API client access (vanilla — no Svelte concerns)
 LangsysAppAPI
@@ -71,19 +102,74 @@ iLangsysInitConfig (the Svelte-flavored one — UserLocaleStore is Writable<stri
 iLangsysResponse, iCategories, iTranslations, iContentBlock, iCountry, iCountryDialCode, iCountryList,
 iCurrency, iCurrencyList, iLanguageName, iLocaleData, iLocaleDefault, iLocaleFlat, iProject,
 TFunction, TranslationParams, ParamPrimitive, ExtractParamKeys, ParamsFor, TArgs
+WriteGrant (base-SDK union), WriteGrantSource (that union plus a Svelte store)
+ApiCredentials, ServerMessage, ResolveServerMessagesOptions, Signal, TStore
+LangsysHandleOptions (/kit/server), LangsysPreprocessOptions and LangsysPreprocessorGroup (/preprocess)
 ```
+
+**`writeEnabled` is the one store NOT re-exported by reference.** Everything else (`t`,
+`currentlyLoadedLocale`, `sTranslations`) is the base signal itself, so no code here sits
+in the catalog-miss path — which is what lets this package be _excluded_ from an
+investigation rather than merely defended. `writeEnabled` is wrapped in `src/lib/stores.ts`
+because reading the live signal during hydration is a mismatch hazard specific to
+SvelteKit: a universal `load` re-runs on the client and is awaited _before_ mount, so
+`await LangsysApp.init()` in a load resolves authorization before the first client render.
+The wrapper changes only _when_ the value is observable, never what it is. See
+`src/lib/stores.test.ts`.
+
+## Commit conventions
+
+**Do not add `Co-Authored-By:` or `Claude-Session:` trailers to commits in this repo.** Fleet
+convention across the Langsys SDKs; the history here should read as the project's, not as a
+record of which tool produced it. Applies to every commit, including WIP.
+
+## Conformance
+
+`CONFORMANCE.md` maps this binding to the published SDK behaviour spec
+(`langsys2:docs/sdk-spec.mdx`), rule id → grade → evidence. Two norms are load-bearing and easy
+to erode:
+
+- **Nothing mock-evidenced grades `implemented`** (CONF-2). This repo's integration suite is
+  `live` — real browser, real base SDK, real API — which is why its rows can reach that grade.
+  If the suite is ever doubled, the grades move down with it.
+- **Every `delegated` row states a non-zero count for the control that would have found
+  participation.** "We found nothing" is worthless unless the same search demonstrably finds
+  something where it does live. `node _dev_/delegation-probe.mjs --check` enforces it: one
+  pattern per rule id, comments stripped on both sides, binding 0 and core above 0.
+- **The file's shape is machine-checked, so keep it canonical.** Header rows
+  `| **Spec revision read** | … blob <sha> |` and `| **Profiles** | … |`; one table headed
+  `| Rule | Status | Tier | Evidence |`; one row per spec rule id, never a family row.
+  `node _dev_/conformance-summary.mjs --check` reads the ids out of the cited blob. Re-derive the
+  blob with `git ls-tree` on every write — never carry it. `CONFORMANCE.md` is in
+  `.prettierignore` on purpose: Prettier pads every row to the widest evidence cell.
+- **Contract evidence is an SDK test clone** (CONF-2), a real Langsys API seeded before each run
+  from `_dev_/contract/seeds/`, reached through `contract-fixture/forwarder.mjs`, vendored
+  byte-exact from langsys-js-typescript and cited by tree id; never edit or reformat it. Each case
+  has projects of its own (`_dev_/contract/cases.mjs`; `make-seeds.mjs --check` after any change),
+  and reads what the API accepted back through its routes. The `/fixture` testbed reaches the
+  forwarder through the dev server's `/__fx` proxy (it sends no CORS headers). A run reseeds the
+  clone for every SDK, so it goes under `test-suite-lock run -- …`. A clause that something is
+  never sent is read at the transport seam (`_dev_/e2e/seam.mjs`). Mutations run in a copy of the
+  tree on another port, after that copy passes unmutated, each on cases fresh from a reseed: mutants
+  on cases of their own share one.
+- **Delegated rows cite the core row's grade**, and `delegation-probe.mjs --check` compares it with
+  the resolved core checkout's CONFORMANCE.md. Verify against a clean build of the core SHA you
+  cite, not the shared checkout, which may carry another lane's uncommitted work.
+- **Tier records the evidence for the property the rule governs**, not whether a double appears
+  in a test: `live` only where the API's answer decides the property; `n/a (pure)` for in-process
+  behaviour, artifact inspection with a control, and meta-rules; `delegated` rows take `-`.
 
 ## Essential commands
 
 - `npm run dev` — Vite dev server with the demo at `src/routes/+page.svelte`. Needs `.env` with `VITE_LANGSYS_PROJECT_ID` and `VITE_LANGSYS_API_KEY` (see `.env.example`).
 - `npm run check` — `svelte-kit sync && svelte-check --tsconfig ./tsconfig.json`. Should be clean before any commit.
 - `npm run package` — `svelte-kit sync && svelte-package && publint`. Builds to `dist/`. `publint` should report "All good!" — the dep is the published npm `langsys-js-typescript`, so there is no `file:` dep to warn about.
-- `npm run test` — Vitest. Tests are minimal; expand here for new features.
+- `npm run test` — Vitest: the unit suite, no network. The contract suites, the transport seam and the browser harnesses are in `_dev_/LOCAL-TESTING.md`.
 - `npm run lint` / `npm run format` — Prettier + ESLint.
 
 ## Local development setup
 
-This package depends on the **published** `langsys-js-typescript` from npm (a caret range like `^0.3.x`), exactly as an end user would — never a `file:`/symlink/`npm link` dep. A local link has bitten us before (a stale local build silently shadowing the real package), so the dependency stays de-linked at all times.
+This package depends on the **published** `langsys-js-typescript` from npm (a caret range, `^0.7.0` today), exactly as an end user would — never a `file:`/symlink/`npm link` dep. A local link has bitten us before (a stale local build silently shadowing the real package), so the dependency stays de-linked at all times.
 
 To pick up base-SDK changes:
 
@@ -104,11 +190,11 @@ Releases are CI-driven via npm **trusted publishing** (OIDC). There is no long-l
 
 The flow:
 
-1. **Local:** `npm run release` (alias for `./_dev_/publish.sh`) — prompts for the new version, bumps `package.json`, amends the last commit with the version bump, force-pushes `main`, creates a tag `vX.Y.Z`, creates a GitHub Release. **It does not publish to npm.**
+1. **Local:** `npm run release` (alias for `./_dev_/publish.sh`) — prompts for the new version, bumps `package.json`, stamps the date into the CHANGELOG heading `## X.Y.Z - unreleased`, amends the last commit with the version bump, force-pushes `main`, creates a tag `vX.Y.Z`, creates a GitHub Release whose body is that version's CHANGELOG section, the install line and the compare link. Before changing anything it refuses a version with no such section, or one over GitHub's 125,000-character limit; `bash _dev_/publish.sh --notes` prints the body without releasing. **It does not publish to npm.**
 2. **CI:** the `release: published` event triggers `.github/workflows/publish.yml`, which runs `npm ci` → `npm run check` → `npm test` → `npm run package` → `npm publish --provenance`. Publishing happens inside the `npm-publish` GitHub Environment so only tag-ref runs can mint the OIDC token.
-3. **PR/push gate:** `.github/workflows/ci.yml` runs `check` + `test` on every PR and every push to `main`, independent of the release flow.
+3. **PR/push gate:** `.github/workflows/ci.yml` runs `lint`, `check` and `test`, the CHANGELOG coverage check and, after `package`, the docs-API coverage check, on every PR and every push to `main`, independent of the release flow.
 
-If a publish fails after the GitHub Release was created, the Release stays but no npm version exists for that tag — fix forward by either deleting the GH release and re-running `npm run release`, or by re-running the failed workflow from the Actions tab once the fix is merged.
+If a publish fails after the GitHub Release was created, the Release and the tag stay but no npm version exists for them. A re-run of the workflow publishes the tag's commit: for a cause outside the code (the trusted-publisher settings, a registry outage), fix it and re-run the failed job from the Actions tab; for a cause in the code, fix it on `main` and release the next version, since `publish.sh` refuses a version whose tag exists. `_dev_/PUBLISHING.md` has the whole flow.
 
 The three trust-handshake strings must stay in sync, or CI will fail at the publish step:
 
@@ -123,10 +209,17 @@ The three trust-handshake strings must stay in sync, or CI will fail at the publ
 - **Docs that ship:** `README.md`, `README-SSR.md`, and the `src/lib/**` JSDoc go into the npm tarball (the JSDoc is what IDE hover shows); `CHANGELOG.md` is GitHub-only. `README-SSR.md` is listed in `files` — it did not ship before 3.6.15, which left `README.md` pointing at a document installed users did not have, and the failed-fetch reset rule reachable only from GitHub. A fix to a shipped doc only reaches npmjs.com on publish.
 
 - **Do not reimplement base-SDK behavior here.** API client, lookup logic, missing-token flow, persistence, SSR strategies all belong in `langsys-js-typescript`. If you need to extend any of that, the change goes in the base package and we re-export.
-- **Keep `<Translate>` to mount/destroy glue.** The DOM walking lives in the vanilla `Translate` class in `langsys-js-typescript`. Don't fork the tokenizer here.
+- **Keep `<Translate>` and `<Phrase>` to glue.** Rendering, registration and tokenizing are the core's (`renderBlock`, `registerBlock`, the vanilla classes); placeholder names are the core's `derivePlaceholderNames`. What is Svelte's is the AST → tree mapping in `src/lib/preprocess` and rendering the result as Svelte elements. Don't fork the tokenizer or the naming here.
+- **On the server, `<Translate>` and `<Phrase>` register only inside a request scope**
+  (`currentRequestScope()`), which sends the block after the response. Outside one there is nothing
+  to send it: the block registers from the browser after hydration, and the core would report the
+  server call as misplaced (`server-registration.test.ts` counts that notice).
+- **`hydrateFromServer()` passes the whole seed** as `seedCatalog`'s third argument: its blocks
+  and phrases, marked collected, are what keeps the client from sending them again.
+- **The testbed applies the transform per path**, in `vite.config.ts` (`varTransform`): `/fixture/var`, `/fixture/gate10` and `src/ssr-measure/var` only, so every other route keeps measuring the package without it.
 - **Type re-exports go through `index.ts`.** Consumers shouldn't have to reach into `langsys-js-typescript` for routine types.
 - **`t`'s reactivity story** depends on the base SDK re-emitting a fresh `TFunction` closure on every translations/locale change. If you find templates not re-rendering after a locale change, look at the `tSignal` subscriber wiring in `langsys-js-typescript`'s `Translations` class — not here.
 
 ## Testing approach
 
-Vitest with default SvelteKit-package config. The current test file is a smoke check; real coverage is light. New features benefit from tests, especially around the writable→Signal adapter and the `<Translate>` mount lifecycle.
+Vitest with default SvelteKit-package config runs the unit suite (`npm test -- --run`, no network). The contract suites run against the SDK test clone and the E2E harnesses in a real browser; `_dev_/LOCAL-TESTING.md` lists every suite and how to run it, and `CONFORMANCE.md`'s Suites row gives their current counts. A fix comes with a test that fails without it.

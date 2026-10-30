@@ -1,0 +1,96 @@
+import { PHRASE_MARKER_ATTR, generateCustomId, sTranslations, type iCategories } from 'langsys-js-typescript';
+// Read from `/pure` and checked against the main entry below, so the stamp this binding writes
+// and the attribute the core reads are provably one name.
+import { CONTENT_BLOCK_MARKER_ATTR } from 'langsys-js-typescript/pure';
+import { CONTENT_BLOCK_MARKER_ATTR as MAIN_ENTRY_ATTR } from 'langsys-js-typescript';
+import { render } from 'svelte/server';
+import { afterEach, describe, expect, it } from 'vitest';
+import ServedBytes from './ServedBytes.svelte';
+
+/**
+ * SRV-1, MEASURED — what a server render of this binding sends WITHOUT the build-time
+ * transform. `$t()` serves the request locale. `<Translate>` and `<Phrase>` take SRV-1's
+ * sanctioned fallback: without the transform the binding cannot show their content to the
+ * core's renderer, so they serve source, stamp only an app-supplied `custom_id`, and translate
+ * after hydration. `var/var-served.test.ts` is the same measurement with the transform.
+ *
+ * Served bytes are asserted, never a post-hydration DOM: a crawler reads the bytes.
+ */
+
+const ITALIAN = 'Prezzi';
+
+/**
+ * Carries the phrase under BOTH lookup shapes — the plain phrase key `$t()` and
+ * `<Phrase>` read, and the content-block key `<Translate>` reads — so a base-language
+ * result from any surface cannot be explained by the catalog lacking the entry.
+ */
+function italianCatalog(): iCategories {
+    return {
+        SRV: {
+            __category__: 'SRV',
+            Pricing: ITALIAN,
+            [generateCustomId('SRV', ['Pricing'])]: { Pricing: ITALIAN },
+        },
+    } as unknown as iCategories;
+}
+
+const serve = (catalog: iCategories) => render(ServedBytes, { props: { catalog, locale: 'it-it' } }).body;
+
+/** Text content of the first element carrying `attr`, markers and comments removed. */
+function textAfter(body: string, attr: string): string {
+    const at = body.indexOf(attr);
+    if (at < 0) throw new Error(`no ${attr} in served bytes:\n${body}`);
+    const open = body.indexOf('>', at);
+    const close = body.indexOf('</', open);
+    return body
+        .slice(open + 1, close)
+        .replace(/<!--.*?-->/g, '')
+        .replace(/<[^>]+>/g, '')
+        .trim();
+}
+
+afterEach(() => {
+    // Process-global, exactly as README-SSR.md warns. Reset so a case cannot pass on
+    // the previous case's seed.
+    sTranslations.set({} as iCategories);
+});
+
+describe('SRV-1 — served bytes under the component-body seed', () => {
+    it('control: with an EMPTY catalog, $t() serves the base language', () => {
+        // Without this, the Italian below could be an artefact of a catalog left in
+        // the process-global by something else rather than of this render's seed.
+        expect(textAfter(serve({} as iCategories), 'id="t-hit"')).toBe('Pricing');
+    });
+
+    it('$t() serves the request locale when the catalog holds it', () => {
+        expect(textAfter(serve(italianCatalog()), 'id="t-hit"')).toBe(ITALIAN);
+    });
+
+    it('$t() serves the base language for a genuine miss in the same render', () => {
+        expect(textAfter(serve(italianCatalog()), 'id="t-miss"')).toBe('Control miss');
+    });
+
+    it('control: the stamp attribute this file checks for is a real attribute name', () => {
+        expect(CONTENT_BLOCK_MARKER_ATTR).toMatch(/^data-[a-z-]+$/);
+    });
+
+    it('fallback: <Translate> serves source, and a derived id is not stamped on the server', () => {
+        const body = serve(italianCatalog());
+        expect(textAfter(body, 'id="translate-hit"')).toBe('Pricing');
+        // The derived-id host is the opening tag just before `translate-hit`: no stamp on it.
+        const host = body.slice(0, body.indexOf('<p id="translate-hit">')).match(/<div[^>]*>\s*$/)?.[0];
+        expect(host).toBeDefined();
+        expect(host).not.toContain(CONTENT_BLOCK_MARKER_ATTR);
+    });
+
+    it("MARK-1: an app-supplied custom_id is stamped on the served host, under the core's attribute", () => {
+        const body = serve(italianCatalog());
+        expect(MAIN_ENTRY_ATTR).toBe(CONTENT_BLOCK_MARKER_ATTR);
+        expect(body).toContain(`<section ${CONTENT_BLOCK_MARKER_ATTR}="app-supplied-id"`);
+    });
+
+    it('fallback: <Phrase> serves source, though its host is marked', () => {
+        const body = serve(italianCatalog());
+        expect(textAfter(body, PHRASE_MARKER_ATTR)).toBe('Pricing');
+    });
+});

@@ -1,0 +1,30 @@
+{
+    "projects": [
+        {
+            "id": "76000601-0000-4000-8000-000000000001",
+            "title": "locale-race 1 app",
+            "base_locale": "en-us",
+            "target_locales": ["fr-fr", "de-de", "it-it", "pt-pt"],
+            "phrases": [
+                { "category": "FX", "phrase": "Layout phrase race", "translations": { "fr-fr": "Bonjour", "de-de": "Hallo", "it-it": "Ciao", "pt-pt": "Olá" } }
+            ],
+            "blocks": [],
+            "user": { "token": "116011|svelte-token-116011", "device_id": "svelte-device-116011" }
+        },
+        {
+            "id": "76000602-0000-4000-8000-000000000001",
+            "title": "locale-race 2 app",
+            "base_locale": "en-us",
+            "target_locales": ["fr-fr", "de-de", "it-it", "pt-pt"],
+            "phrases": [
+                { "category": "FX", "phrase": "Layout phrase race", "translations": { "fr-fr": "Bonjour", "de-de": "Hallo", "it-it": "Ciao", "pt-pt": "Olá" } }
+            ],
+            "blocks": [],
+            "user": { "token": "116021|svelte-token-116021", "device_id": "svelte-device-116021" }
+        }
+    ],
+    "keys": [
+        { "id": "76000601-0000-4000-8000-100000000001", "key": "svelte-06-01-read", "project": "76000601-0000-4000-8000-000000000001", "type": "read" },
+        { "id": "76000602-0000-4000-8000-100000000001", "key": "svelte-06-02-read", "project": "76000602-0000-4000-8000-000000000001", "type": "read" }
+    ]
+}

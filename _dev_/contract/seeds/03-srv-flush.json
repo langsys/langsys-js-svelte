@@ -1,0 +1,26 @@
+{
+    "projects": [
+        {
+            "id": "76000301-0000-4000-8000-000000000001",
+            "title": "srv-flush 1 app",
+            "base_locale": "en-us",
+            "target_locales": ["it-it", "de-de"],
+            "phrases": [],
+            "blocks": [],
+            "user": { "token": "113011|svelte-token-113011", "device_id": "svelte-device-113011" }
+        },
+        {
+            "id": "76000302-0000-4000-8000-000000000001",
+            "title": "srv-flush 2 app",
+            "base_locale": "en-us",
+            "target_locales": ["it-it", "de-de"],
+            "phrases": [],
+            "blocks": [],
+            "user": { "token": "113021|svelte-token-113021", "device_id": "svelte-device-113021" }
+        }
+    ],
+    "keys": [
+        { "id": "76000301-0000-4000-8000-100000000001", "key": "svelte-03-01-write", "project": "76000301-0000-4000-8000-000000000001", "type": "write" },
+        { "id": "76000302-0000-4000-8000-100000000001", "key": "svelte-03-02-read", "project": "76000302-0000-4000-8000-000000000001", "type": "read" }
+    ]
+}

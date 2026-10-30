@@ -1,0 +1,44 @@
+{
+    "projects": [
+        {
+            "id": "76000101-0000-4000-8000-000000000001",
+            "title": "verify-contract 1 app",
+            "base_locale": "en-us",
+            "website_url": "http://127.0.0.1",
+            "machine_translate_new_phrases": true,
+            "target_locales": ["es-es"],
+            "phrases": [{ "category": "FX", "phrase": "Page A only 1" }],
+            "blocks": [],
+            "user": { "token": "111011|svelte-token-111011", "device_id": "svelte-device-111011" }
+        },
+        {
+            "id": "76000102-0000-4000-8000-000000000001",
+            "title": "verify-contract 2 app",
+            "base_locale": "en-us",
+            "website_url": "http://127.0.0.1",
+            "machine_translate_new_phrases": true,
+            "target_locales": ["es-es"],
+            "phrases": [{ "category": "FX", "phrase": "Layout phrase 2" }],
+            "blocks": [],
+            "user": { "token": "111021|svelte-token-111021", "device_id": "svelte-device-111021" }
+        }
+    ],
+    "keys": [
+        {
+            "id": "76000101-0000-4000-8000-100000000001",
+            "key": "svelte-01-01-reporter",
+            "project": "76000101-0000-4000-8000-000000000001",
+            "type": "ip_write",
+            "report_discovered_content": true,
+            "ip_allowlist": []
+        },
+        {
+            "id": "76000102-0000-4000-8000-100000000001",
+            "key": "svelte-01-02-reporter",
+            "project": "76000102-0000-4000-8000-000000000001",
+            "type": "ip_write",
+            "report_discovered_content": true,
+            "ip_allowlist": []
+        }
+    ]
+}

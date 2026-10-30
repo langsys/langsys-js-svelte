@@ -14,7 +14,18 @@ export default ts.config(
         // Ported from .eslintignore, which ESLint no longer reads. `dist` is added
         // because it did not exist as a build target when the old list was written
         // and linting generated output produces noise, not findings.
-        ignores: ['.DS_Store', 'node_modules/**', 'build/**', '.svelte-kit/**', 'dist/**', 'package/**', 'pnpm-lock.yaml', 'package-lock.json', 'yarn.lock'],
+        ignores: [
+            '.DS_Store',
+            'node_modules/**',
+            'build/**',
+            '.svelte-kit/**',
+            'dist/**',
+            'package/**',
+            'contract-fixture/**',
+            'pnpm-lock.yaml',
+            'package-lock.json',
+            'yarn.lock',
+        ],
     },
 
     js.configs.recommended,
@@ -50,6 +61,29 @@ export default ts.config(
         languageOptions: {
             parser: svelteParser,
             parserOptions: { parser: ts.parser },
+        },
+    },
+
+    {
+        // The /e2e testbed. Dev-only routes, never built for deployment and never
+        // in the published tarball — and the two rules below flag the exact
+        // behavior these pages exist to exercise.
+        //
+        // no-navigation-without-resolve guards links against a configured `base`
+        // path. These pages assert what an ordinary consumer's link and a raw
+        // pushState/replaceState actually do — whether a client-side navigation
+        // remounts the app, and whether a shallow route change is attributed to
+        // the right URL. Routing them through resolve() puts a layer between the
+        // assertion and the thing asserted.
+        //
+        // no-dom-manipulating is correct advice that /e2e/vanilla deliberately
+        // violates: it sets innerHTML by hand so Svelte never renders those
+        // children, which is the whole mechanism by which that page separates a
+        // core-SDK behavior from a binding one.
+        files: ['src/routes/e2e/**/*.svelte', 'src/routes/fixture/**/*.svelte'],
+        rules: {
+            'svelte/no-navigation-without-resolve': 'off',
+            'svelte/no-dom-manipulating': 'off',
         },
     }
 );

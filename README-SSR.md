@@ -65,24 +65,38 @@ comments.
 
 ```typescript
 // src/routes/+layout.server.ts
-import { LangsysApp, type iCategories } from 'langsys-js-svelte';
+import { LangsysApp, canonicalizeLocale, type iCategories } from 'langsys-js-svelte';
 import { LANGSYS_PROJECT_ID, LANGSYS_API_KEY } from '$env/static/private';
 import { PUBLIC_LANGSYS_API_KEY } from '$env/static/public';
 
-// The locales configured on your Langsys project, as exact tags. The translations
-// endpoint matches them LITERALLY — if your project's Spanish is `es-CR`, then
-// `locale=es` is a 422, not a fuzzy match onto `es-CR`.
-const SUPPORTED = ['en-US', 'es-CR', 'fr-FR', 'it-IT'];
-const BASE_LOCALE = 'en-US';
+// The locales configured on your Langsys project, in the SDK's lowercase form, which
+// `detectPreferredLocale` and `canonicalizeLocale` answer in. The translations endpoint
+// matches a locale exactly — if your project's Spanish is `es-cr`, then `locale=es` is a
+// 422, not a fuzzy match onto it.
+const SUPPORTED = ['en-us', 'es-cr', 'fr-fr', 'it-it'];
+const BASE_LOCALE = 'en-us';
 
-export async function load({ fetch, request, locals }) {
-    // Resolve Accept-Language down to a tag the project actually has. This helper is
-    // pure — it reads the header and returns a string; it touches no SDK state, so
-    // it is safe on the server. It returns `false` when there is nothing to go on,
-    // and returns the VISITOR'S OWN TAG UNCHANGED when nothing matches — so always
-    // check the result against your list rather than trusting it.
-    const detected = locals.userLocale || LangsysApp.detectPreferredLocale(request.headers.get('accept-language'), SUPPORTED);
-    const locale = typeof detected === 'string' && SUPPORTED.includes(detected) ? detected : BASE_LOCALE;
+/** A candidate locale in the SDK's form when the project serves it, else undefined. */
+const served = (candidate: string | null | undefined) => {
+    const locale = candidate ? canonicalizeLocale(candidate) : '';
+    return SUPPORTED.includes(locale) ? locale : undefined;
+};
+
+export async function load({ fetch, request, url, locals, setHeaders }) {
+    // The first usable candidate, as "Choosing the locale" below says: the URL your app routes by
+    // (`?lang=` here), then the locale the visitor chose (a cookie or session value), then
+    // Accept-Language, else the base locale. A candidate the project does not serve is skipped.
+    const fromUrl = served(url.searchParams.get('lang'));
+    // `detectPreferredLocale` is pure — it reads the header and touches no SDK state, so it is
+    // safe on the server — and answers `false` when nothing in SUPPORTED matches. It is asked only
+    // when the request sends the header: without one it reads the runtime's own languages (Node
+    // has a `navigator`), which are the server's, not the visitor's.
+    const header = request.headers.get('accept-language');
+    const locale = fromUrl || served(locals.userLocale) || (header && LangsysApp.detectPreferredLocale(header, SUPPORTED)) || BASE_LOCALE;
+
+    // Unless the URL decided, the response depends on the cookie and the header, so say so.
+    // Without `Vary`, a CDN caches the first visitor's language and serves it to everyone after them.
+    if (!fromUrl) setHeaders({ vary: 'Cookie, Accept-Language' });
 
     const response = await fetch(`https://api.langsys.dev/api/translations?project_id=${LANGSYS_PROJECT_ID}&locale=${locale}`, {
         headers: {
@@ -100,6 +114,13 @@ export async function load({ fetch, request, locals }) {
     };
 }
 ```
+
+> **Choosing the locale.** Take the first usable candidate from the URL (a path segment,
+> subdomain or query parameter your app routes by), then a cookie or session value your app
+> set (`locals.userLocale` above), then `Accept-Language`; otherwise the base locale. Check
+> every candidate against the locales the project serves and skip one it doesn't — never
+> serve it, and never write it back to a cookie. A locale taken from the URL needs no `Vary`,
+> because the URL is already the cache key.
 
 > **Use `/api/translations?project_id=…&locale=…`.** This is the route the SDK itself
 > calls, so a hand-rolled server fetch and the client's later fetches agree. The older
@@ -155,11 +176,81 @@ export async function load({ fetch, request, locals }) {
 These render base language in the server HTML and correct themselves at hydration.
 That is expected — see [What this does](#what-this-does--and-what-it-does-not).
 
-> Inside `<Translate>` and `<Phrase>` markup, interpolation placeholders are `%name%`,
-> not `{name}` — Svelte compiles a bare `{name}` in a template as its own expression
-> tag before the SDK ever sees the text. The `{name}` above is fine because it is a
-> JavaScript string argument to `$t()`, which the compiler does not touch. See the
-> main `README.md`.
+> Inside `<Translate>` and `<Phrase>` markup, `{name}` is a Svelte expression. With the
+> build-time transform (`langsysPreprocess()` in `svelte.config.js`) it becomes the placeholder
+> `{name}` with the value as a param; without it, write `%name%` and pass `params`. The `{name}`
+> above is a JavaScript string argument to `$t()`, which needs neither. See the main `README.md`.
+
+## Rendering inside a request scope
+
+A server process renders for many visitors at once, and the SDK's catalog normally lives in
+module state shared by all of them. A **request scope** gives each request its own locale,
+catalog and missed-phrase collection. `createLangsysHandle` opens one per request:
+
+```typescript
+// src/hooks.server.ts
+import { createLangsysHandle } from 'langsys-js-svelte/kit/server';
+
+export const handle = createLangsysHandle({
+    // The request's locale: the URL first, then a cookie or session value, then Accept-Language,
+    // each checked against your project's locales (see "Choosing the locale" above).
+    locale: (event) => event.locals.locale,
+});
+```
+
+```typescript
+// src/hooks.client.ts — SvelteKit 2.10 or later, which runs the `init` hook before hydration
+import { hydrateFromServer } from 'langsys-js-svelte/kit';
+
+export const init = () => hydrateFromServer();
+```
+
+For each request the handle opens a scope, renders the whole response inside it — `load`, its
+`await`s and every component — writes the scope's catalog into the page, and closes the scope
+after the response. `hydrateFromServer()` puts that catalog in place before hydration, so the
+first client render matches the served HTML. Inside the scope `$t`, `$currentlyLoadedLocale` and
+`$sTranslations` all read this request's locale and catalog, and an `await` before a read is safe.
+Measured with 800 concurrent Italian and German renders that await before they read: none served
+the wrong locale.
+
+- **Server init.** Call `LangsysApp.init()` once on the server — with the key, and
+  `ssrTokenStrategy: 'server'` if phrases missed during a server render should be registered.
+  When the key may write, a scope's misses are sent after the response, never while the visitor
+  waits; a read-only key sends nothing.
+- **Options.** `catalog` hands the scope a catalog you already have (otherwise it is fetched, at
+  most once per locale per request); `match` limits which requests get a scope; `seed: false`
+  skips the inline script, for a CSP that forbids inline scripts: the client then has no seed,
+  and `hydrateFromServer()` finds none and returns `false`; `storage` supplies your own
+  `AsyncLocalStorage`.
+- **More than one project.** `credentials` gives a request its own project id and API key, for
+  an app that serves several projects from one server:
+
+    ```typescript
+    export const handle = createLangsysHandle({
+        locale: (event) => event.locals.locale,
+        credentials: (event) => event.locals.tenant?.langsys, // { projectid, key } or undefined
+    });
+    ```
+
+    The request's catalog, every request its render makes and the misses sent after the response
+    go out under them, never under another request's, however renders interleave. A request given
+    none sends under the credentials `init()` set. A read key is allowed: whether a request may
+    write is its own key's. With `catalog` as well, nothing tells the scope what its key may write,
+    so it sends nothing after the response and the browser registers what the page missed. The key
+    is never written into the page.
+
+- **Reference lists.** Inside the scope, `LangsysApp.getCountries()` and the other lists
+  (README, _Utilities_) name their list in the request's locale when given none. The core holds
+  each list per display locale for the life of the process, so a later request in that locale
+  answers it with no request. Each request with `credentials` reads under its own.
+- **Components.** With the build-time transform, `<Translate>` and `<Phrase>` are rendered
+  translated in the served HTML, their hosts stamped with the block's id, and the misses of a
+  server render are registered through the scope after the response. A block the transform
+  cannot read — or any block without the transform — is served as its source, with no resolved
+  marker and with an app-supplied `custom_id` stamped, and is translated after hydration; with
+  `debug: true` the SDK says why, once per reason.
+
+With a request scope you do not need the component-body seed below.
 
 ## Server-rendering translated copy
 
@@ -313,12 +404,14 @@ want.
 
 ```typescript
 // src/routes/+layout.server.ts — the Step 1 load, with the fetch made failure-safe
-export async function load({ fetch, request, locals }) {
-    const detected = locals.userLocale || LangsysApp.detectPreferredLocale(request.headers.get('accept-language'), SUPPORTED);
-    const locale = typeof detected === 'string' && SUPPORTED.includes(detected) ? detected : BASE_LOCALE;
+export async function load({ fetch, request, url, locals, setHeaders }) {
+    const fromUrl = served(url.searchParams.get('lang'));
+    const header = request.headers.get('accept-language');
+    const locale = fromUrl || served(locals.userLocale) || (header && LangsysApp.detectPreferredLocale(header, SUPPORTED)) || BASE_LOCALE;
+    if (!fromUrl) setHeaders({ vary: 'Cookie, Accept-Language' });
 
     // A non-2xx is not an exception, so check `response.ok` as well as catching.
-    let translations: iCategories = {};
+    let translations = {} as iCategories;
     try {
         const response = await fetch(`https://api.langsys.dev/api/translations?project_id=${LANGSYS_PROJECT_ID}&locale=${locale}`, {
             headers: { 'x-Authorization': LANGSYS_API_KEY, 'Content-Type': 'application/json' },
@@ -491,9 +584,29 @@ Control how missing tokens are handled during SSR:
 }
 ```
 
-- `'client'` (default) — queue tokens, send from client after hydration.
-- `'server'` — send tokens immediately from server.
+- `'client'` (default) — the server collects **nothing**; registration happens only from the browser.
+- `'server'` — send tokens immediately from the server.
 - `'auto'` — small batches (≤5) from server, larger batches from client.
+
+**"Queue on the server, send from the client" is not what `'client'` does, and is not
+possible.** Under SSR the server instance declines to collect (`shouldQueueForWrite()`
+returns `false`), and the post-hydration flush runs in the browser's module instance — a
+different object in a different process. There is no channel carrying a queue client-ward;
+`initialTranslations` goes the other way.
+
+**So server-only content is discovered by neither lane.** Markup that renders exclusively
+during SSR — a branch the browser never takes, anything gated on `!browser` — never reaches
+the browser's collector and was never collected on the server either. It fails silently: no
+error, no failed request, and no discovery hint, because SSR does not hint.
+
+Reach for `ssrTokenStrategy: 'server'` on those pages — after checking the precondition below.
+
+> [!IMPORTANT]
+> **`'server'` requires your origin server's address to be allow-listed for the key.**
+> Registrations under `'server'` originate from your server process, so the API sees your
+> **origin server's IP**, not a visitor's. If that address is not allow-listed, the SDK makes
+> zero registration attempts by design — no error, no request, nothing in the catalog, and no
+> discovery hint. `'auto'` sends its small batches the same way and has the same precondition.
 
 ### Debug mode
 
@@ -536,7 +649,7 @@ assuming the catalog is simply untranslated.
 2. **Matching locales.** Always provide `initialTranslationsLocale` with
    `initialTranslations` so the SDK knows what locale the data represents.
 3. **Exact locale tags.** The value must be one of your project's configured locales,
-   spelled the same way. Casing and `_` are normalized (`es_cr` → `es-CR`), but a bare
+   spelled the same way. Casing and `_` are normalized (`es_cr` and `es-CR` are both `es-cr`), but a bare
    language is _not_ widened to a region — `es` will not find `es-CR`. Resolve with
    `LangsysApp.detectPreferredLocale(header, supportedLocales)`, which does the
    language-to-region match for you.

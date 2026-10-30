@@ -1,0 +1,266 @@
+{
+    "projects": [
+        {
+            "id": "76000201-0000-4000-8000-000000000001",
+            "title": "var 1 app",
+            "base_locale": "en-us",
+            "target_locales": ["it-it"],
+            "phrases": [
+                { "category": "VAR", "phrase": "Hello {name}, welcome back", "translations": { "it-it": "Ciao {name}, bentornato" } },
+                { "category": "VAR", "phrase": "Hello Ana, welcome back", "translations": { "it-it": "Ciao Ana, bentornato" } },
+                { "category": "VAR", "phrase": "Photo of {name}", "translations": { "it-it": "Foto di {name}" } },
+                { "category": "VAR", "phrase": "Picture of {name}", "translations": { "it-it": "Immagine di {name}" } },
+                { "category": "VAR2", "phrase": "Picture of {name}", "translations": { "it-it": "Figura di {name}" } },
+                { "category": "VAR", "phrase": "Built with", "translations": { "it-it": "Costruito con" } }
+            ],
+            "blocks": [
+                {
+                    "category": "VAR",
+                    "custom_id": "e077f70228646ed5954442174a83a42f",
+                    "content": "<p>You have {items_count} items</p><button>Add one</button>",
+                    "phrases": [
+                        {
+                            "phrase": "You have {items_count} items",
+                            "translations": { "it-it": "{items_count, plural, one {Hai # articolo} other {Hai # articoli}}" }
+                        },
+                        { "phrase": "Add one", "translations": { "it-it": "Aggiungi" } }
+                    ]
+                },
+                {
+                    "category": "VAR",
+                    "custom_id": "d7cc7227f9b047d8c222a6157e6872d5",
+                    "content": "<img alt=\"Photo of {name}\">",
+                    "phrases": [{ "phrase": "Photo of {name}", "translations": { "it-it": "Foto di {name}" } }]
+                },
+                {
+                    "category": "VAR",
+                    "custom_id": "a23da2eb5c265945e75b9e5b75559e84",
+                    "content": "<img alt=\"Picture of {name}\">",
+                    "phrases": [{ "phrase": "Picture of {name}", "translations": { "it-it": "Immagine di {name}" } }]
+                },
+                {
+                    "category": "VAR2",
+                    "custom_id": "17bcc0d3639bdc51adee5a98864c1c28",
+                    "content": "<img alt=\"Picture of {name}\">",
+                    "phrases": [{ "phrase": "Picture of {name}", "translations": { "it-it": "Figura di {name}" } }]
+                }
+            ],
+            "user": { "token": "112011|svelte-token-112011", "device_id": "svelte-device-112011" }
+        },
+        {
+            "id": "76000202-0000-4000-8000-000000000001",
+            "title": "var 2 app",
+            "base_locale": "en-us",
+            "target_locales": ["it-it"],
+            "phrases": [],
+            "blocks": [],
+            "user": { "token": "112021|svelte-token-112021", "device_id": "svelte-device-112021" }
+        },
+        {
+            "id": "76000203-0000-4000-8000-000000000001",
+            "title": "var 3 app",
+            "base_locale": "en-us",
+            "target_locales": ["it-it"],
+            "phrases": [],
+            "blocks": [],
+            "user": { "token": "112031|svelte-token-112031", "device_id": "svelte-device-112031" }
+        },
+        {
+            "id": "76000204-0000-4000-8000-000000000001",
+            "title": "var 4 app",
+            "base_locale": "en-us",
+            "target_locales": ["it-it"],
+            "phrases": [
+                { "category": "VAR", "phrase": "Hello {name}, welcome back", "translations": { "it-it": "Ciao {name}, bentornato" } },
+                { "category": "VAR", "phrase": "Hello Ana, welcome back", "translations": { "it-it": "Ciao Ana, bentornato" } },
+                { "category": "VAR", "phrase": "Photo of {name}", "translations": { "it-it": "Foto di {name}" } },
+                { "category": "VAR", "phrase": "Picture of {name}", "translations": { "it-it": "Immagine di {name}" } },
+                { "category": "VAR2", "phrase": "Picture of {name}", "translations": { "it-it": "Figura di {name}" } },
+                { "category": "VAR", "phrase": "Built with", "translations": { "it-it": "Costruito con" } }
+            ],
+            "blocks": [
+                {
+                    "category": "VAR",
+                    "custom_id": "e077f70228646ed5954442174a83a42f",
+                    "content": "<p>You have {items_count} items</p><button>Add one</button>",
+                    "phrases": [
+                        {
+                            "phrase": "You have {items_count} items",
+                            "translations": { "it-it": "{items_count, plural, one {Hai # articolo} other {Hai # articoli}}" }
+                        },
+                        { "phrase": "Add one", "translations": { "it-it": "Aggiungi" } }
+                    ]
+                },
+                {
+                    "category": "VAR",
+                    "custom_id": "d7cc7227f9b047d8c222a6157e6872d5",
+                    "content": "<img alt=\"Photo of {name}\">",
+                    "phrases": [{ "phrase": "Photo of {name}", "translations": { "it-it": "Foto di {name}" } }]
+                },
+                {
+                    "category": "VAR",
+                    "custom_id": "a23da2eb5c265945e75b9e5b75559e84",
+                    "content": "<img alt=\"Picture of {name}\">",
+                    "phrases": [{ "phrase": "Picture of {name}", "translations": { "it-it": "Immagine di {name}" } }]
+                },
+                {
+                    "category": "VAR2",
+                    "custom_id": "17bcc0d3639bdc51adee5a98864c1c28",
+                    "content": "<img alt=\"Picture of {name}\">",
+                    "phrases": [{ "phrase": "Picture of {name}", "translations": { "it-it": "Figura di {name}" } }]
+                }
+            ],
+            "user": { "token": "112041|svelte-token-112041", "device_id": "svelte-device-112041" }
+        },
+        {
+            "id": "76000205-0000-4000-8000-000000000001",
+            "title": "var 5 app",
+            "base_locale": "en-us",
+            "target_locales": ["it-it"],
+            "phrases": [
+                { "category": "VAR", "phrase": "Hello {name}, welcome back", "translations": { "it-it": "Ciao {name}, bentornato" } },
+                { "category": "VAR", "phrase": "Hello Ana, welcome back", "translations": { "it-it": "Ciao Ana, bentornato" } },
+                { "category": "VAR", "phrase": "Photo of {name}", "translations": { "it-it": "Foto di {name}" } },
+                { "category": "VAR", "phrase": "Picture of {name}", "translations": { "it-it": "Immagine di {name}" } },
+                { "category": "VAR2", "phrase": "Picture of {name}", "translations": { "it-it": "Figura di {name}" } },
+                { "category": "VAR", "phrase": "Built with", "translations": { "it-it": "Costruito con" } }
+            ],
+            "blocks": [
+                {
+                    "category": "VAR",
+                    "custom_id": "e077f70228646ed5954442174a83a42f",
+                    "content": "<p>You have {items_count} items</p><button>Add one</button>",
+                    "phrases": [
+                        {
+                            "phrase": "You have {items_count} items",
+                            "translations": { "it-it": "{items_count, plural, one {Hai # articolo} other {Hai # articoli}}" }
+                        },
+                        { "phrase": "Add one", "translations": { "it-it": "Aggiungi" } }
+                    ]
+                },
+                {
+                    "category": "VAR",
+                    "custom_id": "d7cc7227f9b047d8c222a6157e6872d5",
+                    "content": "<img alt=\"Photo of {name}\">",
+                    "phrases": [{ "phrase": "Photo of {name}", "translations": { "it-it": "Foto di {name}" } }]
+                },
+                {
+                    "category": "VAR",
+                    "custom_id": "a23da2eb5c265945e75b9e5b75559e84",
+                    "content": "<img alt=\"Picture of {name}\">",
+                    "phrases": [{ "phrase": "Picture of {name}", "translations": { "it-it": "Immagine di {name}" } }]
+                },
+                {
+                    "category": "VAR2",
+                    "custom_id": "17bcc0d3639bdc51adee5a98864c1c28",
+                    "content": "<img alt=\"Picture of {name}\">",
+                    "phrases": [{ "phrase": "Picture of {name}", "translations": { "it-it": "Figura di {name}" } }]
+                }
+            ],
+            "user": { "token": "112051|svelte-token-112051", "device_id": "svelte-device-112051" }
+        },
+        {
+            "id": "76000206-0000-4000-8000-000000000001",
+            "title": "var 6 app",
+            "base_locale": "en-us",
+            "target_locales": ["it-it"],
+            "phrases": [
+                { "category": "VAR", "phrase": "Hello {name}, welcome back", "translations": { "it-it": "Ciao {name}, bentornato" } },
+                { "category": "VAR", "phrase": "Hello Ana, welcome back", "translations": { "it-it": "Ciao Ana, bentornato" } },
+                { "category": "VAR", "phrase": "Photo of {name}", "translations": { "it-it": "Foto di {name}" } },
+                { "category": "VAR", "phrase": "Picture of {name}", "translations": { "it-it": "Immagine di {name}" } },
+                { "category": "VAR2", "phrase": "Picture of {name}", "translations": { "it-it": "Figura di {name}" } },
+                { "category": "VAR", "phrase": "Built with", "translations": { "it-it": "Costruito con" } }
+            ],
+            "blocks": [
+                {
+                    "category": "VAR",
+                    "custom_id": "e077f70228646ed5954442174a83a42f",
+                    "content": "<p>You have {items_count} items</p><button>Add one</button>",
+                    "phrases": [
+                        {
+                            "phrase": "You have {items_count} items",
+                            "translations": { "it-it": "{items_count, plural, one {Hai # articolo} other {Hai # articoli}}" }
+                        },
+                        { "phrase": "Add one", "translations": { "it-it": "Aggiungi" } }
+                    ]
+                },
+                {
+                    "category": "VAR",
+                    "custom_id": "d7cc7227f9b047d8c222a6157e6872d5",
+                    "content": "<img alt=\"Photo of {name}\">",
+                    "phrases": [{ "phrase": "Photo of {name}", "translations": { "it-it": "Foto di {name}" } }]
+                },
+                {
+                    "category": "VAR",
+                    "custom_id": "a23da2eb5c265945e75b9e5b75559e84",
+                    "content": "<img alt=\"Picture of {name}\">",
+                    "phrases": [{ "phrase": "Picture of {name}", "translations": { "it-it": "Immagine di {name}" } }]
+                },
+                {
+                    "category": "VAR2",
+                    "custom_id": "17bcc0d3639bdc51adee5a98864c1c28",
+                    "content": "<img alt=\"Picture of {name}\">",
+                    "phrases": [{ "phrase": "Picture of {name}", "translations": { "it-it": "Figura di {name}" } }]
+                }
+            ],
+            "user": { "token": "112061|svelte-token-112061", "device_id": "svelte-device-112061" }
+        },
+        {
+            "id": "76000207-0000-4000-8000-000000000001",
+            "title": "var 7 app",
+            "base_locale": "en-us",
+            "target_locales": ["it-it"],
+            "phrases": [
+                { "category": "VAR", "phrase": "Hello {name}, welcome back", "translations": { "it-it": "Ciao {name}, bentornato" } },
+                { "category": "VAR", "phrase": "Hello Ana, welcome back", "translations": { "it-it": "Ciao Ana, bentornato" } },
+                { "category": "VAR", "phrase": "Photo of {name}", "translations": { "it-it": "Foto di {name}" } },
+                { "category": "VAR", "phrase": "Picture of {name}", "translations": { "it-it": "Immagine di {name}" } },
+                { "category": "VAR2", "phrase": "Picture of {name}", "translations": { "it-it": "Figura di {name}" } },
+                { "category": "VAR", "phrase": "Built with", "translations": { "it-it": "Costruito con" } }
+            ],
+            "blocks": [
+                {
+                    "category": "VAR",
+                    "custom_id": "e077f70228646ed5954442174a83a42f",
+                    "content": "<p>You have {items_count} items</p><button>Add one</button>",
+                    "phrases": [
+                        {
+                            "phrase": "You have {items_count} items",
+                            "translations": { "it-it": "{items_count, plural, one {Hai # articolo} other {Hai # articoli}}" }
+                        },
+                        { "phrase": "Add one", "translations": { "it-it": "Aggiungi" } }
+                    ]
+                },
+                {
+                    "category": "VAR",
+                    "custom_id": "d7cc7227f9b047d8c222a6157e6872d5",
+                    "content": "<img alt=\"Photo of {name}\">",
+                    "phrases": [{ "phrase": "Photo of {name}", "translations": { "it-it": "Foto di {name}" } }]
+                },
+                {
+                    "category": "VAR",
+                    "custom_id": "a23da2eb5c265945e75b9e5b75559e84",
+                    "content": "<img alt=\"Picture of {name}\">",
+                    "phrases": [{ "phrase": "Picture of {name}", "translations": { "it-it": "Immagine di {name}" } }]
+                },
+                {
+                    "category": "VAR2",
+                    "custom_id": "17bcc0d3639bdc51adee5a98864c1c28",
+                    "content": "<img alt=\"Picture of {name}\">",
+                    "phrases": [{ "phrase": "Picture of {name}", "translations": { "it-it": "Figura di {name}" } }]
+                }
+            ],
+            "user": { "token": "112071|svelte-token-112071", "device_id": "svelte-device-112071" }
+        }
+    ],
+    "keys": [
+        { "id": "76000201-0000-4000-8000-100000000001", "key": "svelte-02-01-read", "project": "76000201-0000-4000-8000-000000000001", "type": "read" },
+        { "id": "76000202-0000-4000-8000-100000000001", "key": "svelte-02-02-write", "project": "76000202-0000-4000-8000-000000000001", "type": "write" },
+        { "id": "76000203-0000-4000-8000-100000000001", "key": "svelte-02-03-write", "project": "76000203-0000-4000-8000-000000000001", "type": "write" },
+        { "id": "76000204-0000-4000-8000-100000000001", "key": "svelte-02-04-read", "project": "76000204-0000-4000-8000-000000000001", "type": "read" },
+        { "id": "76000205-0000-4000-8000-100000000001", "key": "svelte-02-05-read", "project": "76000205-0000-4000-8000-000000000001", "type": "read" },
+        { "id": "76000206-0000-4000-8000-100000000001", "key": "svelte-02-06-read", "project": "76000206-0000-4000-8000-000000000001", "type": "read" },
+        { "id": "76000207-0000-4000-8000-100000000001", "key": "svelte-02-07-write", "project": "76000207-0000-4000-8000-000000000001", "type": "write" }
+    ]
+}

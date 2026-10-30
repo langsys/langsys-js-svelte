@@ -1,0 +1,218 @@
+--- a/contract-fixture/README.md
++++ b/contract-fixture/README.md
+@@ -22,11 +22,7 @@
+   files, unique across every SDK's folders, each SDK in ranges of its own. A test knows every id it
+   uses without asking, and the forwarder passes them through as sent.
+ - **Every test case has projects of its own**, so no case reads another's writes, whatever order
+-  the cases run in, and a test runs again only after a reseed. Before a case acts, the test helper
+-  reads its world back as each project's owner: the keys on every field the key listing returns,
+-  the project's settings, a catalog holding exactly the seeded phrases and blocks with their
+-  translations, each block's markup, and no stored hints. A world that differs fails its case as
+-  `seed not landed`, naming what differs.
++  the cases run in, and a test runs again only after a reseed.
+ - **The server's settings are the clone's `.env`**, one set for the whole run: the batch limit,
+   the hint rate per address, the hint dedup window and the renderer's egress address.
+ - **One refused seed file stops the reseed for every SDK sharing the clone**, so a changed file is
+@@ -60,7 +56,7 @@
+ reader for a project nothing uses and the target for a catalog with no key, and it exits 2 unless
+ the reader answers no hints and the target answers `401 unauthenticated`, as a Langsys API does.
+ `--log` appends one JSON line for its start, each setup, each request refused for naming no case,
+-each locale list refused as unsupported, and each failed read.
++and each failed read.
+ 
+ The TypeScript suite always takes this path: `tests/helpers/contract-fixture.ts` starts the
+ forwarder from `LANGSYS_CONTRACT_TARGET` and `LANGSYS_CONTRACT_CLONE_ROOT`, and throws when either
+@@ -130,8 +126,8 @@
+ ## Crafted reference lists
+ 
+ A case's `reference` holds Locale, Country, DialCode and Currency tables of its own, in table
+-order, with its organisation's `locale_code_format` beside them, since a clone's reference tables
+-are shared by every test. Once the clone has accepted a
++order, with its project's `target_locales` and its organisation's `locale_code_format` beside
++them, since a clone's reference tables are shared by every test. Once the clone has accepted a
+ request on a reference route, the forwarder answers it from the case's tables
+ (`reference-lists.mjs`), as LocaleController, CountryController and CurrencyController answer
+ from the API's own, ported; a request the clone refuses is refused as the clone refuses it. Names
+@@ -160,12 +156,10 @@
+ 
+ - **The three locale forms** (`/locales`, `/locales/flat`, `/locales/data`) take their display
+   locales as `locales[]`, each formatted as the backend formats a locale, `_` read as `-` and
+-  lowercased. Only the codes the case's Locale table holds are named, in the table's order. The
+-  API appends the project's target locales unless `append_target_locales` is `false` or `0`, and
+-  always with a `project_id`; only the clone holds those, so a request that would append them is
+-  refused with `501` and a body of the forwarder's own,
+-  `{"ok":false,"fixture":"unsupported","route":"GET /api/locales/flat",…}`, which names what to
+-  send instead. Each entry is keyed, and every `code` in it written, in the
++  lowercased. Only the codes the case's Locale table holds are named. The project's target locales
++  are appended after them unless `append_target_locales` is `false` or `0`, and always with a
++  `project_id`. `locales/data` names its display locales in the table's order, so an appended one
++  can come first. Each entry is keyed, and every `code` in it written, in the
+   `locale_code_format` (`lowercase-hyphen`, `bcp47` or `posix`: `es-es`, `es-ES`, `es_ES`). The
+   grouped form groups by language name, groups and rows in byte order; the flat form is by name and
+   the data form by locale name. An answer naming nothing is `data: []`, as PHP writes an empty map.
+@@ -201,12 +195,12 @@
+ 
+ ## Error bodies
+ 
+-On `/api`, every answer is the clone's but four. Two carry a body of the forwarder's own, naming
+-the route: a request naming no case (`421`, above) and a locale list that would append target
+-locales (`501`, above). Two carry the backend's envelope, `{status:false, error:{message, code,
+-template}}`: a fault's `status`, which answers with the case the backend's
++On `/api`, every answer is the clone's but three. The forwarder's own are a request naming no
++case (`421`, above), a fault's `status`, which answers with the case the backend's
+ `ApiErrorService::forStatus` maps it to (`bad_request`, `unauthenticated`, `payment_required`,
+ `forbidden`, `not_found`, `method_not_allowed`, `conflict`, `gone`, `unprocessable_entity`,
+-`too_many_requests`, `internal_error`, `external_service_error`, `service_unavailable`, and
+-`internal_error` for any other status), and the crafted currency list's `500 internal_error`.
+-Assert on the status and on `error.code`, never on message text.
++`too_many_requests`, `internal_error`,
++`external_service_error`, `service_unavailable`, and `internal_error` for any other status), and
++the crafted currency list's `500 internal_error`. Each carries the backend's envelope,
++`{status:false, error:{message, code, template}}`. Assert on the status and on `error.code`, never
++on message text.
+--- a/contract-fixture/forwarder.mjs
++++ b/contract-fixture/forwarder.mjs
+@@ -23,9 +23,7 @@
+  * - A case's faults fail its next matching requests, in order, before anything is forwarded.
+  * - A case's crafted reference lists answer the reference routes in place of the clone's shared
+  *   tables, named as the API names its own (`reference-lists.mjs`), once the clone has answered
+- *   the request itself: a request the API refuses is refused as the API refuses it. A locale list
+- *   that would append the project's target locales, which only the clone holds, is refused with
+- *   501 and a body of the fixture's own.
++ *   the request itself: a request the API refuses is refused as the API refuses it.
+  * - `GET /__fixture/state?project=<id>[&project=<id>]` answers the hints the clone stored for those
+  *   projects, read by langsys's reader. `POST /__fixture/clock` waits the time it is asked to
+  *   advance: the clone's clock is real.
+@@ -37,7 +35,7 @@
+ import { createServer } from 'node:http';
+ import { isIP } from 'node:net';
+ import { join } from 'node:path';
+-import { craftedList, decodeSegment, LocaleComposeError, referenceRoute, referenceTables, UnsupportedListError } from './reference-lists.mjs';
++import { craftedList, decodeSegment, LocaleComposeError, referenceRoute, referenceTables } from './reference-lists.mjs';
+ 
+ const option = (name) => {
+     const at = process.argv.indexOf(name);
+@@ -281,10 +279,6 @@
+     } catch (error) {
+         // An exception the controller does not catch, rendered as the backend renders one.
+         if (error instanceof LocaleComposeError) return send(res, 500, statusError(500));
+-        if (error instanceof UnsupportedListError) {
+-            log({ event: 'unsupported', route });
+-            return send(res, 501, { ok: false, fixture: 'unsupported', route, error: error.message });
+-        }
+         throw error;
+     }
+ }
+--- a/contract-fixture/reference-lists.mjs
++++ b/contract-fixture/reference-lists.mjs
+@@ -3,8 +3,7 @@
+  * Currency tables a case gives in its setup, named as LocaleController, CountryController and
+  * CurrencyController name the API's own, ported. The forwarder answers a reference route from
+  * them once the clone has accepted the request, since a clone's shared tables cannot hold a list
+- * per test; every refusal is the clone's. The one request they cannot answer, a locale list that
+- * appends the project's target locales, which only the clone holds, is an UnsupportedListError.
++ * per test; every refusal is the clone's, so nothing here refuses a request.
+  *
+  * Node built-ins only.
+  */
+@@ -14,12 +13,12 @@
+ 
+ /** The organisation's settings.locales.locale_code_format (LocaleCodeFormat). */
+ const LOCALE_CODE_FORMATS = ['lowercase-hyphen', 'bcp47', 'posix'];
+-const FIELDS = ['locales', 'countries', 'dial_codes', 'currencies', 'locale_code_format'];
++const FIELDS = ['locales', 'countries', 'dial_codes', 'currencies', 'target_locales', 'locale_code_format'];
+ 
+ /**
+  * A case's lists as the seeders fill the tables: locale codes as stored (lowercase), the rest as
+- * rows. Beside them, its organisation's code format, which the locale lists write codes in.
+- * Throws, naming what is wrong, on a malformed one.
++ * rows. Beside them, the case's project's target locales and its organisation's code format, which
++ * the locale lists append and write codes in. Throws, naming what is wrong, on a malformed one.
+  */
+ export function referenceTables(ref) {
+     if (!ref || typeof ref !== 'object' || Array.isArray(ref)) throw new Error('reference is an object');
+@@ -50,6 +49,7 @@
+             decimal_digits: c.decimal_digits ?? 2,
+             rounding: c.rounding ?? 0,
+         })),
++        target_locales: strings(ref.target_locales ?? [], 'target_locales'),
+         locale_code_format: format,
+     };
+ }
+@@ -79,13 +79,9 @@
+ /** PHP's locale_compose given no language: a ValueError, which CurrencyController does not catch. */
+ export class LocaleComposeError extends Error {}
+ 
+-/** A request the crafted lists cannot answer as the API would, since what it asks for only the clone holds. */
+-export class UnsupportedListError extends Error {}
+-
+ /**
+  * The `data` a reference route answers over a case's tables. Throws a LocaleComposeError where the
+- * backend throws one its controller does not catch, which it renders as a 500, and an
+- * UnsupportedListError for a locale list that appends the project's target locales.
++ * backend throws one its controller does not catch, which it renders as a 500.
+  */
+ export function craftedList(tables, route, url) {
+     return route.form ? localeLists(tables, url, route.form) : REFERENCE_LISTS[route.list](tables, route.visitor);
+@@ -321,21 +317,24 @@
+ 
+ /**
+  * GET /locales, /locales/flat, /locales/data, as the controller answers a request the API
+- * accepted. The display locales are the `locales[]` the Locale table holds, in its order. The API
+- * appends the project's target locales unless `append_target_locales` is false
+- * (BooleanQueryParamCast's `false` or `0`), and always with a `project_id`; those are the clone's
+- * project's, so such a request is an UnsupportedListError. Each display locale's entry is keyed,
+- * and every code written, in the organisation's locale-code format. An empty answer is `[]`, as
+- * PHP writes an empty map.
++ * accepted. The display locales are the `locales[]` the Locale table holds; the project's target
++ * locales are appended unless `append_target_locales` is false (BooleanQueryParamCast's `false`
++ * or `0`), and always with a `project_id`. Each display locale's entry is keyed, and every code
++ * written, in the organisation's locale-code format. An empty answer is `[]`, as PHP writes an
++ * empty map.
+  */
+ function localeLists(tables, url, form) {
+     const { listed, scalars } = localesQuery(url);
+-    if ((scalars.project_id ?? null) !== null || !['false', '0'].includes(scalars.append_target_locales ?? 'true')) {
+-        throw new UnsupportedListError("the crafted locale lists do not append a project's target locales, which the clone holds: ask with append_target_locales=0 and no project_id");
+-    }
++    const append = !['false', '0'].includes(scalars.append_target_locales ?? 'true');
++    // _getRequestLocales: the listed locales the Locale table holds, in its order, then targets.
++    let requested = tables.locales.filter((code) => listed.includes(code));
++    if ((scalars.project_id ?? null) !== null || append) requested = [...requested, ...tables.target_locales];
++    requested = [...new Set(requested)];
+     const format = tables.locale_code_format;
++    // `data` names only the requested locales the table holds, in the table's order.
++    const visitors = form === 'locales/data' ? tables.locales.filter((code) => requested.includes(code)) : requested;
+     const data = {};
+-    for (const visitor of tables.locales.filter((code) => listed.includes(code))) data[formatLocaleCode(visitor, format)] = formatCodes(LOCALE_FORMS[form](tables, visitor), format);
++    for (const visitor of visitors) data[formatLocaleCode(visitor, format)] = formatCodes(LOCALE_FORMS[form](tables, visitor), format);
+     return Object.keys(data).length ? data : [];
+ }
+ 
+--- a/contract-fixture/setup.schema.json
++++ b/contract-fixture/setup.schema.json
+@@ -126,7 +126,7 @@
+                 "null"
+             ],
+             "additionalProperties": false,
+-            "description": "The case's crafted reference tables, in table order, which answer the locale, country, dial-code and currency routes once the clone has accepted the request; null for the clone's own tables. A locale-list request that would append the project's target locales (append_target_locales not false or 0, or a project_id) is answered 501 with the fixture's own body, since only the clone holds them. Names are not given: each route names its rows in the display locale through ICU and Symfony Intl, as the backend does.",
++            "description": "The case's crafted reference tables, in table order, which answer the locale, country, dial-code and currency routes once the clone has accepted the request; null for the clone's own tables. Names are not given: each route names its rows in the display locale through ICU and Symfony Intl, as the backend does.",
+             "properties": {
+                 "locales": {
+                     "type": "array",
+@@ -208,6 +208,15 @@
+                             }
+                         }
+                     }
++                },
++                "target_locales": {
++                    "type": "array",
++                    "items": {
++                        "type": "string",
++                        "minLength": 1
++                    },
++                    "default": [],
++                    "description": "The case's project's target locales, stored lowercase-hyphen (fr-fr), which the locale routes append to the display locales."
+                 },
+                 "locale_code_format": {
+                     "enum": [
