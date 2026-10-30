@@ -1,139 +1,74 @@
-# Publishing Guide for langsys-js-svelte
+# Publishing langsys-js-svelte
 
-This project includes an automated publishing script to streamline the release process.
+Releases are CI-driven through npm **trusted publishing** (OIDC): there is no npm token in the
+repo, in CI secrets or on a maintainer's machine. The release script prepares the version, the tag
+and the GitHub release; the GitHub release starts the workflow that publishes to npm.
 
-## Prerequisites
+## Before a release
 
-Before using the publishing scripts, ensure you have:
+- You are on `main`, with the release's work merged and **not pushed**. The script amends the last
+  commit with the version bump, so it refuses when there is nothing unpushed.
+- `main` is up to date with `origin/main`. The script refuses when `origin/main` holds commits you
+  do not have: its push is a force-push with lease, and after its own fetch the lease would accept
+  overwriting them.
+- `CHANGELOG.md` has a `## X.Y.Z - unreleased` section for the version. Preview the release body
+  with `bash _dev_/publish.sh --notes X.Y.Z` (the version defaults to the unreleased section's).
+- The GitHub CLI is installed and authenticated (`gh auth status`; see `GITHUB_CLI_SETUP.md`).
 
-1. **GitHub CLI (gh)** installed - [Installation guide](https://cli.github.com/)
-2. **npm** authentication configured for publishing
-3. **Git** configured with push access to the repository
-4. You are on the `main` branch with unpushed commits ready to release
-
-## Publishing Script
-
-```bash
-npm run release
-# or
-./publish.sh
-```
-
-## What the Script Does
-
-The publishing script automates the entire release process:
-
-1. **Verify Prerequisites**
-    - Check GitHub CLI is installed
-    - Verify you're on the main branch
-    - Ensure there are unpushed commits to release
-
-2. **Version Management**
-    - Display current version
-    - Prompt for new version (with suggestion)
-    - Validate version format
-    - Check version doesn't already exist
-
-3. **Build and Test**
-    - Update version in package.json
-    - Run `npm install` to update package-lock.json
-    - Run `npm run build` to verify everything compiles
-
-4. **Git Operations**
-    - Commit version bump
-    - Push to origin
-    - Create and push git tag
-
-5. **Release Creation**
-    - Create GitHub release with auto-generated notes
-    - Publish package to npm
-
-6. **Error Handling**
-    - Comprehensive error checking at each step
-    - Automatic rollback option if something fails
-
-## Version Format
-
-Versions must follow semantic versioning:
-
-- Format: `x.y.z` or `x.y.z-tag`
-- Examples: `1.2.3`, `2.0.0-beta.1`
-
-## Manual Publishing
-
-If you prefer to publish manually, here are the steps:
+## Running it
 
 ```bash
-# 1. Ensure you're on main with no uncommitted changes
-git checkout main
-git status
-
-# 2. Update version in package.json
-# Edit package.json and update the version field
-
-# 3. Update package-lock.json
-npm install
-
-# 4. Build to verify
-npm run build
-
-# 5. Commit version bump
-git add package.json package-lock.json
-git commit -m "chore: bump version to x.y.z"
-
-# 6. Push to origin
-git push origin main
-
-# 7. Create and push tag
-git tag -a vx.y.z -m "Release vx.y.z"
-git push origin vx.y.z
-
-# 8. Create GitHub release
-gh release create vx.y.z --title "vx.y.z" --notes "Release notes here"
-
-# 9. Publish to npm
-npm publish
+npm run release        # runs ./_dev_/publish.sh
 ```
 
-## Troubleshooting
+It takes no arguments. It asks for the version, suggesting the next patch, and then
+`Ready to publish version X.Y.Z? (y/N)`.
 
-### GitHub CLI Not Found
+## What it does
 
-Install the GitHub CLI from https://cli.github.com/
+1. **Checks**: `gh` is installed and authenticated, the branch is `main`, `origin/main` has nothing
+   you lack, and there is at least one unpushed commit.
+2. **Refuses before changing anything** a version that is not `x.y.z` or `x.y.z-tag`, one that
+   exists as a tag, a version with no CHANGELOG section, and release notes over GitHub's 125,000
+   characters.
+3. **Bumps** `package.json`, stamps the date into the `## X.Y.Z - unreleased` heading, so it matches
+   the publish, and runs `npm install` (the lockfile) and `npm run build`.
+4. **Amends** the last commit with the bump (its message gains `[Version bumped to X.Y.Z]`), pushes
+   `main` with `--force-with-lease`, and creates and pushes the annotated tag `vX.Y.Z`.
+5. **Creates the GitHub release** `vX.Y.Z`. Its body is the version's CHANGELOG section, the
+   install line and the compare link from the previous version.
 
-### npm Authentication Issues
+If a step fails after the version changed, the script offers a rollback: `package.json` and the
+CHANGELOG heading restored, the commit from before the amend restored (and force-pushed back if
+it was pushed), and the tag deleted locally and on `origin`.
 
-Ensure you're logged in to npm:
+The script does not publish to npm. The release's `published` event runs
+`.github/workflows/publish.yml` in the `npm-publish` environment: `npm ci`, `npm run check`,
+`npm test -- --run`, `npm run package`, then `npm publish --provenance`.
 
-```bash
-npm login
-```
+## Trusted publishing
 
-### Permission Denied (script not executable)
+Three settings must agree, or the workflow fails at the publish step:
 
-Make the scripts executable:
+- the GitHub Environment `npm-publish`;
+- npm's trusted publisher for the package: environment `npm-publish`, workflow `publish.yml`;
+- `environment: npm-publish` in `.github/workflows/publish.yml`.
 
-```bash
-chmod +x publish.js publish.sh
-```
+Publishing through OIDC needs npm 11.5.1 or later; the workflow installs the latest npm, because
+Node 22 ships npm 10.
 
-### Rollback Failed
+## After the release
 
-If automatic rollback fails, you can manually rollback:
+- The Publish run: https://github.com/langsys/langsys-js-svelte/actions
+- The published version: `npm view langsys-js-svelte@X.Y.Z version dist.integrity`, and its date,
+  which the CHANGELOG heading carries: `npm view langsys-js-svelte time --json`.
 
-```bash
-# Reset local changes
-git reset --hard HEAD~1
+## When the publish fails
 
-# Delete local tag
-git tag -d vx.y.z
+The GitHub release and the tag stay, and no npm version exists for them. A re-run of the workflow
+publishes the tag's commit, so:
 
-# Delete remote tag (if pushed)
-git push origin :refs/tags/vx.y.z
-```
-
-## Security Notes
-
-- Never commit sensitive credentials
-- Ensure npm tokens are properly secured
-- Use GitHub's built-in secrets for CI/CD automation
+- A cause outside the code, such as the trusted-publisher settings or a registry outage: fix it,
+  then re-run the failed job from the Actions tab.
+- A cause in the code: fix it on `main` and release the next version. The script refuses a
+  version whose tag exists.

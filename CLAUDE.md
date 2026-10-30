@@ -8,6 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Version compatibility:**
 
+- v4.x — Svelte 5 + `$t()`, over `langsys-js-typescript` 0.7: the build-time transform (`/preprocess`), the SvelteKit entries (`/kit`, `/kit/server`), and registration only where the server lets the session write.
 - v3.x — Svelte 5 + the function-call `$t()` API. Depends on `langsys-js-typescript`.
 - v2.x — Svelte 5, proxy-based `$_['Cat']['Phrase']` API, self-contained.
 - Pre-v2 — Svelte 3/4 client-only. Tag `v-last-svelte4-compat`.
@@ -20,9 +21,12 @@ README-SSR.md                     # ships in the tarball (since 3.6.15); SSR pat
 src/lib/
     index.ts                      # public exports — LangsysApp wrapper, t store, components, type re-exports
     adapters.ts                   # writable<T> → Signal<T> adapter (svelte/store get → .get())
+    proxy-handler.ts              # the forwarding handler behind the LangsysApp proxy
+    stores.ts                     # writeEnabled — the core's signal, wrapped so hydration reads it as the server rendered it
     messages.ts                   # `serverMessage` — a store derived from `t` over the core's renderServerMessage
     kit.ts                        # `langsys-js-svelte/kit` entry — syncNavigation() (afterNavigate), hydrateFromServer()
     kit/server.ts                 # `langsys-js-svelte/kit/server` — createLangsysHandle(): the core's request scope per request, with the request's own credentials when given
+    kit/seed.ts                   # the global the server writes a request's hydration seed to, and hydrateFromServer() reads
     preprocess/
         index.ts                  # `langsys-js-svelte/preprocess` — langsysPreprocess(), the build-time transform (VAR-6)
         naming.ts                 # Svelte AST → the core's expression shape; names come from the core's derivePlaceholderNames
@@ -53,7 +57,7 @@ That's the entire surface. Every other concern — HTTP, missing-token registrat
 
 ```typescript
 // Main entry point — wraps init to accept Writable, delegates everything else
-LangsysApp.init({ projectid, key, UserLocaleStore, baseLocale?, debug?, ssrTokenStrategy?, initialTranslations?, initialTranslationsLocale?, writeGrant? })
+LangsysApp.init({ projectid, key, UserLocaleStore, baseLocale?, apiUrl?, requireCredentials?, debug?, ssrTokenStrategy?, legacyKeys?, messagesCategory?, initialTranslations?, initialTranslationsLocale?, writeGrant? })
 LangsysApp.setWriteGrant(grant)  // async — re-authorizes so the server re-evaluates the session
 LangsysApp.t                     // current TFunction (snapshot — not reactive on its own)
 LangsysApp.getCountries() / getCurrencies() / getDialCodes() / getLocales*() / ...
@@ -78,6 +82,18 @@ writeEnabled                     // Readable<boolean | undefined> — tri-state,
 langsysPreprocess({ from?, warn? })   // {expr} inside <Translate>/<Phrase> → {name} placeholder + typed param;
                                       // $t(`…${x}`) → $t('…{x}…', cat, { x }). Without it, write %name% + params.
 
+// SvelteKit (optional peer @sveltejs/kit ^2.10.0)
+syncNavigation()                      // langsys-js-svelte/kit — once in the root layout; notifyNavigation() after each navigation
+hydrateFromServer()                   // langsys-js-svelte/kit — hooks.client.ts `init`: the served seed in place before hydration
+createLangsysHandle({ locale, catalog?, credentials?, match?, seed?, storage? })
+                                      // langsys-js-svelte/kit/server — hooks.server.ts `handle`: a request scope per request
+
+// Also from the main entry
+notifyNavigation(), canonicalizeLocale(), LangsysConfigurationError   // the core's, by reference
+serverMessage                         // Readable store: $serverMessage(entry) renders a server message entry
+renderServerMessage(), resolveServerMessages()                        // the core's, by reference
+OVERRIDDEN_MEMBERS                    // the LangsysApp members whose behaviour differs from the core's docs
+
 // Direct API client access (vanilla — no Svelte concerns)
 LangsysAppAPI
 
@@ -87,6 +103,8 @@ iLangsysResponse, iCategories, iTranslations, iContentBlock, iCountry, iCountryD
 iCurrency, iCurrencyList, iLanguageName, iLocaleData, iLocaleDefault, iLocaleFlat, iProject,
 TFunction, TranslationParams, ParamPrimitive, ExtractParamKeys, ParamsFor, TArgs
 WriteGrant (base-SDK union), WriteGrantSource (that union plus a Svelte store)
+ApiCredentials, ServerMessage, ResolveServerMessagesOptions, Signal, TStore
+LangsysHandleOptions (/kit/server), LangsysPreprocessOptions and LangsysPreprocessorGroup (/preprocess)
 ```
 
 **`writeEnabled` is the one store NOT re-exported by reference.** Everything else (`t`,
@@ -146,12 +164,12 @@ to erode:
 - `npm run dev` — Vite dev server with the demo at `src/routes/+page.svelte`. Needs `.env` with `VITE_LANGSYS_PROJECT_ID` and `VITE_LANGSYS_API_KEY` (see `.env.example`).
 - `npm run check` — `svelte-kit sync && svelte-check --tsconfig ./tsconfig.json`. Should be clean before any commit.
 - `npm run package` — `svelte-kit sync && svelte-package && publint`. Builds to `dist/`. `publint` should report "All good!" — the dep is the published npm `langsys-js-typescript`, so there is no `file:` dep to warn about.
-- `npm run test` — Vitest. Tests are minimal; expand here for new features.
+- `npm run test` — Vitest: the unit suite, no network. The contract suites, the transport seam and the browser harnesses are in `_dev_/LOCAL-TESTING.md`.
 - `npm run lint` / `npm run format` — Prettier + ESLint.
 
 ## Local development setup
 
-This package depends on the **published** `langsys-js-typescript` from npm (a caret range like `^0.3.x`), exactly as an end user would — never a `file:`/symlink/`npm link` dep. A local link has bitten us before (a stale local build silently shadowing the real package), so the dependency stays de-linked at all times.
+This package depends on the **published** `langsys-js-typescript` from npm (a caret range, `^0.7.0` today), exactly as an end user would — never a `file:`/symlink/`npm link` dep. A local link has bitten us before (a stale local build silently shadowing the real package), so the dependency stays de-linked at all times.
 
 To pick up base-SDK changes:
 
@@ -174,9 +192,9 @@ The flow:
 
 1. **Local:** `npm run release` (alias for `./_dev_/publish.sh`) — prompts for the new version, bumps `package.json`, stamps the date into the CHANGELOG heading `## X.Y.Z - unreleased`, amends the last commit with the version bump, force-pushes `main`, creates a tag `vX.Y.Z`, creates a GitHub Release whose body is that version's CHANGELOG section, the install line and the compare link. Before changing anything it refuses a version with no such section, or one over GitHub's 125,000-character limit; `bash _dev_/publish.sh --notes` prints the body without releasing. **It does not publish to npm.**
 2. **CI:** the `release: published` event triggers `.github/workflows/publish.yml`, which runs `npm ci` → `npm run check` → `npm test` → `npm run package` → `npm publish --provenance`. Publishing happens inside the `npm-publish` GitHub Environment so only tag-ref runs can mint the OIDC token.
-3. **PR/push gate:** `.github/workflows/ci.yml` runs `check` + `test` on every PR and every push to `main`, independent of the release flow.
+3. **PR/push gate:** `.github/workflows/ci.yml` runs `lint`, `check` and `test`, the CHANGELOG coverage check and, after `package`, the docs-API coverage check, on every PR and every push to `main`, independent of the release flow.
 
-If a publish fails after the GitHub Release was created, the Release stays but no npm version exists for that tag — fix forward by either deleting the GH release and re-running `npm run release`, or by re-running the failed workflow from the Actions tab once the fix is merged.
+If a publish fails after the GitHub Release was created, the Release and the tag stay but no npm version exists for them. A re-run of the workflow publishes the tag's commit: for a cause outside the code (the trusted-publisher settings, a registry outage), fix it and re-run the failed job from the Actions tab; for a cause in the code, fix it on `main` and release the next version, since `publish.sh` refuses a version whose tag exists. `_dev_/PUBLISHING.md` has the whole flow.
 
 The three trust-handshake strings must stay in sync, or CI will fail at the publish step:
 
@@ -204,4 +222,4 @@ The three trust-handshake strings must stay in sync, or CI will fail at the publ
 
 ## Testing approach
 
-Vitest with default SvelteKit-package config. The current test file is a smoke check; real coverage is light. New features benefit from tests, especially around the writable→Signal adapter and the `<Translate>` mount lifecycle.
+Vitest with default SvelteKit-package config runs the unit suite (`npm test -- --run`, no network). The contract suites run against the SDK test clone and the E2E harnesses in a real browser; `_dev_/LOCAL-TESTING.md` lists every suite and how to run it, and `CONFORMANCE.md`'s Suites row gives their current counts. A fix comes with a test that fails without it.

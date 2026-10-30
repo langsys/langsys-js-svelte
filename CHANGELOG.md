@@ -38,7 +38,7 @@ Requires `langsys-js-typescript` 0.7, which installs with it. The README's [Upgr
 - `getCountries()`, `getCurrencies()`, `getDialCodes()` and the locale lists are read once per display locale, from the API's current routes, and held.
 - `init({ apiUrl })` points the SDK at another API; `init({ legacyKeys })` keeps an app's existing i18n keys; `LangsysApp.loadSnapshot()` renders from a catalog snapshot.
 - `LangsysApp` forwards every member of the core, so its newer calls, such as `localeHeaders()`, `isConfigured()` and `seedCatalog()`, are there too.
-- New exports: `OVERRIDDEN_MEMBERS`, and the types `WriteGrant`, `WriteGrantSource`, `ApiCredentials`, `ServerMessage`, `ResolveServerMessagesOptions` and, from `/kit/server`, `LangsysHandleOptions`.
+- New exports: `OVERRIDDEN_MEMBERS`, and the types `WriteGrant`, `WriteGrantSource`, `ApiCredentials`, `ServerMessage` and `ResolveServerMessagesOptions`; from `/kit/server`, `LangsysHandleOptions`; from `/preprocess`, `LangsysPreprocessOptions` and `LangsysPreprocessorGroup`.
 
 ### Fixed
 
@@ -57,6 +57,7 @@ Requires `langsys-js-typescript` 0.7, which installs with it. The README's [Upgr
 - `$t()` rejected the gender argument Langsys asks for, and a phrase shaped like a 32-character hex id was not registered.
 - A stored block was matched to an older id of a different block.
 - `<style>`, `<script>`, `<noscript>` and `<math>` contents were registered as phrases and sent for translation.
+- `LangsysApp.init()` without a `UserLocaleStore` threw a `TypeError`; it resolves `{ status: false, errors }`, as it does without a project id or key.
 - README and README-SSR said the `'client'` strategy queues on the server and sends from the browser; content rendered only on the server is registered by neither, and they now say so.
 - README-SSR's example `load` let a CDN cache one visitor's language for the next, gave a request with no `Accept-Language` the server's own language, and did not type-check.
 - README described the locale matcher as matching the language only (it matches the script too), and numbers as always formatted (a plain ICU argument is written as given).
