@@ -18,6 +18,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 README.md                         # ships in the tarball
 README-SSR.md                     # ships in the tarball (since 3.6.15); SSR patterns, incl. the component-body seed
+skill/                            # ships in the tarball (since 4.0.1): the langsys-svelte agent skill
+    SKILL.md                      # the shared preamble, then what Svelte changes; links the topic files beside it
+    preamble.md                   # langsys-skill's preamble template, word for word
 src/lib/
     index.ts                      # public exports — LangsysApp wrapper, t store, components, type re-exports
     adapters.ts                   # writable<T> → Signal<T> adapter (svelte/store get → .get())
@@ -190,9 +193,9 @@ Releases are CI-driven via npm **trusted publishing** (OIDC). There is no long-l
 
 The flow:
 
-1. **Local:** `npm run release` (alias for `./_dev_/publish.sh`) — prompts for the new version, bumps `package.json`, stamps the date into the CHANGELOG heading `## X.Y.Z - unreleased`, amends the last commit with the version bump, force-pushes `main`, creates a tag `vX.Y.Z`, creates a GitHub Release whose body is that version's CHANGELOG section, the install line and the compare link. Before changing anything it refuses a version with no such section, or one over GitHub's 125,000-character limit; `bash _dev_/publish.sh --notes` prints the body without releasing. **It does not publish to npm.**
-2. **CI:** the `release: published` event triggers `.github/workflows/publish.yml`, which runs `npm ci` → `npm run check` → `npm test` → `npm run package` → `npm publish --provenance`. Publishing happens inside the `npm-publish` GitHub Environment so only tag-ref runs can mint the OIDC token.
-3. **PR/push gate:** `.github/workflows/ci.yml` runs `lint`, `check` and `test`, the CHANGELOG coverage check and, after `package`, the docs-API coverage check, on every PR and every push to `main`, independent of the release flow.
+1. **Local:** `npm run release` (alias for `./_dev_/publish.sh`) — prompts for the new version, bumps `package.json` and the version in `skill/SKILL.md`'s frontmatter, stamps the date into the CHANGELOG heading `## X.Y.Z - unreleased`, runs `_dev_/skill-gate.mjs` on its build, amends the last commit with the version bump, force-pushes `main`, creates a tag `vX.Y.Z`, creates a GitHub Release whose body is that version's CHANGELOG section, the install line and the compare link. Before changing anything it refuses a version with no such section, or one over GitHub's 125,000-character limit; `bash _dev_/publish.sh --notes` prints the body without releasing. **It does not publish to npm.**
+2. **CI:** the `release: published` event triggers `.github/workflows/publish.yml`, which runs `npm ci` → `npm run check` → `npm test` → `npm run package` → `node _dev_/skill-gate.mjs` → `npm publish --provenance`. Publishing happens inside the `npm-publish` GitHub Environment so only tag-ref runs can mint the OIDC token.
+3. **PR/push gate:** `.github/workflows/ci.yml` runs `lint`, `check` and `test`, the CHANGELOG coverage check and, after `package`, the docs-API coverage check and the skill check, on every PR and every push to `main`, independent of the release flow.
 
 If a publish fails after the GitHub Release was created, the Release and the tag stay but no npm version exists for them. A re-run of the workflow publishes the tag's commit: for a cause outside the code (the trusted-publisher settings, a registry outage), fix it and re-run the failed job from the Actions tab; for a cause in the code, fix it on `main` and release the next version, since `publish.sh` refuses a version whose tag exists. `_dev_/PUBLISHING.md` has the whole flow.
 
@@ -206,8 +209,17 @@ The three trust-handshake strings must stay in sync, or CI will fail at the publ
 
 - **`sTranslations` / `currentlyLoadedLocale` are writable, process-global signals, and `README-SSR.md` documents writing to them.** Seeding them synchronously in a layout component body is what makes `$t()` resolve during SSR — measured clean at 400 concurrent requests, because Svelte's default server renderer completes a page in one uninterrupted synchronous pass. That safety is narrower than it looks: seeding anywhere that `await`s before rendering (a `hooks.server.js` hook, an async server module) bled 70/80 requests into the wrong language, and `compilerOptions.experimental.async` switches Svelte to a renderer that yields mid-tree, which removes the guarantee entirely. Do not restate or extend that guidance without re-measuring — the numbers are in the CHANGELOG for 3.6.11 and 3.6.13.
 
-- **Docs that ship:** `README.md`, `README-SSR.md`, and the `src/lib/**` JSDoc go into the npm tarball (the JSDoc is what IDE hover shows); `CHANGELOG.md` is GitHub-only. `README-SSR.md` is listed in `files` — it did not ship before 3.6.15, which left `README.md` pointing at a document installed users did not have, and the failed-fetch reset rule reachable only from GitHub. A fix to a shipped doc only reaches npmjs.com on publish.
+- **Docs that ship:** `README.md`, `README-SSR.md`, `skill/`, and the `src/lib/**` JSDoc go into the npm tarball (the JSDoc is what IDE hover shows); `CHANGELOG.md` is GitHub-only. `README-SSR.md` is listed in `files` — it did not ship before 3.6.15, which left `README.md` pointing at a document installed users did not have, and the failed-fetch reset rule reachable only from GitHub. A fix to a shipped doc only reaches npmjs.com on publish.
 
+- **The agent skill in `skill/` changes in the same commit as the behaviour it describes.** It is a
+  child of the core's `langsys-typescript` skill, which ships in `langsys-js-typescript` from 0.7.1:
+  it states only what Svelte changes, never a core rule, and names the core file for anything the
+  binding passes through, as `node_modules/langsys-js-typescript/skill/<file>.md`.
+  `node _dev_/skill-gate.mjs`, after `npm run package`, holds every name, option, prop and path it
+  uses to the build, the core and the tarball, compiles each Svelte example and runs it through the
+  transform, and checks the preamble against `skill/preamble.md`; each check has a planted defect
+  it must report. langsys-skill's `skill-contract --source=<this repo>/skill` compares `SKILL.md`'s marked
+  preamble with the entry skill's template.
 - **Do not reimplement base-SDK behavior here.** API client, lookup logic, missing-token flow, persistence, SSR strategies all belong in `langsys-js-typescript`. If you need to extend any of that, the change goes in the base package and we re-export.
 - **Keep `<Translate>` and `<Phrase>` to glue.** Rendering, registration and tokenizing are the core's (`renderBlock`, `registerBlock`, the vanilla classes); placeholder names are the core's `derivePlaceholderNames`. What is Svelte's is the AST → tree mapping in `src/lib/preprocess` and rendering the result as Svelte elements. Don't fork the tokenizer or the naming here.
 - **On the server, `<Translate>` and `<Phrase>` register only inside a request scope**

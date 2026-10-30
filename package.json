@@ -45,6 +45,7 @@
     "files": [
         "dist",
         "README-SSR.md",
+        "skill",
         "!dist/**/*.test.*",
         "!dist/**/*.spec.*"
     ],

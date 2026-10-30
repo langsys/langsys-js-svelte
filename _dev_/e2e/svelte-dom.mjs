@@ -12,6 +12,10 @@
  * expression's text is rewritten to the client's value; a later state change reaches a node whose
  * value was rewritten in place, and does not reach a node that was replaced.
  *
+ * REACTIVITY, TRANSFORMED (`/e2e/reactivity-var`, client-only, compiled with the transform). The
+ * REACTIVITY cases with each value a placeholder: once a block is translated, a changed value shows
+ * in the translation, in a `<Phrase>`, a `<Translate>`, and an `<option>` in a two-token block.
+ *
  * SCOPED STYLES (`/fixture/var-styled`, compiled with the transform). A transformed block's elements
  * are written in the component the block is written in, so they carry its scoped-style class and its
  * styles apply, inside `<Translate>` and `<Phrase>`, hydrated and mounted after hydration; an unset
@@ -163,6 +167,42 @@ const T = (p, id) =>
         check(r.href === '/u/', `styles (${how}): an unset value inside an attribute's text prints nothing`, d);
     }
     check(!errors.length && !mismatches.length, 'styles: no page errors and no hydration mismatch', JSON.stringify([...errors, ...mismatches].slice(0, 2)));
+}
+
+// ---------- REACTIVITY, TRANSFORMED ----------
+// The same cases compiled with the transform (`VarReactive.svelte`): the catalog is keyed by the
+// placeholder phrase, so a translation shows whichever value the state holds.
+{
+    const { p, errors } = await page('/e2e/reactivity-var');
+    const text = () =>
+        p.evaluate(() =>
+            Object.fromEntries(['phrase', 'block', 'option'].map((id) => [id, document.getElementById(id).textContent.replace(/\s+/g, ' ').trim()]))
+        );
+
+    const [greet, choose] = await p.evaluate(() => window.__reactivityVar.ids());
+    check(!!greet && !!choose, 'transformed: premise: each block carries its id', JSON.stringify([greet, choose]));
+    const RXV = {
+        __category__: 'RXV',
+        'Hello {name}': 'IT Hello {name}',
+        [greet]: { 'Hello {name}': 'IT Hello {name}' },
+        [choose]: { 'Choose one': 'IT Choose one', 'Pick {label}': 'IT Pick {label}' },
+    };
+    await p.evaluate((catalog) => window.__reactivityVar.seed(catalog), { RXV });
+    await p.waitForTimeout(500);
+    const translated = await text();
+    check(
+        translated.phrase === 'IT Hello Sarah' && translated.block === 'IT Hello Sarah' && translated.option === 'IT Choose one IT Pick Alpha',
+        'transformed: premise: every case is translated, with its value',
+        JSON.stringify(translated)
+    );
+
+    await p.evaluate(() => window.__reactivityVar.change());
+    await p.waitForTimeout(500);
+    const after = await text();
+    check(after.phrase === 'IT Hello Bob', 'transformed <Phrase>: a changed value shows in the translation', after.phrase);
+    check(after.block === 'IT Hello Bob', 'transformed <Translate>: a changed value shows in the translation', after.block);
+    check(after.option === 'IT Choose one IT Pick Beta', 'transformed <option> in a two-token block: a changed value shows in the translation', after.option);
+    check(!errors.length, 'no page errors (transformed reactivity)', JSON.stringify(errors.slice(0, 2)));
 }
 
 await browser.close();

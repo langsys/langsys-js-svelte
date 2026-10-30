@@ -4,6 +4,10 @@
      * translated text into the nodes Svelte already holds, never replacing them. A replaced node
      * leaves Svelte updating a detached one, and the page freezes on its first translation.
      * Driven by `_dev_/e2e/svelte-dom.mjs`.
+     *
+     * Compiled without the build transform on purpose (`varTransform` in vite.config.ts leaves this
+     * route out): it measures the core's DOM handler, which translates an app without the transform
+     * and a block the transform can't read. `/e2e/reactivity-var` runs the same cases with it.
      */
     import { LangsysApp, Phrase, Translate } from '$lib/index.js';
     import { generateCustomId, tokenizeElement, type iCategories } from 'langsys-js-typescript';

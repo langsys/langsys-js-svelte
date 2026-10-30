@@ -31,20 +31,22 @@ It takes no arguments. It asks for the version, suggesting the next patch, and t
 2. **Refuses before changing anything** a version that is not `x.y.z` or `x.y.z-tag`, one that
    exists as a tag, a version with no CHANGELOG section, and release notes over GitHub's 125,000
    characters.
-3. **Bumps** `package.json`, stamps the date into the `## X.Y.Z - unreleased` heading, so it matches
-   the publish, and runs `npm install` (the lockfile) and `npm run build`.
+3. **Bumps** `package.json` and the version in `skill/SKILL.md`'s frontmatter, stamps the date into
+   the `## X.Y.Z - unreleased` heading, so it matches the publish, runs `npm install` (the lockfile)
+   and `npm run build`, and refuses the release when `_dev_/skill-gate.mjs` finds the skill naming
+   something the build lacks.
 4. **Amends** the last commit with the bump (its message gains `[Version bumped to X.Y.Z]`), pushes
    `main` with `--force-with-lease`, and creates and pushes the annotated tag `vX.Y.Z`.
 5. **Creates the GitHub release** `vX.Y.Z`. Its body is the version's CHANGELOG section, the
    install line and the compare link from the previous version.
 
-If a step fails after the version changed, the script offers a rollback: `package.json` and the
-CHANGELOG heading restored, the commit from before the amend restored (and force-pushed back if
+If a step fails after the version changed, the script offers a rollback: `package.json`, the skill's
+version and the CHANGELOG heading restored, the commit from before the amend restored (and force-pushed back if
 it was pushed), and the tag deleted locally and on `origin`.
 
 The script does not publish to npm. The release's `published` event runs
 `.github/workflows/publish.yml` in the `npm-publish` environment: `npm ci`, `npm run check`,
-`npm test -- --run`, `npm run package`, then `npm publish --provenance`.
+`npm test -- --run`, `npm run package`, `node _dev_/skill-gate.mjs`, then `npm publish --provenance`.
 
 ## Trusted publishing
 
