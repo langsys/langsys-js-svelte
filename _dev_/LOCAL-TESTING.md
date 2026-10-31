@@ -8,14 +8,14 @@ You need Node 18+ and Chromium for the harnesses (`npx playwright install chromi
 
 ## 1. Install
 
-`npm install` installs the core this branch needs, `langsys-js-typescript` 0.7.0 from npm.
+`npm install` installs the core this branch needs, `langsys-js-typescript` 0.7.1 from npm.
 
 `node _dev_/delegation-probe.mjs` reads the core's sources and `CONFORMANCE.md`, which the
 registry package does not carry. Run it with a checkout of the tag in `CONFORMANCE.md`'s **Core
 under test** row linked in place, then put the registry package back:
 
 ```bash
-git clone --branch v0.7.0 https://github.com/langsys/langsys-js-typescript.git /tmp/langsys-core
+git clone --branch v0.7.1 https://github.com/langsys/langsys-js-typescript.git /tmp/langsys-core
 rm -rf node_modules/langsys-js-typescript
 ln -s /tmp/langsys-core node_modules/langsys-js-typescript
 node _dev_/delegation-probe.mjs --check
