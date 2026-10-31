@@ -587,7 +587,7 @@ Control how missing tokens are handled during SSR:
 
 - `'client'` (default) — the server collects **nothing**; registration happens only from the browser.
 - `'server'` — send tokens immediately from the server.
-- `'auto'` — the server sends the first 5 misses itself and leaves the rest to the browser.
+- `'auto'` — the server sends a short list of misses and leaves the rest to the browser. In a request scope (`createLangsysHandle`) it sends a render's misses when there are fewer than 5, and otherwise none; without one it sends the first 5.
 
 **"Queue on the server, send from the client" is not what `'client'` does, and is not
 possible.** Under SSR the server instance declines to collect (`shouldQueueForWrite()`

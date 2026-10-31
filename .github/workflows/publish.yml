@@ -21,7 +21,8 @@ jobs:
                   cache: npm
 
             # OIDC trusted publishing (tokenless) requires npm >= 11.5.1; Node 22 ships npm 10.x.
-            - run: npm install -g npm@latest
+            # ci.yml installs the same major, so a pull request's CI runs the npm that publishes.
+            - run: npm install -g npm@12
 
             - run: npm ci
 

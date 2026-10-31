@@ -16,6 +16,9 @@ jobs:
                   node-version: 22
                   cache: npm
 
+            # The npm major publish.yml installs, so a change in npm's behaviour fails a pull request rather than the publish.
+            - run: npm install -g npm@12
+
             - run: npm ci
 
             # Runs BEFORE check/test on purpose: this gate spent an unknown
@@ -55,6 +58,9 @@ jobs:
               with:
                   node-version: 22
                   cache: npm
+
+            # The npm major publish.yml installs: the skill check below reads its `npm pack` output.
+            - run: npm install -g npm@12
 
             - run: npm ci
 

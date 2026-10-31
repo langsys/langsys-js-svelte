@@ -3,7 +3,7 @@ name: langsys-svelte
 description: The Langsys Svelte skill, for langsys-js-svelte on Svelte 5 and SvelteKit. Part of the Langsys skill set, read in order - the entry skill langsys first, then the core skill langsys-typescript (installed with this package, at node_modules/langsys-js-typescript/skill/SKILL.md), then this one. Covers only what Svelte changes - install, LangsysApp.init with a Svelte store, the $t store, writeEnabled and write grants as stores, the Translate, Phrase and DontTranslate components, the langsysPreprocess() build transform (without it the components register nothing), and SvelteKit's createLangsysHandle, hydrateFromServer and syncNavigation.
 metadata:
   package: langsys-js-svelte
-  version: 4.0.1
+  version: 4.0.2
 ---
 
 # Langsys Svelte

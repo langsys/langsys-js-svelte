@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 README.md                         # ships in the tarball
 README-SSR.md                     # ships in the tarball (since 3.6.15); SSR patterns, incl. the component-body seed
-skill/                            # ships in the tarball (since 4.0.1): the langsys-svelte agent skill
+skill/                            # ships in the tarball (since 4.0.2): the langsys-svelte agent skill
     SKILL.md                      # the shared preamble, then what Svelte changes; links the topic files beside it
     preamble.md                   # langsys-skill's preamble template, word for word
 src/lib/
@@ -204,6 +204,8 @@ The three trust-handshake strings must stay in sync, or CI will fail at the publ
 - GitHub Environment name: `npm-publish`
 - npm trusted publisher config: Environment name `npm-publish`, workflow filename `publish.yml`
 - `.github/workflows/publish.yml`: `environment: npm-publish`
+
+Both workflows install the same npm major (`npm install -g npm@12`), so a pull request's CI runs the npm that publishes. Change the major in both together; OIDC publishing needs npm 11.5.1 or later.
 
 ## When making changes
 
