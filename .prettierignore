@@ -31,3 +31,8 @@ yarn.lock
 # The upgrade audit is one wide table for the same reason: padded, every row is the width of
 # the longest evidence cell.
 _dev_/upgrade/AUDIT.md
+
+# The agent skill opens with langsys-skill's preamble, which its skill-contract compares byte for
+# byte with the template; Prettier adds blank lines inside the markers and pads every table.
+# Checked instead by `node _dev_/skill-gate.mjs`.
+/skill

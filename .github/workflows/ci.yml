@@ -64,3 +64,7 @@ jobs:
             - run: npm run package
 
             - run: node _dev_/docs-api-coverage.mjs . --strict
+
+            # The agent skill ships in the tarball: every name, option, prop and path it uses must
+            # exist in this build, the core or the pack, and each Svelte example must compile cleanly.
+            - run: node _dev_/skill-gate.mjs

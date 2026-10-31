@@ -31,4 +31,7 @@ jobs:
 
             - run: npm run package
 
+            # The agent skill in skill/ ships in this tarball: every name it uses must exist in this build.
+            - run: node _dev_/skill-gate.mjs
+
             - run: npm publish --provenance

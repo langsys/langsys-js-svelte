@@ -219,8 +219,9 @@ the wrong locale.
   waits; a read-only key sends nothing.
 - **Options.** `catalog` hands the scope a catalog you already have (otherwise it is fetched, at
   most once per locale per request); `match` limits which requests get a scope; `seed: false`
-  skips the inline script, for a CSP that forbids inline scripts: the client then has no seed,
-  and `hydrateFromServer()` finds none and returns `false`; `storage` supplies your own
+  skips the inline script, for a CSP that forbids inline scripts, SvelteKit's `kit.csp` among
+  them, since it gives its nonce or hashes only to SvelteKit's own scripts: the client then has no
+  seed, and `hydrateFromServer()` finds none and returns `false`; `storage` supplies your own
   `AsyncLocalStorage`.
 - **More than one project.** `credentials` gives a request its own project id and API key, for
   an app that serves several projects from one server:
@@ -586,7 +587,7 @@ Control how missing tokens are handled during SSR:
 
 - `'client'` (default) — the server collects **nothing**; registration happens only from the browser.
 - `'server'` — send tokens immediately from the server.
-- `'auto'` — small batches (≤5) from server, larger batches from client.
+- `'auto'` — the server sends the first 5 misses itself and leaves the rest to the browser.
 
 **"Queue on the server, send from the client" is not what `'client'` does, and is not
 possible.** Under SSR the server instance declines to collect (`shouldQueueForWrite()`

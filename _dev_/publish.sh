@@ -88,6 +88,12 @@ rollback() {
             rm -f package.json.bak
         fi
 
+        # Un-stamp the skill's version, which the bump stamped with package.json's.
+        if [ -f "skill/SKILL.md" ]; then
+            sed -i.bak "s/^  version: $NEW_VERSION$/  version: $ORIGINAL_VERSION/" skill/SKILL.md
+            rm -f skill/SKILL.md.bak
+        fi
+
         # Un-stamp the CHANGELOG heading: an aborted release leaves no dated section behind.
         if [ -n "$RELEASE_DATE" ] && [ -f "CHANGELOG.md" ]; then
             sed -i.bak "s/^## $NEW_VERSION - $RELEASE_DATE$/## $NEW_VERSION - unreleased/" CHANGELOG.md
@@ -274,6 +280,16 @@ else
 fi
 log_success "Updated package.json version to $NEW_VERSION"
 
+# The skill names the package version it describes, which is the version it ships in. Stamped with
+# the bump so the two never differ; _dev_/skill-gate.mjs holds them equal.
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    sed -i '' "s/^  version: $ORIGINAL_VERSION$/  version: $NEW_VERSION/" skill/SKILL.md
+else
+    sed -i "s/^  version: $ORIGINAL_VERSION$/  version: $NEW_VERSION/" skill/SKILL.md
+fi
+grep -q "^  version: $NEW_VERSION$" skill/SKILL.md || handle_error "skill/SKILL.md's frontmatter version did not hold $ORIGINAL_VERSION, so it was not stamped $NEW_VERSION"
+log_success "Stamped skill/SKILL.md version $NEW_VERSION"
+
 # Stamp the release date into the version's CHANGELOG heading, `## X.Y.Z - unreleased`.
 #
 # Authoring-time dates are wrong often enough to matter — four of this repo's
@@ -284,8 +300,8 @@ log_success "Updated package.json version to $NEW_VERSION"
 #
 # Stamp here rather than after publishing so the date is carried by the git tag
 # and GitHub release rather than added afterwards. (This package's tarball ships
-# only dist/ and no CHANGELOG.md, so no npm artifact could read "unreleased" —
-# that hazard applies to packages that do ship theirs.)
+# no CHANGELOG.md, so no npm artifact could read "unreleased" — that hazard
+# applies to packages that do ship theirs.)
 if grep -q "^## $NEW_VERSION - unreleased$" CHANGELOG.md; then
     RELEASE_DATE=$(date +%Y-%m-%d)
     log_info "Stamping CHANGELOG: ## $NEW_VERSION - unreleased -> ## $NEW_VERSION - $RELEASE_DATE"
@@ -307,9 +323,15 @@ npm install
 log_info "Running build to verify everything compiles..."
 npm run build
 
+# The agent skill ships in the package, so it must name only what this build has, at the version
+# just stamped, over a core that ships the skill it builds on.
+log_info "Checking the agent skill against the build..."
+node _dev_/skill-gate.mjs || handle_error "skill/ names something this build or the core does not have, or its version or preamble is off (above)"
+log_success "The agent skill matches the build"
+
 # Amend the last commit with version bump
 log_info "Amending last commit with version bump..."
-git add package.json package-lock.json CHANGELOG.md
+git add package.json package-lock.json CHANGELOG.md skill/SKILL.md
 
 # Get the current commit message
 LAST_COMMIT_MESSAGE=$(git log -1 --pretty=%B)

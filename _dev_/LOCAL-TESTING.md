@@ -8,14 +8,14 @@ You need Node 18+ and Chromium for the harnesses (`npx playwright install chromi
 
 ## 1. Install
 
-`npm install` installs the core this branch needs, `langsys-js-typescript` 0.7.0 from npm.
+`npm install` installs the core this branch needs, `langsys-js-typescript` 0.7.1 from npm.
 
 `node _dev_/delegation-probe.mjs` reads the core's sources and `CONFORMANCE.md`, which the
 registry package does not carry. Run it with a checkout of the tag in `CONFORMANCE.md`'s **Core
 under test** row linked in place, then put the registry package back:
 
 ```bash
-git clone --branch v0.7.0 https://github.com/langsys/langsys-js-typescript.git /tmp/langsys-core
+git clone --branch v0.7.1 https://github.com/langsys/langsys-js-typescript.git /tmp/langsys-core
 rm -rf node_modules/langsys-js-typescript
 ln -s /tmp/langsys-core node_modules/langsys-js-typescript
 node _dev_/delegation-probe.mjs --check
@@ -153,6 +153,19 @@ unmet and does not evaluate the rest.
 
 The full run, each suite on a freshly started server, is the command block in `CONFORMANCE.md` under
 _Evidence — and re-running it_. On the core above every suite passes: unit 385, transport seam 31,
-live E2E 61, Svelte DOM 26, SRV concurrency 6, SRV-7 scope 9, running without credentials 8; and
+live E2E 61, Svelte DOM 32, SRV concurrency 6, SRV-7 scope 9, running without credentials 8; and
 on the SDK test clone, contract unit 9, HINT-13 12, VAR 43, hydration 11, SRV-3 flush 6 + 6,
 locale race 6.
+
+## 10. The agent skill
+
+`skill/` ships in the package, and its release check reads the build, so package first:
+
+```bash
+npm run package
+node _dev_/skill-gate.mjs   # every name in skill/ exists in dist/ or the core; each planted defect reported
+```
+
+It needs a core that ships its own skill, 0.7.1 or later. With a checkout of `langsys-skill` beside
+this one, `node src/bin/skill-contract.mjs --source=../langsys-js-svelte/skill`, run there, checks the
+shared preamble against the entry skill's template and the links into it.

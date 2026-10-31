@@ -42,6 +42,8 @@ npm install langsys-js-svelte
 
 `langsys-js-typescript` is installed automatically as a transitive dependency.
 
+**Using a coding agent?** Run `npx langsys-skill install`. It gives the agent the Langsys skills, this package's included: the package ships its own in `skill/`.
+
 ## Creating a Langsys project
 
 Visit [Langsys.dev](https://Langsys.dev/) to create your account, then create your project. Take note of your project ID and API key.
@@ -60,9 +62,9 @@ Visit [Langsys.dev](https://Langsys.dev/) to create your account, then create yo
     import { onMount } from 'svelte';
     import { LangsysApp, type iLangsysInitConfig } from 'langsys-js-svelte';
 
+    let { children } = $props();
+
     const userLocale = writable('en-US');
-    let appReady = $state(false);
-    let appInitError = $state<string | null>(null);
 
     onMount(async () => {
         const config: iLangsysInitConfig = {
@@ -75,19 +77,14 @@ Visit [Langsys.dev](https://Langsys.dev/) to create your account, then create yo
         };
 
         const res = await LangsysApp.init(config);
-        if (res.status) appReady = true;
-        else appInitError = res.errors?.join(', ') ?? 'Init failed';
+        if (!res.status) console.error('Langsys init failed', res.errors);
     });
 </script>
 
-{#if appInitError}
-    <p>Langsys init failed: {appInitError}</p>
-{:else if !appReady}
-    <p>Loading…</p>
-{:else}
-    <slot />
-{/if}
+{@render children()}
 ```
+
+The page renders whatever `init()` answers: text shows as its source until a translation exists, so nothing waits for it. A loading state in place of the children would be what a server render serves, because `onMount` never runs on the server.
 
 `UserLocaleStore` is a standard Svelte `Writable<string>` — set/update it however you like and the SDK reacts.
 
@@ -118,7 +115,7 @@ To fail loudly instead, pass `requireCredentials: true`. `$t()` then throws `Lan
 
 - `'client'` (default) — the server collects **nothing**. Registration happens only from the browser, for content the browser actually renders. Cheapest, and the right default; but see the discovery gap below.
 - `'server'` — tokens are sent immediately during SSR. Best for reliability and immediate registration.
-- `'auto'` — small batches (≤5) sent from server, larger queued for client.
+- `'auto'` — a short list of misses is sent from the server, the rest left to the client. In a request scope (`createLangsysHandle`) the server sends a render's misses when there are fewer than 5, and otherwise none; without one it sends the first 5.
 
 > [!IMPORTANT]
 > **`'server'` requires your origin server's address to be allow-listed for the key.**
@@ -202,7 +199,7 @@ The block is then rendered through the core's block renderer, so it is **transla
 
 ``$t(`Hello ${user.name}`)`` is rewritten the same way, to `$t('Hello {name}', undefined, { name: user.name })`. A key you write in an object literal argument is a name you chose, so ``$t(`Hello ${name}`, { name: nickname })`` registers `Hello {name_2}`.
 
-**What it cannot read** — an `{#each}`, an `{#await}`, a snippet, another component, a directive (`bind:`, `use:`, `class:`), a spread, `{@html}` beside a variable, a `translate` or `data-notrans` attribute whose value is an expression, or an `<input>` whose `type` is an expression beside a `value` holding text — makes that block a **fallback**: the build names it in a warning, and the block renders as below. An element that one of those attributes excludes as written stays excluded whatever an expression in the other holds, and inside an exclusion such an expression changes nothing: neither makes its block a fallback. A `<Translate>` or `<Phrase>` inside a fallback block that the build can read is read on its own, under the category the block renders with, unless it names one. One inside a `<DontTranslate>`, or inside an element marked `translate="no"` or `data-notrans`, or given either attribute by an expression, is never read, and registers nothing. The build reads an exclusion written on the element itself: one a spread applies (`<div {...attrs}>`), or another component applies to its own elements, is decided at runtime where the build cannot see it, so a unit inside it is read and registers. Write `translate="no"` on the element to keep its content out.
+**What it cannot read** — an `{#each}`, an `{#await}`, a `{#snippet}`, a `{@render}` or a `{@const}`; another component, or a special element such as `<svelte:element>`; an `<svg>`, `<math>`, `<textarea>`, `<template>`, `<script>` or `<style>` element, such as an icon inside a link; a directive (`bind:`, `use:`, `class:`, `style:`, a transition or an animation), an `{@attach}` or a spread; `{@html}` beside a variable; a `translate` or `data-notrans` attribute whose value is an expression; an `<input>` whose `type` is an expression beside a `value` holding text; or a nested `<Translate>` or `<Phrase>` with a prop other than `tag` and `custom_id` written as text, `class`, `params`, and the block's own `category` (a `label`, or a `category` of its own) — makes that block a **fallback**: the build names it in a warning, and the block renders as below. An element that one of those attributes excludes as written stays excluded whatever an expression in the other holds, and inside an exclusion such an expression changes nothing: neither makes its block a fallback. A `<Translate>` or `<Phrase>` inside a fallback block that the build can read is read on its own, under the category the block renders with, unless it names one. One inside a `<DontTranslate>`, or inside an element marked `translate="no"` or `data-notrans`, or given either attribute by an expression, is never read, and registers nothing. The build reads an exclusion written on the element itself: one a spread applies (`<div {...attrs}>`), or another component applies to its own elements, is decided at runtime where the build cannot see it, so a unit inside it is read and registers. Write `translate="no"` on the element to keep its content out.
 
 **Raw HTML is content.** A block whose only dynamic parts are `{@html}` insertions — a CMS field, say — holds text to translate, not a variable, so it registers the HTML's text as the page shows it:
 
@@ -669,7 +666,7 @@ A block whose only text is one attribute (`<input placeholder="…">`) keeps its
 
 - Each visitor's first page load fetches the catalog once more: the cached catalog is keyed by project and locale, and the old `translations` storage key is removed.
 - A block registers after mount, once the first catalog has arrived; a block on the core's DOM class, such as one holding only `{@html}`, once it has also been stable for 500 ms.
-- A session that cannot write reports the page's URL, so Langsys can find the content on it, where the key's discovery setting allows. A URL carrying a credential-shaped query parameter is never reported.
+- A session that cannot write reports the page's URL where the key's discovery setting allows, and Langsys records it. The session registers nothing. A URL carrying a credential-shaped query parameter is never reported.
 - New console lines with debug off: "this session cannot write" (above), "Discovery hint failed" for a hint that could not be sent, "Catalog fetch threw", "Ignoring non-category member" for a malformed catalog, a reference list asked for in a display locale not shaped as one, and a phrase the message formatter could not render.
 - The country, currency, dial-code and locale lists are read once per display locale and held. A failed read answers an empty list and is not sent again for a few seconds.
 - A `<Translate>` host carries its id in `data-ls-contentblock`.

@@ -171,7 +171,9 @@ node _dev_/e2e/srv-flush.mjs --expect read
 `_dev_/e2e/svelte-dom.mjs` checks what Svelte does to DOM text it holds. `/e2e/reactivity`
 (client-only) translates a `<Phrase>` with an expression and an `<option>` in a two-token block,
 then changes state: the new value must reach the page, as it does for the in-place controls
-beside them. `/e2e/hydration-facts` is served with its text rewritten, as a server-translated
+beside them. That route is compiled without the transform, so it measures the core's DOM handler;
+`/e2e/reactivity-var` runs the same cases compiled with it, where each value is a placeholder and
+the new value must show in the translation. `/e2e/hydration-facts` is served with its text rewritten, as a server-translated
 block would arrive: static text must hydrate as served, an expression as the client's value, and
 a state change must reach a node written in place and not one that was replaced.
 `/fixture/var-styled`, compiled with the transform, renders a component whose `<style>` targets
