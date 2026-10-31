@@ -325,15 +325,21 @@ async function buildFacts() {
     const constructs = [...describe.matchAll(/return '(\{[#@][a-z]+\})'/g)].map((m) => m[1]);
 
     let packed = new Set();
+    let packError = '';
     try {
         const out = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
             cwd: ROOT,
             encoding: 'utf8',
-            stdio: ['ignore', 'pipe', 'ignore'],
+            stdio: ['ignore', 'pipe', 'pipe'],
         });
         packed = packedPaths(out);
-    } catch {
-        // An empty list fails the read check below.
+    } catch (e) {
+        // npm's first error line, or why its output did not parse: the read check below reports it.
+        packError =
+            String(e.stderr || e.message)
+                .split('\n')
+                .find((l) => l.trim() && !/^npm warn/i.test(l))
+                ?.trim() ?? '';
     }
 
     return {
@@ -351,6 +357,7 @@ async function buildFacts() {
         props,
         pkg: { name: pkg.name, version: pkg.version, files: pkg.files ?? [], coreRange: pkg.dependencies?.['langsys-js-typescript'] },
         packed,
+        packError,
         core: {
             version: corePkg.version,
             skill: existsSync(join(CORE, 'skill')) ? new Set(readdirSync(join(CORE, 'skill'))) : new Set(),
@@ -467,6 +474,8 @@ function problems(docs, facts) {
     const optionNames = new Set(Object.values(facts.options).flatMap((s) => [...s]));
     const propNames = new Set(Object.values(facts.props).flatMap((s) => [...s]));
     const known = (name) => allExports.has(name) || facts.members.has(name) || optionNames.has(name) || propNames.has(name) || NOT_THE_PACKAGES.has(name);
+    // A pack the gate read nothing from is reported once, with its reason, not as every file missing from it.
+    const packRead = facts.packed.has('package.json');
 
     for (const [file, text] of Object.entries(docs)) {
         const fences = [...text.matchAll(FENCE)].map((m) => ({ lang: m[1], code: m[2] }));
@@ -568,7 +577,7 @@ function problems(docs, facts) {
                 found.push(`${file}: names node_modules/langsys-js-typescript/skill/${m[1]}, which the installed core (${facts.core.version}) does not ship`);
         }
         for (const m of text.matchAll(/node_modules\/langsys-js-svelte\/([\w./-]+\.\w+)/g)) {
-            if (!facts.packed.has(m[1])) found.push(`${file}: names node_modules/langsys-js-svelte/${m[1]}, which the package does not ship`);
+            if (packRead && !facts.packed.has(m[1])) found.push(`${file}: names node_modules/langsys-js-svelte/${m[1]}, which the package does not ship`);
         }
 
         // 8. Links between the skill's files, each written `./file.md`.
@@ -627,7 +636,7 @@ function problems(docs, facts) {
         found.push('skill-gate: read no options from the build');
     if (!facts.props.Translate?.has('category')) found.push('skill-gate: read no component props from dist/components');
     if (!facts.fallbacks.opaque.length || !facts.fallbacks.constructs.length) found.push('skill-gate: read no fallback constructs from the built transform');
-    if (!facts.packed.has('package.json')) found.push('skill-gate: read no files from npm pack');
+    if (!packRead) found.push(`skill-gate: read no files from npm pack${facts.packError ? `: ${facts.packError}` : ''}`);
 
     // 10. Name and version, as package.json holds them.
     const skill = docs['SKILL.md'] ?? '';
@@ -658,7 +667,7 @@ function problems(docs, facts) {
         if (!skill.includes(`(./${file})`)) found.push(`SKILL.md: does not link ${file}`);
     }
     if (!facts.pkg.files.includes('skill')) found.push('package.json: files does not include skill');
-    for (const file of Object.keys(docs)) if (!facts.packed.has(`skill/${file}`)) found.push(`npm pack: does not ship skill/${file}`);
+    if (packRead) for (const file of Object.keys(docs)) if (!facts.packed.has(`skill/${file}`)) found.push(`npm pack: does not ship skill/${file}`);
 
     // 13. The core skill this one sends the agent to is installed, and always will be.
     if (!facts.core.skill.has('SKILL.md'))
@@ -901,7 +910,17 @@ const PLANTED_FACTS = [
         'declines {@debug}, which has no probe',
     ],
     ['a build the gate read nothing from', (f) => ({ ...f, svelteApp: new Set() }), 'read no LangsysApp members'],
-    ['a pack the gate read nothing from', (f) => ({ ...f, packed: new Set() }), 'read no files from npm pack'],
+    [
+        "a pack the gate read nothing from, with npm's reason",
+        (f) => ({ ...f, packed: new Set(), packError: 'npm error code E404' }),
+        'read no files from npm pack: npm error code E404',
+    ],
+];
+
+/** Problems the gate must NOT report from these facts: ones a pack it read nothing from only seems to have. */
+const NOT_REPORTED_FACTS = [
+    ['a file missing from a pack it read nothing from', (f) => ({ ...f, packed: new Set() }), 'npm pack: does not ship'],
+    ['a named file missing from a pack it read nothing from', (f) => ({ ...f, packed: new Set() }), 'which the package does not ship'],
 ];
 
 /** `npm pack --dry-run --json` as each npm major prints it, which the gate must read alike. */
@@ -940,6 +959,12 @@ for (const [what, plant, unexpected] of NOT_REPORTED) {
         failed++;
     }
 }
+for (const [what, plant, unexpected] of NOT_REPORTED_FACTS) {
+    if (problems(docs, plant(facts)).join('\n').includes(unexpected)) {
+        console.error(`  ✗ control: the gate reported ${what}`);
+        failed++;
+    }
+}
 for (const [npm, out] of PACK_OUTPUTS) {
     let paths = new Set();
     try {
@@ -952,8 +977,8 @@ for (const [npm, out] of PACK_OUTPUTS) {
         failed++;
     }
 }
-const controls = PLANTED.length + PLANTED_FACTS.length + NOT_REPORTED.length + PACK_OUTPUTS.length;
-if (failed) console.error(`skill-gate: ${failed} of ${controls} planted defects went unreported, so a clean result would mean nothing.`);
+const controls = PLANTED.length + PLANTED_FACTS.length + NOT_REPORTED.length + NOT_REPORTED_FACTS.length + PACK_OUTPUTS.length;
+if (failed) console.error(`skill-gate: ${failed} of ${controls} controls failed, so a clean result would mean nothing.`);
 
 const found = problems(docs, facts);
 for (const p of found) console.error(`  ✗ ${p}`);
@@ -961,4 +986,4 @@ if (found.length || failed) {
     console.error(`skill-gate: ${found.length} problem(s) in skill/.`);
     process.exit(1);
 }
-console.log(`skill-gate: skill/ names only what the build has (${Object.keys(docs).length} files; ${controls} planted defects each reported).`);
+console.log(`skill-gate: skill/ names only what the build has (${Object.keys(docs).length} files; ${controls} controls passed).`);

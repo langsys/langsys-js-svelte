@@ -205,6 +205,8 @@ The three trust-handshake strings must stay in sync, or CI will fail at the publ
 - npm trusted publisher config: Environment name `npm-publish`, workflow filename `publish.yml`
 - `.github/workflows/publish.yml`: `environment: npm-publish`
 
+Both workflows install the same npm major (`npm install -g npm@12`), so a pull request's CI runs the npm that publishes. Change the major in both together; OIDC publishing needs npm 11.5.1 or later.
+
 ## When making changes
 
 - **`sTranslations` / `currentlyLoadedLocale` are writable, process-global signals, and `README-SSR.md` documents writing to them.** Seeding them synchronously in a layout component body is what makes `$t()` resolve during SSR — measured clean at 400 concurrent requests, because Svelte's default server renderer completes a page in one uninterrupted synchronous pass. That safety is narrower than it looks: seeding anywhere that `await`s before rendering (a `hooks.server.js` hook, an async server module) bled 70/80 requests into the wrong language, and `compilerOptions.experimental.async` switches Svelte to a renderer that yields mid-tree, which removes the guarantee entirely. Do not restate or extend that guidance without re-measuring — the numbers are in the CHANGELOG for 3.6.11 and 3.6.13.

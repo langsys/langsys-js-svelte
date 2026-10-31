@@ -25,7 +25,7 @@ Tagged on GitHub but not published to npm: install 4.0.2, which ships these chan
 ### Fixed (documentation)
 
 - **The README's initialization example renders the page while `init()` runs.** It showed a loading message in place of the layout's children until `init()` resolved, which in SvelteKit is what the server serves for every page, because `onMount` never runs there.
-- **The READMEs say how many misses `'auto'` sends from the server, on each path.** In a request scope it sends a render's misses when there are fewer than 5, and otherwise none; without one it sends the first 5 and leaves the rest to the browser. They said "≤5" for both.
+- **The README says how many misses `'auto'` sends from the server, on each path.** In a request scope it sends a render's misses when there are fewer than 5, and otherwise none; without one it sends the first 5 and leaves the rest to the browser. It said "≤5" for both.
 - **README-SSR says SvelteKit's `kit.csp` needs `seed: false`.** The handle's seed script carries no nonce, and `kit.csp` gives its nonce or hashes only to SvelteKit's own scripts, so the browser blocks it.
 - **The README lists everything that makes a block a fallback.** It now also names `{#snippet}`, `{@render}`, `{@const}`, special elements such as `<svelte:element>`, an `<svg>`, `<math>`, `<textarea>`, `<template>`, `<script>` or `<style>` element, a `style:` directive, a transition or animation, an `{@attach}`, and a nested `<Translate>` or `<Phrase>` carrying a `label` or a `category` of its own.
 - **The README says what a read-only session's report does:** it reports the page's URL, which Langsys records, and registers nothing. It said Langsys could find the content on the page.
