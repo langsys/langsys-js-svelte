@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 README.md                         # ships in the tarball
 README-SSR.md                     # ships in the tarball (since 3.6.15); SSR patterns, incl. the component-body seed
-skill/                            # ships in the tarball (since 4.0.1): the langsys-svelte agent skill
+skill/                            # ships in the tarball (since 4.0.2): the langsys-svelte agent skill
     SKILL.md                      # the shared preamble, then what Svelte changes; links the topic files beside it
     preamble.md                   # langsys-skill's preamble template, word for word
 src/lib/

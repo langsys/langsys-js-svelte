@@ -16,6 +16,9 @@ jobs:
                   node-version: 22
                   cache: npm
 
+            # The npm publish.yml publishes with, so a change in its behaviour shows here before a tag.
+            - run: npm install -g npm@12
+
             - run: npm ci
 
             # Runs BEFORE check/test on purpose: this gate spent an unknown
@@ -55,6 +58,9 @@ jobs:
               with:
                   node-version: 22
                   cache: npm
+
+            # The npm publish.yml publishes with: the skill check below reads its `npm pack` output.
+            - run: npm install -g npm@12
 
             - run: npm ci
 

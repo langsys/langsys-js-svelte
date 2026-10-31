@@ -268,6 +268,13 @@ function typecheck(files) {
     }
 }
 
+/** The paths `npm pack --dry-run --json` lists. npm 10 and 11 print an array of results, npm 12 an object keyed by package name. */
+function packedPaths(out) {
+    const parsed = JSON.parse(out);
+    const [result] = Array.isArray(parsed) ? parsed : Object.values(parsed);
+    return new Set(result.files.map((f) => f.path));
+}
+
 async function buildFacts() {
     const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
     const corePkg = existsSync(join(CORE, 'package.json')) ? JSON.parse(readFileSync(join(CORE, 'package.json'), 'utf8')) : { exports: {} };
@@ -324,9 +331,9 @@ async function buildFacts() {
             encoding: 'utf8',
             stdio: ['ignore', 'pipe', 'ignore'],
         });
-        packed = new Set(JSON.parse(out)[0].files.map((f) => f.path));
+        packed = packedPaths(out);
     } catch {
-        // An empty list fails the shipping check below, naming what is missing.
+        // An empty list fails the read check below.
     }
 
     return {
@@ -620,6 +627,7 @@ function problems(docs, facts) {
         found.push('skill-gate: read no options from the build');
     if (!facts.props.Translate?.has('category')) found.push('skill-gate: read no component props from dist/components');
     if (!facts.fallbacks.opaque.length || !facts.fallbacks.constructs.length) found.push('skill-gate: read no fallback constructs from the built transform');
+    if (!facts.packed.has('package.json')) found.push('skill-gate: read no files from npm pack');
 
     // 10. Name and version, as package.json holds them.
     const skill = docs['SKILL.md'] ?? '';
@@ -893,6 +901,13 @@ const PLANTED_FACTS = [
         'declines {@debug}, which has no probe',
     ],
     ['a build the gate read nothing from', (f) => ({ ...f, svelteApp: new Set() }), 'read no LangsysApp members'],
+    ['a pack the gate read nothing from', (f) => ({ ...f, packed: new Set() }), 'read no files from npm pack'],
+];
+
+/** `npm pack --dry-run --json` as each npm major prints it, which the gate must read alike. */
+const PACK_OUTPUTS = [
+    ['npm 10 and 11', '[{"name":"p","files":[{"path":"package.json"}]}]'],
+    ['npm 12', '{"p":{"name":"p","files":[{"path":"package.json"}]}}'],
 ];
 
 const newestSrc = Math.max(
@@ -925,7 +940,19 @@ for (const [what, plant, unexpected] of NOT_REPORTED) {
         failed++;
     }
 }
-const controls = PLANTED.length + PLANTED_FACTS.length + NOT_REPORTED.length;
+for (const [npm, out] of PACK_OUTPUTS) {
+    let paths = new Set();
+    try {
+        paths = packedPaths(out);
+    } catch {
+        // Reported below.
+    }
+    if (!paths.has('package.json')) {
+        console.error(`  ✗ control: the gate read no files from npm pack's output as ${npm} prints it`);
+        failed++;
+    }
+}
+const controls = PLANTED.length + PLANTED_FACTS.length + NOT_REPORTED.length + PACK_OUTPUTS.length;
 if (failed) console.error(`skill-gate: ${failed} of ${controls} planted defects went unreported, so a clean result would mean nothing.`);
 
 const found = problems(docs, facts);

@@ -56,8 +56,10 @@ Three settings must agree, or the workflow fails at the publish step:
 - npm's trusted publisher for the package: environment `npm-publish`, workflow `publish.yml`;
 - `environment: npm-publish` in `.github/workflows/publish.yml`.
 
-Publishing through OIDC needs npm 11.5.1 or later; the workflow installs the latest npm, because
-Node 22 ships npm 10.
+Publishing through OIDC needs npm 11.5.1 or later, and Node 22 ships npm 10, so the workflow
+installs npm 12. `ci.yml` installs the same major, so CI runs the npm that publishes: a change in
+npm's behaviour, such as the shape of `npm pack --json` the skill check reads, fails CI before a tag
+rather than the publish after one. Change the major in both workflows together.
 
 ## After the release
 
