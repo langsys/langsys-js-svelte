@@ -59,7 +59,7 @@ What the binding passes to the core unchanged is described in the core skill:
 | `legacyKeys`, `LangsysApp.loadSnapshot()` | `node_modules/langsys-js-typescript/skill/migration.md` |
 | `LangsysApp.localeHeaders()`, `LangsysApp.detectPreferredLocale()`, `canonicalizeLocale()`, the country, currency and locale lists | `node_modules/langsys-js-typescript/skill/locales.md` |
 | `resolveServerMessages()`, `renderServerMessage()`, `messagesCategory`, `LangsysApp.seedCatalog()` | `node_modules/langsys-js-typescript/skill/catalog.md` |
-| Placeholders, ICU, plurals and gender in `$t()` | `node_modules/langsys-js-typescript/skill/interpolation.md` |
+| Placeholders, and plurals and gender written flat, in `$t()` | `node_modules/langsys-js-typescript/skill/interpolation.md` |
 
 ## Entry points
 
