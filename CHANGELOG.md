@@ -1,3 +1,11 @@
+## 4.0.3 - 2026-11-06
+
+Requires `langsys-js-typescript` 0.7.2, whose skill and README say never to write ICU.
+
+### Fixed (documentation)
+
+- **The README says never to write ICU.** Write the sentence flat with its placeholders, `$t('You have {count} new messages', 'Notifications', { count })`, and Langsys makes each language's plural and gender forms, the base language included. A sentence that says something different at zero is its own phrase. The README's ICU examples, which wrote a plural and a gender select by hand, are gone, and what it says about ICU now describes the translations Langsys sends. The skill's reading table points to the core skill's "write the sentence flat" section. Only documentation changed; the code is the same as 4.0.2's.
+
 ## 4.0.2 - 2026-10-31
 
 Brings the agent skill and the documentation fixes below to npm. 4.0.1 holds the same changes, but it is tagged on GitHub only and not on npm. Requires `langsys-js-typescript` 0.7.1, which ships the core skill this package's skill builds on. The package's code is unchanged.

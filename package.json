@@ -1,6 +1,6 @@
 {
     "name": "langsys-js-svelte",
-    "version": "4.0.2",
+    "version": "4.0.3",
     "author": "Langsys",
     "license": "MIT",
     "homepage": "https://github.com/langsys/langsys-js-svelte",
@@ -85,7 +85,7 @@
     "types": "./dist/index.d.ts",
     "type": "module",
     "dependencies": {
-        "langsys-js-typescript": "^0.7.1",
+        "langsys-js-typescript": "^0.7.2",
         "magic-string": "^0.30.0"
     }
 }

@@ -16,7 +16,7 @@ export default {
 
 ## Why it's needed
 
-Svelte compiles `<p>Hello {user.name}</p>` into code that writes the name straight into the DOM. At runtime nothing separates `Hello` from the value after it, so a block read from the DOM would register `Hello Ana`, `Hello Luis` and one more phrase per user, which is the core's fifth invariant (`node_modules/langsys-js-typescript/skill/invariants.md`). The source still shows which text is a variable, so the transform reads it there, at build time.
+Svelte compiles `<p>Hello {user.name}</p>` into code that writes the name straight into the DOM. At runtime nothing separates `Hello` from the value after it, so a block read from the DOM would register `Hello Ana`, `Hello Luis` and one more phrase per user, which breaks the core's invariant "A block's content must not depend on runtime data" (`node_modules/langsys-js-typescript/skill/invariants.md`). The source still shows which text is a variable, so the transform reads it there, at build time.
 
 **Without it, `<Translate>` and `<Phrase>` register nothing**, on the server or in the browser. They still render every translation the catalog holds. With `debug: true`, one notice names the transform. `$t()` registers as before.
 

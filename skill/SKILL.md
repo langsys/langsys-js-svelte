@@ -3,7 +3,7 @@ name: langsys-svelte
 description: The Langsys Svelte skill, for langsys-js-svelte on Svelte 5 and SvelteKit. Part of the Langsys skill set, read in order - the entry skill langsys first, then the core skill langsys-typescript (installed with this package, at node_modules/langsys-js-typescript/skill/SKILL.md), then this one. Covers only what Svelte changes - install, LangsysApp.init with a Svelte store, the $t store, writeEnabled and write grants as stores, the Translate, Phrase and DontTranslate components, the langsysPreprocess() build transform (without it the components register nothing), and SvelteKit's createLangsysHandle, hydrateFromServer and syncNavigation.
 metadata:
   package: langsys-js-svelte
-  version: 4.0.2
+  version: 4.0.3
 ---
 
 # Langsys Svelte
@@ -20,7 +20,7 @@ The entry skill isn't installed with any SDK. If `langsys` isn't among your skil
 
 This is `langsys-svelte`, step 3 for Svelte and SvelteKit. It describes `langsys-js-svelte` at the version in its frontmatter. Check the installed version first (`npm ls langsys-js-svelte`). If it differs, say so before relying on anything here.
 
-**Read the core skill before this one.** `langsys-typescript` ships in `langsys-js-typescript`, which this package depends on, so it is always installed: `node_modules/langsys-js-typescript/skill/SKILL.md`, or the `langsys-typescript` skill where `npx langsys-skill install` copied it. It holds every rule this binding keeps: choosing between `t()`, `Phrase` and `Translate`, the invariants, who may write, `init()` and its options, interpolation and ICU, value markers, the catalog, and request scopes. This skill adds only what Svelte changes. Where the binding passes a call to the core unchanged, it names the core file that describes it, as `node_modules/langsys-js-typescript/skill/<file>.md`.
+**Read the core skill before this one.** `langsys-typescript` ships in `langsys-js-typescript`, which this package depends on, so it is always installed: `node_modules/langsys-js-typescript/skill/SKILL.md`, or the `langsys-typescript` skill where `npx langsys-skill install` copied it. It holds every rule this binding keeps: choosing between `t()`, `Phrase` and `Translate`, the invariants, who may write, `init()` and its options, interpolation and plurals, value markers, the catalog, and request scopes. This skill adds only what Svelte changes. Where the binding passes a call to the core unchanged, it names the core file that describes it, as `node_modules/langsys-js-typescript/skill/<file>.md`.
 
 ## What Svelte changes
 
@@ -59,7 +59,7 @@ What the binding passes to the core unchanged is described in the core skill:
 | `legacyKeys`, `LangsysApp.loadSnapshot()` | `node_modules/langsys-js-typescript/skill/migration.md` |
 | `LangsysApp.localeHeaders()`, `LangsysApp.detectPreferredLocale()`, `canonicalizeLocale()`, the country, currency and locale lists | `node_modules/langsys-js-typescript/skill/locales.md` |
 | `resolveServerMessages()`, `renderServerMessage()`, `messagesCategory`, `LangsysApp.seedCatalog()` | `node_modules/langsys-js-typescript/skill/catalog.md` |
-| Placeholders, ICU, plurals and gender in `$t()` | `node_modules/langsys-js-typescript/skill/interpolation.md` |
+| Placeholders, and plurals and gender written flat, in `$t()` | `node_modules/langsys-js-typescript/skill/interpolation.md` |
 
 ## Entry points
 
