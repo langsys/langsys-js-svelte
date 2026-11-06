@@ -257,7 +257,7 @@ $t('You have {count} new messages', 'Notifications', { count: 3, extra: 'x' });
 
 Allowed value types: `string | number | Date | boolean`. `number` and `Date` values are formatted for the active locale via CLDR — `1234.5` renders as `1,234.5` in `en-US` and `1.234,5` in `de-DE`; a `Date` renders in medium date style (`Mar 14, 2026` / `14.03.2026`), and a `boolean` as `true` or `false`. `string` values pass through untouched. In a translation Langsys made into a plural or select, a `Date` and a `boolean` in a plain argument render the same way, but a `number` there is written as it is (`1234.5` in every locale).
 
-**Plurals and gender: write the sentence flat, never ICU.** Write the sentence as it reads, with the count as a placeholder, and Langsys makes each language's plural and gender forms, the base language included: Langsys runs the same plural check on the base-language text, so English renders `You have 1 new message` with no ICU in English either, and Russian picks among its four forms and Arabic among its six.
+**Plurals and gender: write the sentence flat, never ICU.** Write the sentence as it reads, with the count as a placeholder, and Langsys makes each language's plural and gender forms, the base language included: Langsys runs the same plural check on the base-language text, so English renders `You have 1 new message` with no ICU in English either, and Russian picks among its four forms and Arabic among its six. Langsys makes them once it has checked the phrase: a translation run checks its own phrases, and an hourly check covers the rest. Until then the base language shows the sentence as written.
 
 ```svelte
 {$t('You have {count} new messages', 'Notifications', { count })}
@@ -275,7 +275,7 @@ A sentence that says something different at zero is its own phrase:
 
 In a gendered locale Langsys can also turn a plain `{name}` into a `select` your phrase never had. The catalog sends those forms as ICU, and when an argument the translation expects isn't supplied, the SDK resolves `select` and `plural` to their `other` branch rather than rendering the raw construct.
 
-A translation that holds an ICU argument, such as a plural or select Langsys made, is an ICU message throughout, so ICU's quoting applies to it: an apostrophe right before a `{` starts a quote. In a phrase you write, which holds no ICU, an apostrophe is text.
+A translation that holds an ICU argument, such as a plural or select Langsys made, is an ICU message throughout, so ICU's quoting applies to it: an apostrophe right before a `{` starts a quote.
 
 #### Categorization disambiguates context
 
