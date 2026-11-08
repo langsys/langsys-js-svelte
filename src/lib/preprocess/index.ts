@@ -298,7 +298,8 @@ class Transform {
         const atPrevious = attributes.findIndex((a) => a.type === 'Attribute' && a.name === 'previousCategory');
         const previousComputed =
             computed || attributes.some((a, i) => (a.type === 'SpreadAttribute' && i > atPrevious) || (i === atPrevious && ownPrevious === undefined));
-        const inherits = !own && atPrevious < 0;
+        // In the enclosing block's category, named or not, it takes the block's move (MOVE-1).
+        const inherits = (!own || own === scope?.text) && atPrevious < 0;
         const previous = previousComputed
             ? null
             : inherits && scope
@@ -515,9 +516,15 @@ class Transform {
                 else dyn.push({ name: 'class', parts: parts.map((p) => (p.type === 'Text' ? (p.data as string) : (p.expression as Expr))) });
             } else if (a.name === 'category' && isStatic && (text === '' || text === ctx.category)) continue;
             // A nested unit in the block's category moved with it, and the core gives it the
-            // block's previous category (MOVE-1); one naming the same previous category says so.
-            // Any other is a move of its own, which a nested host cannot carry: the block falls back.
-            else if (a.name === 'previousCategory' && kind !== 'DontTranslate' && isStatic && typeof ctx.previous === 'string' && text === ctx.previous)
+            // block's previous category (MOVE-1); one naming the same previous category says so, and
+            // in a block that did not move, one naming the category itself names no move. Any other
+            // is a move of its own, which a nested host cannot carry: the block falls back.
+            else if (
+                a.name === 'previousCategory' &&
+                kind !== 'DontTranslate' &&
+                isStatic &&
+                ((typeof ctx.previous === 'string' && text === ctx.previous) || (ctx.previous === undefined && text === ctx.category))
+            )
                 continue;
             else if (a.name === 'custom_id' && kind === 'Translate' && isStatic) customId = text;
             else if (a.name === 'params' && kind !== 'DontTranslate' && !Array.isArray(value) && value !== true) {

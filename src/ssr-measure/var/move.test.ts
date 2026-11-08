@@ -32,7 +32,8 @@ describe('content moved to another category (MOVE-1)', () => {
         const unmoved = [...(control as unknown as { blockMisses: Map<string, Record<string, unknown>> }).blockMisses.values()];
         expect(unmoved).toHaveLength(1);
         expect(unmoved[0].previousCategory).toBeUndefined();
-        expect(moved?.customId).toBe(unmoved[0].customId);
+        expect(typeof moved?.custom_id).toBe('string');
+        expect(moved?.custom_id).toBe(unmoved[0].custom_id);
     });
 
     it('sends the previous category with a moved phrase, a nested unit in the block, and a $t call', async () => {
@@ -49,6 +50,8 @@ describe('content moved to another category (MOVE-1)', () => {
         expect(of('Fallback unit {name}')).toMatchObject({ category: 'Cart', previousCategory: 'Header' });
         expect(of('Own unit {name}')?.category).toBe('Own');
         expect(of('Own unit {name}')?.previousCategory).toBeUndefined();
+        // One naming the block's own category is in the block's move, as it is in a block that is read.
+        expect(of('Same category unit {name}')).toMatchObject({ category: 'Cart', previousCategory: 'Header' });
     });
 
     it('renders the previous category until the catalog has the new one, and the host says where it came from (MOVE-4, MOVE-5)', async () => {
@@ -65,5 +68,20 @@ describe('content moved to another category (MOVE-1)', () => {
         } as unknown as iCategories;
         const after = (await inScope(current, 'es-cr')).body;
         expect(after).toMatch(/<span(?![^>]*data-ls-previous)[^>]*>Frase nueva Ana<\/span>/);
+    });
+
+    it("fills a moved block from its previous category's id until the catalog has it, and says so on the host (MOVE-4, MOVE-5)", async () => {
+        // The block's id under its previous category, as a render there derives it.
+        const header = await createRequestScope({ locale: 'en-us', catalog: {} as iCategories });
+        header.run(() => void render(VarMoveControl, { props: { name: 'Ana', category: 'Header' } }).body);
+        const [old] = [...(header as unknown as { blockMisses: Map<string, Record<string, unknown>> }).blockMisses.values()];
+        const oldId = old.custom_id as string;
+        const catalog = {
+            Header: { [oldId]: { 'Moved block {name}': 'Bloque movido {name}', 'Second paragraph': 'Segundo párrafo' } },
+        } as unknown as iCategories;
+        const { body } = await inScope(catalog, 'es-cr');
+        expect(body).toMatch(new RegExp(`<div[^>]*data-ls-previous-contentblock="${oldId}"[^>]*><p>Bloque movido Ana</p>`));
+        // Control: without the move, the same block under its new category renders its source.
+        expect(body).toMatch(/<div(?![^>]*data-ls-previous)[^>]*><p>Moved block Ana<\/p>\s*<p>Second paragraph<\/p><\/div>/);
     });
 });

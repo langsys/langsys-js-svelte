@@ -60,9 +60,11 @@ export interface UnitCategory {
 /**
  * The category a unit renders and registers under, given its own: for one the build read on its
  * own inside a fallback block, the block's unless the unit names one (an empty one is the block's
- * too, as it is inside a block that is read). A unit that takes the block's category takes its
- * previous category with it, unless it names its own; one naming its own category moved, or did
- * not, on its own (MOVE-1), as the core decides for a nested host. A fallback block provides both
+ * too, as it is inside a block that is read). A unit in the block's category, whether it names it or
+ * not, takes the block's previous category with it unless it names its own, as a nested unit does
+ * in a block that is read, where the build drops a category equal to the block's and the core gives
+ * the host the block's move; one naming another category moved, or did not, on its own (MOVE-1).
+ * A fallback block provides both
  * to the units read inside it. Call while the component initialises; the getter is reactive where
  * it is read.
  */
@@ -75,8 +77,9 @@ export function blockCategory(
     const resolved = (): UnitCategory => {
         const named = own();
         const previous = ownPrevious();
-        if (named || !block) return { category: named, previousCategory: previous };
+        if (!block) return { category: named, previousCategory: previous };
         const outer = block();
+        if (named && named !== outer.category) return { category: named, previousCategory: previous };
         return { category: outer.category, previousCategory: previous ?? outer.previousCategory };
     };
     if (__ls && 'fallback' in __ls && __ls.scope) setContext(__ls.scope, resolved);

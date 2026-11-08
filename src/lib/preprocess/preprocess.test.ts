@@ -759,6 +759,8 @@ describe('content moved to another category (MOVE-1)', () => {
         expect(read('<Translate category="New" previousCategory={from}><p>A {name}</p><Phrase previousCategory="Old">B {name}</Phrase></Translate>')).toBe(
             false
         );
+        // In a block that did not move, naming the category itself names no move.
+        expect(read('<Translate category="New"><p>A {name}</p><Phrase previousCategory="New">B {name}</Phrase></Translate>')).toBe(true);
         // Control: a block deciding its move at runtime is still read when no nested unit names one.
         expect(read('<Translate category="New" previousCategory={from}><p>A {name}</p><Phrase>B {name}</Phrase></Translate>')).toBe(true);
     });

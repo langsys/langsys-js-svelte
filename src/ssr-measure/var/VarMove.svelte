@@ -25,7 +25,8 @@
         {#each items as item (item)}<li>{item}</li>{/each}
     </ul>
     <Phrase>Fallback unit {name}</Phrase>
-    <Phrase category="Own">Own unit {name}</Phrase></Translate
+    <Phrase category="Own">Own unit {name}</Phrase>
+    <Phrase category="Cart">Same category unit {name}</Phrase></Translate
 >
 <!-- `$t` with a template literal: the build's runtime path, a ref in the category position. -->
 <p>{$t(`Moved call ${name}`, inCategory('Checkout', { previousCategory: 'Header' }))}</p>
