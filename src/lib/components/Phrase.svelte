@@ -39,19 +39,40 @@
         class?: string;
         tag?: string;
         category?: string;
+        /**
+         * The category this phrase was registered under before it moved to `category` (MOVE-1):
+         * `''` for none. Its translations follow it instead of being made again, and until the
+         * catalog holds it under `category` the previous one's renders. Never part of its key.
+         */
+        previousCategory?: string | null;
         params?: Record<string, ParamPrimitive>;
         children: Snippet;
         /** Written by `langsysPreprocess()`; never by hand. */
         __ls?: TransformOutput;
     }
 
-    let { class: clazz = '', tag = 'span', category: named = '', params = {}, children, __ls = undefined }: Props = $props();
+    let {
+        class: clazz = '',
+        tag = 'span',
+        category: named = '',
+        previousCategory: namedPrevious = undefined,
+        params = {},
+        children,
+        __ls = undefined,
+    }: Props = $props();
 
-    // Inside a block that falls back, the block's category unless this one names its own (VAR-6).
+    // Inside a block that falls back, the block's category unless this one names its own (VAR-6),
+    // and with it the block's previous category (MOVE-1).
     // A component's transform output never changes after it is created.
     // svelte-ignore state_referenced_locally
-    const inBlock = blockCategory(__ls, () => named);
-    const category = $derived(inBlock());
+    const inBlock = blockCategory(
+        __ls,
+        () => named,
+        () => namedPrevious
+    );
+    const unit = $derived(inBlock());
+    const category = $derived(unit.category);
+    const previous = $derived(unit.previousCategory === undefined || unit.previousCategory === null ? {} : { previousCategory: unit.previousCategory });
 
     /**
      * The skip marker, spread so the attribute NAME comes from the core rather
@@ -91,7 +112,7 @@
     );
     // The host is element 0 of the tree, so the build's entries start at 1.
     const dyn = $derived(__ls && 'tree' in __ls ? [null, ...__ls.dyn] : []);
-    const options = $derived({ category, params: paramsOf(__ls && 'tree' in __ls ? __ls.params : undefined, params) });
+    const options = $derived({ category, ...previous, params: paramsOf(__ls && 'tree' in __ls ? __ls.params : undefined, params) });
     const root = $derived.by(() => {
         if (!tree) return undefined;
         // eslint-disable-next-line @typescript-eslint/no-unused-expressions -- reading the store is the dependency: re-render on every catalog or locale change
@@ -108,7 +129,7 @@
 
     $effect(() => {
         if (!host || tree || instance) return;
-        instance = new VanillaPhrase(host, { category, params, register: rawHtml });
+        instance = new VanillaPhrase(host, { category, ...previous, params, register: rawHtml });
     });
 
     // On the server, inside the request scope, which sends it after the response (SRV-3).

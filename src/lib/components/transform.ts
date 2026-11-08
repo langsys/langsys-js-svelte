@@ -50,17 +50,37 @@ export type TransformOutput = (
     | { content: 'raw-html' }
 ) & { in?: object };
 
+/** A unit's category, and the one its content was registered under before it moved (MOVE-1). */
+export interface UnitCategory {
+    category: string;
+    /** `undefined` or `null` when it did not move; `''` when it had no category before. */
+    previousCategory?: string | null;
+}
+
 /**
  * The category a unit renders and registers under, given its own: for one the build read on its
  * own inside a fallback block, the block's unless the unit names one (an empty one is the block's
- * too, as it is inside a block that is read). A fallback block provides its category to the units
- * read inside it. Call while the component initialises; the getter is reactive where it is read.
+ * too, as it is inside a block that is read). A unit that takes the block's category takes its
+ * previous category with it, unless it names its own; one naming its own category moved, or did
+ * not, on its own (MOVE-1), as the core decides for a nested host. A fallback block provides both
+ * to the units read inside it. Call while the component initialises; the getter is reactive where
+ * it is read.
  */
-export function blockCategory(__ls: TransformOutput | undefined, own: () => string): () => string {
-    const block = __ls?.in ? getContext<(() => string) | undefined>(__ls.in) : undefined;
-    const category = () => own() || block?.() || '';
-    if (__ls && 'fallback' in __ls && __ls.scope) setContext(__ls.scope, category);
-    return category;
+export function blockCategory(
+    __ls: TransformOutput | undefined,
+    own: () => string,
+    ownPrevious: () => string | null | undefined = () => undefined
+): () => UnitCategory {
+    const block = __ls?.in ? getContext<(() => UnitCategory) | undefined>(__ls.in) : undefined;
+    const resolved = (): UnitCategory => {
+        const named = own();
+        const previous = ownPrevious();
+        if (named || !block) return { category: named, previousCategory: previous };
+        const outer = block();
+        return { category: outer.category, previousCategory: previous ?? outer.previousCategory };
+    };
+    if (__ls && 'fallback' in __ls && __ls.scope) setContext(__ls.scope, resolved);
+    return resolved;
 }
 
 /** The reason `warnUnregistered` reports when a block reaches the runtime without the transform. */

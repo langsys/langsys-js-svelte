@@ -89,6 +89,12 @@ export { LangsysConfigurationError } from 'langsys-js-typescript';
 // the same entry rather than fetching twice.
 export { canonicalizeLocale } from 'langsys-js-typescript';
 
+// Content moved to another category (MOVE-1), re-exported by reference:
+// `$t('Buy now', inCategory('Checkout', { previousCategory: 'Header' }))`. The ref goes in the
+// category position; `<Translate>` and `<Phrase>` take `previousCategory` as a prop instead.
+export { inCategory, isCategoryRef } from 'langsys-js-typescript';
+export type { CategoryRef, CategoryMoveOptions } from 'langsys-js-typescript';
+
 // Components
 export { default as Translate } from './components/Translate.svelte';
 export { default as Phrase } from './components/Phrase.svelte';

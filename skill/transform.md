@@ -57,7 +57,7 @@ A block holding any of these is a **fallback**: the build names it in a warning,
 - `{@html}` beside a variable;
 - a `translate` or `data-notrans` attribute whose value is an expression;
 - an `<input>` whose `type` is an expression, beside a `value` holding text;
-- a nested `<Translate>` or `<Phrase>` with a prop other than these: `tag` and `custom_id` written as text, `class`, `params`, and `category` when it is the block's own. A `label`, or a `category` of its own, makes the enclosing block a fallback.
+- a nested `<Translate>` or `<Phrase>` with a prop other than these: `tag` and `custom_id` written as text, `class`, `params`, `category` when it is the block's own, and `previousCategory` when it is the block's own, written as text on both. A `label`, a `category` of its own, or a `previousCategory` of its own makes the enclosing block a fallback. A nested unit naming neither moves with the block.
 
 Restructure so each unit is readable: put the `<Translate>` or `<Phrase>` inside the `{#each}` rather than around it, keep components and bound inputs outside the block or in a block of their own, and give a link or a button with an icon its text through `$t` or a `<Phrase>` around the text alone. A `<Translate>` or `<Phrase>` nested inside a fallback block that the build can read is still read on its own.
 
