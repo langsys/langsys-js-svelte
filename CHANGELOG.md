@@ -1,4 +1,4 @@
-## 4.1.0 - unreleased
+## 4.1.0 - 2026-11-09
 
 Requires `langsys-js-typescript` 0.7.3, which adds `inCategory()` and category moves (spec MOVE-1 to MOVE-5).
 
