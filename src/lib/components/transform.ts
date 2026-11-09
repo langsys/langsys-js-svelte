@@ -50,17 +50,40 @@ export type TransformOutput = (
     | { content: 'raw-html' }
 ) & { in?: object };
 
+/** A unit's category, and the one its content was registered under before it moved (MOVE-1). */
+export interface UnitCategory {
+    category: string;
+    /** `undefined` or `null` when it did not move; `''` when it had no category before. */
+    previousCategory?: string | null;
+}
+
 /**
  * The category a unit renders and registers under, given its own: for one the build read on its
  * own inside a fallback block, the block's unless the unit names one (an empty one is the block's
- * too, as it is inside a block that is read). A fallback block provides its category to the units
- * read inside it. Call while the component initialises; the getter is reactive where it is read.
+ * too, as it is inside a block that is read). A unit in the block's category, whether it names it or
+ * not, takes the block's previous category with it unless it names its own, as a nested unit does
+ * in a block that is read, where the build drops a category equal to the block's and the core gives
+ * the host the block's move; one naming another category moved, or did not, on its own (MOVE-1).
+ * A fallback block provides both
+ * to the units read inside it. Call while the component initialises; the getter is reactive where
+ * it is read.
  */
-export function blockCategory(__ls: TransformOutput | undefined, own: () => string): () => string {
-    const block = __ls?.in ? getContext<(() => string) | undefined>(__ls.in) : undefined;
-    const category = () => own() || block?.() || '';
-    if (__ls && 'fallback' in __ls && __ls.scope) setContext(__ls.scope, category);
-    return category;
+export function blockCategory(
+    __ls: TransformOutput | undefined,
+    own: () => string,
+    ownPrevious: () => string | null | undefined = () => undefined
+): () => UnitCategory {
+    const block = __ls?.in ? getContext<(() => UnitCategory) | undefined>(__ls.in) : undefined;
+    const resolved = (): UnitCategory => {
+        const named = own();
+        const previous = ownPrevious();
+        if (!block) return { category: named, previousCategory: previous };
+        const outer = block();
+        if (named && named !== outer.category) return { category: named, previousCategory: previous };
+        return { category: outer.category, previousCategory: previous ?? outer.previousCategory };
+    };
+    if (__ls && 'fallback' in __ls && __ls.scope) setContext(__ls.scope, resolved);
+    return resolved;
 }
 
 /** The reason `warnUnregistered` reports when a block reaches the runtime without the transform. */

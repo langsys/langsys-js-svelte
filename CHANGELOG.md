@@ -1,3 +1,16 @@
+## 4.1.0 - unreleased
+
+Requires `langsys-js-typescript` 0.7.3, which adds `inCategory()` and category moves (spec MOVE-1 to MOVE-5).
+
+### What's new
+
+- **Content moved to another category keeps its translations.** `<Translate>` and `<Phrase>` take `previousCategory`, the category the content was registered under before, and `inCategory()` is re-exported for `$t`: `$t('Buy now', inCategory('Checkout', { previousCategory: 'Header' }))`. The core sends it on the registration, so the API copies the old item's translations instead of translating and charging again, and until the catalog has the new item the old one's translation renders. The host of a block or phrase filled that way carries `data-ls-previous-contentblock` or `data-ls-previous-category`. `<DontTranslate>` has no category, so it takes none.
+- **The build transform carries a move.** A `<Translate>` or `<Phrase>` nested in a moved block moves with it, as the core gives a nested host its block's previous category, and a unit read on its own inside a fallback block takes the block's previous category with its category, unless it names a category other than the block's or a previous category of its own. A nested unit naming a previous category other than the block's makes the block a fallback, as a category of its own does. The previous category is never part of what the transform derives (MOVE-2). A `$t` template literal whose category is decided at runtime, ``$t(`Hi ${name}`, inCategory('Checkout', { previousCategory: 'Header' }))``, hands the ref to the core as the category: the runtime path read every object second argument as params, which would have spread the ref into them and registered the phrase with no category.
+
+### Fixed (in the core this version requires)
+
+- **A catalog is no longer cached in the browser under another language's name.** With core 0.7.1 or 0.7.2, a catalog put in place for one locale before `init()` (README-SSR's layout-body seed, `hydrateFromServer()`, or `init({ initialTranslations, initialTranslationsLocale })`) was saved in `localStorage` under the locale the app's `UserLocaleStore` held whenever the two differed. If that locale's fetch then failed, every later visit showed it in the seed's language until a fetch succeeded. Core 0.7.3 saves a catalog only under the locale it belongs to, including one set with `sTranslations.set()` and `currentlyLoadedLocale.set()` as README-SSR shows, so the README's pattern is unchanged.
+
 ## 4.0.3 - 2026-11-06
 
 Requires `langsys-js-typescript` 0.7.2, whose skill and README say never to write ICU.

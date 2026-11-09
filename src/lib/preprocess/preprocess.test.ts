@@ -730,3 +730,53 @@ describe("the snippet a block's nodes are written with", () => {
         expect(code).not.toContain('{#snippet __lsNodes');
     });
 });
+
+describe('content moved to another category (MOVE-1)', () => {
+    const vars = { name: 'Ana', from: 'Old' };
+    const treeOf = (markup: string) => blocks(run(markup, "let name = 'A'; let from = 'Old';").code, vars) as Array<Record<string, unknown>>;
+
+    it('derives nothing from a previous category: the tree is the one the block has without it (MOVE-2)', () => {
+        const [moved] = treeOf('<Translate category="New" previousCategory="Old"><p>Hi {name}</p><Phrase>Sub {name}</Phrase></Translate>');
+        const [unmoved] = treeOf('<Translate category="New"><p>Hi {name}</p><Phrase>Sub {name}</Phrase></Translate>');
+        expect(moved).toEqual(unmoved);
+        expect(JSON.stringify(moved)).not.toContain('Old');
+        // The attribute stays on the component, for it to forward to the core.
+        expect(run('<Translate category="New" previousCategory="Old"><p>Hi {name}</p></Translate>', "let name = 'A';").code).toContain(
+            'previousCategory="Old"'
+        );
+    });
+
+    it('reads a nested unit that moved with the block, and falls back for one that moved on its own', () => {
+        const read = (markup: string) => 'tree' in treeOf(markup)[0];
+        // Naming none, or the block's own, it is in the block's move.
+        expect(read('<Translate category="New" previousCategory="Old"><p>A {name}</p><Phrase>B {name}</Phrase></Translate>')).toBe(true);
+        expect(read('<Translate category="New" previousCategory="Old"><p>A {name}</p><Phrase previousCategory="Old">B {name}</Phrase></Translate>')).toBe(true);
+        // A move the block does not make, or one decided at runtime, a nested host cannot carry.
+        expect(read('<Translate category="New"><p>A {name}</p><Phrase previousCategory="Old">B {name}</Phrase></Translate>')).toBe(false);
+        expect(read('<Translate category="New" previousCategory="Old"><p>A {name}</p><Phrase previousCategory="Other">B {name}</Phrase></Translate>')).toBe(
+            false
+        );
+        expect(read('<Translate category="New" previousCategory={from}><p>A {name}</p><Phrase previousCategory="Old">B {name}</Phrase></Translate>')).toBe(
+            false
+        );
+        // In a block that did not move, naming the category itself names no move.
+        expect(read('<Translate category="New"><p>A {name}</p><Phrase previousCategory="New">B {name}</Phrase></Translate>')).toBe(true);
+        // Control: a block deciding its move at runtime is still read when no nested unit names one.
+        expect(read('<Translate category="New" previousCategory={from}><p>A {name}</p><Phrase>B {name}</Phrase></Translate>')).toBe(true);
+    });
+
+    it('passes a category ref through the runtime path of a $t template call, not as params', () => {
+        const { code } = run('<p>{$t(`Hi ${name}`, ref)}</p>', "let name = 'A'; let ref: unknown;");
+        const call = code.match(/\{(\(\(__lsT[^]*?\)\))\}<\/p>/)![1];
+        const ref = Object.freeze(Object.defineProperty({ category: 'New', previousCategory: 'Old' }, Symbol.for('langsys.category'), { value: true }));
+        const seen: unknown[][] = [];
+        const t = (...args: unknown[]) => (seen.push(args), '');
+        new Function('$t', 'name', 'ref', `return ${call};`)(t, 'Ana', ref);
+        expect(seen[0][1]).toBe(ref);
+        expect(seen[0][2]).toEqual({ name: 'Ana' });
+        // Control: a plain object there is still the params.
+        seen.length = 0;
+        new Function('$t', 'name', 'ref', `return ${call};`)(t, 'Ana', { x: 1 });
+        expect(seen[0]).toEqual(['Hi {name}', { x: 1, name: 'Ana' }]);
+    });
+});

@@ -34,6 +34,12 @@
         tag?: string;
         label?: string;
         category?: string;
+        /**
+         * The category this block was registered under before it moved to `category` (MOVE-1):
+         * `''` for none. Its translations follow it instead of being made again, and until the
+         * catalog holds the block under `category` the previous one's renders. Never part of its id.
+         */
+        previousCategory?: string | null;
         custom_id?: string;
         params?: Record<string, ParamPrimitive>;
         children: Snippet;
@@ -46,23 +52,32 @@
         tag = 'translate',
         label = '',
         category: named = '',
+        previousCategory: namedPrevious = undefined,
         custom_id = '',
         params = undefined,
         children,
         __ls = undefined,
     }: Props = $props();
 
-    // Inside a block that falls back, the block's category unless this one names its own (VAR-6).
+    // Inside a block that falls back, the block's category unless this one names its own (VAR-6),
+    // and with it the block's previous category (MOVE-1).
     // A component's transform output never changes after it is created.
     // svelte-ignore state_referenced_locally
-    const inBlock = blockCategory(__ls, () => named);
-    const category = $derived(inBlock());
+    const inBlock = blockCategory(
+        __ls,
+        () => named,
+        () => namedPrevious
+    );
+    const unit = $derived(inBlock());
+    const category = $derived(unit.category);
+    const previous = $derived(unit.previousCategory === undefined || unit.previousCategory === null ? {} : { previousCategory: unit.previousCategory });
 
     const tree = $derived(__ls && 'tree' in __ls ? unitParams(__ls.tree) : undefined);
     const dyn = $derived(__ls && 'tree' in __ls ? __ls.dyn : []);
     // A param the app names itself wins over the build's.
     const options = $derived({
         category,
+        ...previous,
         label,
         params: paramsOf(__ls && 'tree' in __ls ? __ls.params : undefined, params),
         ...(custom_id ? { id: custom_id } : {}),
@@ -102,7 +117,7 @@
 
     $effect(() => {
         if (!host || tree || instance) return;
-        instance = new VanillaTranslate(host, { category, custom_id, label, params, register: rawHtml });
+        instance = new VanillaTranslate(host, { category, ...previous, custom_id, label, params, register: rawHtml });
     });
 
     // Re-render when params change (e.g. a changed count) after mount.

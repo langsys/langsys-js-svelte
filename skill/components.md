@@ -18,6 +18,7 @@ Which primitive a piece of content needs is the core's question, answered in `no
 - **`$t(phrase, category?, params?)`** is the core's `t()`, read from the `t` store, so the markup re-renders on every catalog or locale change. Its signature, types and placeholder rules are the core's (`node_modules/langsys-js-typescript/skill/interpolation.md`).
 - **`{name}` inside the string is the core's placeholder.** It is a JavaScript string, so Svelte never reads it as an expression.
 - **It registers with or without the build transform**, because its phrase is a string you wrote.
+- **Moving a phrase to another category** is the core's `inCategory()` in the category position, `$t('Buy now', inCategory('Checkout', { previousCategory: 'Header' }))`, imported from `langsys-js-svelte`. What a move does, and the rule to move every use of the text at once, are the core's (`node_modules/langsys-js-typescript/skill/invariants.md`). `<Translate>` and `<Phrase>` take `previousCategory` as a prop instead, and `<DontTranslate>`, which has no category, takes none.
 - **With the transform, a template literal is rewritten** into the placeholder form: `` $t(`Hello ${user.name}`) `` becomes `$t('Hello {name}', undefined, { name: user.name })`. Without it, the same literal builds one phrase per value, which the core's first invariant forbids. Write the placeholder form either way.
 
 ## `<Translate>`
@@ -38,6 +39,7 @@ Which primitive a piece of content needs is the core's question, answered in `no
 | Prop | Default | What it does |
 |---|---|---|
 | `category` | none | The block's category |
+| `previousCategory` | none | The category the block was registered under before it moved to `category`, `''` for none: its translations follow it |
 | `custom_id` | none | Registers the block under this id instead of the one derived from its content |
 | `label` | none | What translators see the block called |
 | `tag` | `translate` | The host element. The default is an unknown element, which renders inline: pass `div`, `section` or `article` for block content |
@@ -69,6 +71,7 @@ Which primitive a piece of content needs is the core's question, answered in `no
 | Prop | Default | What it does |
 |---|---|---|
 | `category` | none | The phrase's category |
+| `previousCategory` | none | The category the phrase was registered under before it moved to `category`, `''` for none: its translations follow it |
 | `tag` | `span` | The host element |
 | `class` | none | The host's class |
 | `params` | none | Values for `%name%` placeholders written in the content |

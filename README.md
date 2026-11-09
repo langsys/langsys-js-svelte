@@ -199,7 +199,7 @@ The block is then rendered through the core's block renderer, so it is **transla
 
 ``$t(`Hello ${user.name}`)`` is rewritten the same way, to `$t('Hello {name}', undefined, { name: user.name })`. A key you write in an object literal argument is a name you chose, so ``$t(`Hello ${name}`, { name: nickname })`` registers `Hello {name_2}`.
 
-**What it cannot read** — an `{#each}`, an `{#await}`, a `{#snippet}`, a `{@render}` or a `{@const}`; another component, or a special element such as `<svelte:element>`; an `<svg>`, `<math>`, `<textarea>`, `<template>`, `<script>` or `<style>` element, such as an icon inside a link; a directive (`bind:`, `use:`, `class:`, `style:`, a transition or an animation), an `{@attach}` or a spread; `{@html}` beside a variable; a `translate` or `data-notrans` attribute whose value is an expression; an `<input>` whose `type` is an expression beside a `value` holding text; or a nested `<Translate>` or `<Phrase>` with a prop other than `tag` and `custom_id` written as text, `class`, `params`, and the block's own `category` (a `label`, or a `category` of its own) — makes that block a **fallback**: the build names it in a warning, and the block renders as below. An element that one of those attributes excludes as written stays excluded whatever an expression in the other holds, and inside an exclusion such an expression changes nothing: neither makes its block a fallback. A `<Translate>` or `<Phrase>` inside a fallback block that the build can read is read on its own, under the category the block renders with, unless it names one. One inside a `<DontTranslate>`, or inside an element marked `translate="no"` or `data-notrans`, or given either attribute by an expression, is never read, and registers nothing. The build reads an exclusion written on the element itself: one a spread applies (`<div {...attrs}>`), or another component applies to its own elements, is decided at runtime where the build cannot see it, so a unit inside it is read and registers. Write `translate="no"` on the element to keep its content out.
+**What it cannot read** — an `{#each}`, an `{#await}`, a `{#snippet}`, a `{@render}` or a `{@const}`; another component, or a special element such as `<svelte:element>`; an `<svg>`, `<math>`, `<textarea>`, `<template>`, `<script>` or `<style>` element, such as an icon inside a link; a directive (`bind:`, `use:`, `class:`, `style:`, a transition or an animation), an `{@attach}` or a spread; `{@html}` beside a variable; a `translate` or `data-notrans` attribute whose value is an expression; an `<input>` whose `type` is an expression beside a `value` holding text; or a nested `<Translate>` or `<Phrase>` with a prop other than `tag` and `custom_id` written as text, `class`, `params`, and the block's own `category` and `previousCategory` (a `label`, or a `category` or `previousCategory` of its own) — makes that block a **fallback**: the build names it in a warning, and the block renders as below. An element that one of those attributes excludes as written stays excluded whatever an expression in the other holds, and inside an exclusion such an expression changes nothing: neither makes its block a fallback. A `<Translate>` or `<Phrase>` inside a fallback block that the build can read is read on its own, under the category the block renders with, unless it names one, and with the block's `previousCategory` unless it names another category or a `previousCategory` of its own. One inside a `<DontTranslate>`, or inside an element marked `translate="no"` or `data-notrans`, or given either attribute by an expression, is never read, and registers nothing. The build reads an exclusion written on the element itself: one a spread applies (`<div {...attrs}>`), or another component applies to its own elements, is decided at runtime where the build cannot see it, so a unit inside it is read and registers. Write `translate="no"` on the element to keep its content out.
 
 **Raw HTML is content.** A block whose only dynamic parts are `{@html}` insertions — a CMS field, say — holds text to translate, not a variable, so it registers the HTML's text as the page shows it:
 
@@ -290,6 +290,26 @@ Without categorization, "Home" would only have one translation — which can't w
 
 A good rule for category names: the module or feature the phrase lives in (`Account`, `Errors`, `Checkout`, `UI`).
 
+#### Moving content to another category
+
+A category is part of a phrase's identity, so a phrase or block moved into a better category registers as new content, which Langsys would translate, and charge for, again. Name the category it was registered under before, and its translations follow it:
+
+```svelte
+<script lang="ts">
+    import { inCategory, Phrase, t, Translate } from 'langsys-js-svelte';
+</script>
+
+<button>{$t('Buy now', inCategory('Checkout', { previousCategory: 'Header' }))}</button>
+<Translate category="Pricing" previousCategory="Home"><p>Plans for every team</p></Translate>
+<Phrase category="Legal" previousCategory="">Read our <a href="/terms">terms</a></Phrase>
+```
+
+- **In `$t`, `inCategory()` goes where the category goes**; a plain object there is params. `<Translate>` and `<Phrase>` take `previousCategory` as a prop. `''` says the content had no category before.
+- **Move every use of the text in that category in the same release.** Until the catalog has it under the new category, the old category's translation renders, and the host of a `<Translate>` or `<Phrase>` filled that way carries `data-ls-previous-contentblock` or `data-ls-previous-category`. Once the catalog has it, the option does nothing and can be deleted.
+- **With the build transform**, a `<Translate>` or `<Phrase>` nested in a moved block moves with it. One naming a `previousCategory` other than the block's makes the block a fallback, as a `category` of its own does. `<DontTranslate>` has no category, so it takes no `previousCategory`.
+
+What a move sends, and its limits, are in the [`langsys-js-typescript` README](https://github.com/langsys/langsys-js-typescript#moving-content-between-categories).
+
 ### `<Translate>` — HTML content blocks
 
 For larger blocks of HTML where the structure should be preserved for the translator:
@@ -338,7 +358,7 @@ With the transform, write values as you would anywhere in Svelte — `{name}`, `
 - The values are **reactive**: a changed `count` re-renders the block.
 - **`debug: true`** warns when `params` has keys that match no placeholder in the content, and names each block the transform could not read.
 
-`<Translate>` props: `category?`, `custom_id?`, `label?`, `tag?` (defaults to `translate`), `class?`, `params?`, `children`.
+`<Translate>` props: `category?`, `previousCategory?`, `custom_id?`, `label?`, `tag?` (defaults to `translate`), `class?`, `params?`, `children`.
 
 #### Blocks the transform cannot read
 
@@ -384,7 +404,7 @@ With the transform this registers `Based on {review_count} {m0o}reviews{m0c}` on
 - **Composes with `<Translate>`.** A `<Phrase>` emits `data-ls-phrase`, which tells a wrapping `<Translate>` to leave that run to it — an internal marker the component sets for you, never something you write on an element yourself. The common pattern is `<Translate>` for the block, with `<Phrase>` around any run that must stay atomic.
 - Use it for: a count plus its noun, a sentence with a bolded or linked span, anything where word order must be free across the markup.
 
-`<Phrase>` props: `category?`, `params?`, `tag?` (defaults to `span`), `class?`, `children`.
+`<Phrase>` props: `category?`, `previousCategory?`, `params?`, `tag?` (defaults to `span`), `class?`, `children`.
 
 ### `<DontTranslate>` — content that must survive verbatim
 

@@ -290,6 +290,23 @@ class Transform {
         // A spread after it decides it at runtime, as an expression does.
         const computed = attributes.some((a, i) => (a.type === 'SpreadAttribute' && i > at) || (i === at && own === undefined));
         const category = computed ? '' : own || scope?.text || '';
+        // The category the block moved from (MOVE-1), as far as the build knows it: a string, or
+        // `undefined` for no move. It is never part of what the build derives (MOVE-2); it only
+        // decides whether a nested unit naming one moved with the block. `null` is "decided at
+        // runtime": a value written as an expression, a spread after it, or a category that is.
+        const ownPrevious = staticProp('previousCategory');
+        const atPrevious = attributes.findIndex((a) => a.type === 'Attribute' && a.name === 'previousCategory');
+        const previousComputed =
+            computed || attributes.some((a, i) => (a.type === 'SpreadAttribute' && i > atPrevious) || (i === atPrevious && ownPrevious === undefined));
+        // In the enclosing block's category, named or not, it takes the block's move (MOVE-1).
+        const inherits = (!own || own === scope?.text) && atPrevious < 0;
+        const previous = previousComputed
+            ? null
+            : inherits && scope
+              ? scope.previous
+              : ownPrevious === undefined || ownPrevious === category
+                ? undefined
+                : ownPrevious;
         const explicitParams = attributes.find((a) => a.type === 'Attribute' && a.name === 'params');
 
         if (scope) scope.used = true;
@@ -312,6 +329,7 @@ class Transform {
                 ids: { next: 0 },
                 phrase: kind === 'Phrase',
                 category,
+                previous,
                 raw: false,
                 pre: false,
             });
@@ -327,7 +345,7 @@ class Transform {
             // A block inside it that the build can read is a block of its own: the core's walk of
             // this one leaves a marked host to that block (MARK-4). The units read so take this
             // block's category from a context it provides under a key of its own.
-            const inner: Scope = { key: `${this.keyPrefix}${this.scopes.length}`, text: category, used: false, module: this.inModule > 0 };
+            const inner: Scope = { key: `${this.keyPrefix}${this.scopes.length}`, text: category, previous, used: false, module: this.inModule > 0 };
             this.scopes.push(inner);
             this.visit((node.fragment as Fragment).nodes, inner);
             inject(`fallback: ${JSON.stringify(e.message)}${inner.used ? `, scope: ${inner.key}` : ''}`);
@@ -497,6 +515,17 @@ class Transform {
                 if (isStatic) attrs.push({ name: 'class', value: [text] });
                 else dyn.push({ name: 'class', parts: parts.map((p) => (p.type === 'Text' ? (p.data as string) : (p.expression as Expr))) });
             } else if (a.name === 'category' && isStatic && (text === '' || text === ctx.category)) continue;
+            // A nested unit in the block's category moved with it, and the core gives it the
+            // block's previous category (MOVE-1); one naming the same previous category says so, and
+            // in a block that did not move, one naming the category itself names no move. Any other
+            // is a move of its own, which a nested host cannot carry: the block falls back.
+            else if (
+                a.name === 'previousCategory' &&
+                kind !== 'DontTranslate' &&
+                isStatic &&
+                ((typeof ctx.previous === 'string' && text === ctx.previous) || (ctx.previous === undefined && text === ctx.category))
+            )
+                continue;
             else if (a.name === 'custom_id' && kind === 'Translate' && isStatic) customId = text;
             else if (a.name === 'params' && kind !== 'DontTranslate' && !Array.isArray(value) && value !== true) {
                 this.explicitKeys(a, own.explicit);
@@ -581,9 +610,14 @@ class Transform {
         // all three are arguments here, so an `await` or `yield` in one stays in the caller, and the
         // store is read before it. The template's values win over params of the same name; the other
         // arguments reach the core as written, spreads included.
+        //
+        // An object is the params unless it is a category ref from `inCategory()` (MOVE-1), which the
+        // core tells apart by the brand it sets under the registry symbol `langsys.category`, so a
+        // ref from any copy of the core is one. Read as params, the ref would be spread into them
+        // and the phrase registered with no category.
         const args = rest.map((a) => (a.type === 'SpreadElement' ? `...(${this.code(a.argument as Node)})` : `(${this.code(a)})`)).join(', ');
         return (
-            `((__lsT, __lsV, __lsA, ...__lsR) => typeof __lsA === 'object' ` +
+            `((__lsT, __lsV, __lsA, ...__lsR) => typeof __lsA === 'object' && !(__lsA && __lsA[Symbol.for('langsys.category')] === true) ` +
             `? __lsT(${phrase}, { ...__lsA, ...__lsV }) : __lsT(${phrase}, __lsA, { ...__lsR[0], ...__lsV }))(${callee}, ${withParams(undefined)}, ${args})`
         );
     }
@@ -635,6 +669,8 @@ class Transform {
 interface Scope {
     key: string;
     text: string;
+    /** The category it moved from when written as text, `undefined` for none, `null` when decided at runtime (MOVE-1). */
+    previous: string | null | undefined;
     /** A unit was read inside it, so it provides the context. */
     used: boolean;
     /** Declared in the module script: the block is in a snippet it exports. */
@@ -654,6 +690,8 @@ interface Ctx extends Unit {
     /** The unit being read is a phrase: it reads everything under its host, a nested block too. */
     phrase: boolean;
     category: string;
+    /** The block's previous category, as `Scope.previous` (MOVE-1). */
+    previous: string | null | undefined;
     /** Inside an exclusion: its text makes no token, its attributes are carried as values, and no unit is read. */
     raw: boolean;
     pre: boolean;

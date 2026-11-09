@@ -77,8 +77,8 @@ writeEnabled                     // Readable<boolean | undefined> — tri-state,
                                  // two above it is genuinely not writable. undefined = not known yet
 
 // Components
-<Translate category? custom_id? label? tag? class? params? children />
-<Phrase category? params? tag? class? children />          // one markup-bearing sentence kept whole
+<Translate category? previousCategory? custom_id? label? tag? class? params? children />
+<Phrase category? previousCategory? params? tag? class? children />   // one markup-bearing sentence kept whole
 <DontTranslate tag? class? children />                     // never translated (translate="no")
 
 // Build-time transform (optional, svelte.config.js): langsys-js-svelte/preprocess
@@ -93,6 +93,7 @@ createLangsysHandle({ locale, catalog?, credentials?, match?, seed?, storage? })
 
 // Also from the main entry
 notifyNavigation(), canonicalizeLocale(), LangsysConfigurationError   // the core's, by reference
+inCategory(), isCategoryRef()          // the core's (MOVE-1): $t(phrase, inCategory('New', { previousCategory: 'Old' }))
 serverMessage                         // Readable store: $serverMessage(entry) renders a server message entry
 renderServerMessage(), resolveServerMessages()                        // the core's, by reference
 OVERRIDDEN_MEMBERS                    // the LangsysApp members whose behaviour differs from the core's docs
@@ -106,7 +107,7 @@ iLangsysResponse, iCategories, iTranslations, iContentBlock, iCountry, iCountryD
 iCurrency, iCurrencyList, iLanguageName, iLocaleData, iLocaleDefault, iLocaleFlat, iProject,
 TFunction, TranslationParams, ParamPrimitive, ExtractParamKeys, ParamsFor, TArgs
 WriteGrant (base-SDK union), WriteGrantSource (that union plus a Svelte store)
-ApiCredentials, ServerMessage, ResolveServerMessagesOptions, Signal, TStore
+ApiCredentials, ServerMessage, ResolveServerMessagesOptions, Signal, TStore, CategoryRef, CategoryMoveOptions
 LangsysHandleOptions (/kit/server), LangsysPreprocessOptions and LangsysPreprocessorGroup (/preprocess)
 ```
 
@@ -172,7 +173,7 @@ to erode:
 
 ## Local development setup
 
-This package depends on the **published** `langsys-js-typescript` from npm (a caret range, `^0.7.1` today), exactly as an end user would — never a `file:`/symlink/`npm link` dep. A local link has bitten us before (a stale local build silently shadowing the real package), so the dependency stays de-linked at all times.
+This package depends on the **published** `langsys-js-typescript` from npm (a caret range, `^0.7.3` today), exactly as an end user would — never a `file:`/symlink/`npm link` dep. A local link has bitten us before (a stale local build silently shadowing the real package), so the dependency stays de-linked at all times.
 
 To pick up base-SDK changes:
 
