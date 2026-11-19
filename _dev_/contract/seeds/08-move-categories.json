@@ -1,0 +1,56 @@
+{
+    "projects": [
+        {
+            "id": "76000801-0000-4000-8000-000000000001",
+            "title": "move-categories 1 app",
+            "base_locale": "en-us",
+            "target_locales": ["es-es"],
+            "phrases": [
+                { "category": "Header", "phrase": "Buy now", "translations": { "es-es": "Comprá ya" } },
+                { "category": "Header", "phrase": "Sign in", "translations": { "es-es": "Ingresá" } },
+                { "category": "Header", "phrase": "Not moved", "translations": { "es-es": "No movido" } },
+                { "phrase": "Plain buy", "translations": { "es-es": "Compra simple" } }
+            ],
+            "blocks": [
+                {
+                    "category": "Header",
+                    "custom_id": "ff3e44def085ca5b7e961dbf7bb3a119",
+                    "content": "<p>Moved block</p><p>Second paragraph</p>",
+                    "phrases": [
+                        { "phrase": "Moved block", "translations": { "es-es": "Bloque movido" } },
+                        { "phrase": "Second paragraph", "translations": { "es-es": "Segundo párrafo" } }
+                    ]
+                }
+            ],
+            "user": { "token": "118011|svelte-token-118011", "device_id": "svelte-device-118011" }
+        },
+        {
+            "id": "76000802-0000-4000-8000-000000000001",
+            "title": "move-categories 2 app",
+            "base_locale": "en-us",
+            "target_locales": ["es-es"],
+            "phrases": [
+                { "category": "Header", "phrase": "Buy now", "translations": { "es-es": "Comprá ya" } },
+                { "category": "Header", "phrase": "Sign in", "translations": { "es-es": "Ingresá" } },
+                { "category": "Header", "phrase": "Not moved", "translations": { "es-es": "No movido" } },
+                { "phrase": "Plain buy", "translations": { "es-es": "Compra simple" } }
+            ],
+            "blocks": [
+                {
+                    "category": "Header",
+                    "custom_id": "ff3e44def085ca5b7e961dbf7bb3a119",
+                    "content": "<p>Moved block</p><p>Second paragraph</p>",
+                    "phrases": [
+                        { "phrase": "Moved block", "translations": { "es-es": "Bloque movido" } },
+                        { "phrase": "Second paragraph", "translations": { "es-es": "Segundo párrafo" } }
+                    ]
+                }
+            ],
+            "user": { "token": "118021|svelte-token-118021", "device_id": "svelte-device-118021" }
+        }
+    ],
+    "keys": [
+        { "id": "76000801-0000-4000-8000-100000000001", "key": "svelte-08-01-write", "project": "76000801-0000-4000-8000-000000000001", "type": "write" },
+        { "id": "76000802-0000-4000-8000-100000000001", "key": "svelte-08-02-read", "project": "76000802-0000-4000-8000-000000000001", "type": "read" }
+    ]
+}

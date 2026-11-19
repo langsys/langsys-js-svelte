@@ -1,3 +1,16 @@
+## 4.2.0 - unreleased
+
+Requires `langsys-js-typescript` 0.7.4.
+
+### Upgrading from 4.1
+
+- **A block or a `<Phrase>` holding a `<plaintext>` element moves to a new id.** The text after a `<plaintext>` start tag is never translated now, as with `<script>`, `<style>`, `<template>`, `<noscript>` and `<math>`: a browser reads everything after that tag as text to the end of the document, and the server SDKs' parsers read it differently, so they could not agree on its id. A `<Translate>` block holding one registers under a new `custom_id` and shows its source text until the new entry is translated; without the build transform it registers nothing, so it stays in source. A `<Phrase>` holding one registers a new key and keeps rendering the translation stored under its earlier key. To do: nothing, unless a page has a `<plaintext>` element, which HTML has made obsolete.
+- **A number in a plain placeholder of a translation Langsys made into a plural or select is formatted for the locale.** `{total}` given `1234.5` rendered `1234.5` in every locale once its translation held a plural or a gender `select`; it now renders `1.234,5` in `de-de`, as the same placeholder does in any other translation and as the plural's `#` already did. Langsys adds plurals to translations language by language, so the same placeholder had rendered differently from one language to the next. To do: pass a number as a string where it must stay as written, such as an ID or a code.
+
+### What's new
+
+- **Server messages can move to another category without losing their translations.** Set `messagesPreviousCategory` in `init()`, beside `messagesCategory`, to the category the server registered its templates under before (`''` for none), as the server's own setting says. `$serverMessage(entry)` renders a template not yet translated under the new category from the old category's translation, and shows `message` only when neither has one. The README's server messages section says how to set it.
+
 ## 4.1.0 - 2026-11-09
 
 Requires `langsys-js-typescript` 0.7.3, which adds `inCategory()` and category moves (spec MOVE-1 to MOVE-5).

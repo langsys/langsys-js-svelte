@@ -58,7 +58,7 @@ What the binding passes to the core unchanged is described in the core skill:
 | `writeEnabled`'s meaning, write grants, page reports, `notifyNavigation()` | `node_modules/langsys-js-typescript/skill/writing.md` |
 | `legacyKeys`, `LangsysApp.loadSnapshot()` | `node_modules/langsys-js-typescript/skill/migration.md` |
 | `LangsysApp.localeHeaders()`, `LangsysApp.detectPreferredLocale()`, `canonicalizeLocale()`, the country, currency and locale lists | `node_modules/langsys-js-typescript/skill/locales.md` |
-| `resolveServerMessages()`, `renderServerMessage()`, `messagesCategory`, `LangsysApp.seedCatalog()` | `node_modules/langsys-js-typescript/skill/catalog.md` |
+| `resolveServerMessages()`, `renderServerMessage()`, `messagesCategory`, `messagesPreviousCategory`, `LangsysApp.seedCatalog()` | `node_modules/langsys-js-typescript/skill/catalog.md` |
 | Placeholders, and plurals and gender written flat, in `$t()` | `node_modules/langsys-js-typescript/skill/interpolation.md` |
 
 ## Entry points

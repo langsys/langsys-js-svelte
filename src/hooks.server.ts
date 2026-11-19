@@ -16,7 +16,7 @@ import { selectSeam } from './srv-scope/seam.js';
  */
 const isScopeRoute = (url: URL) => url.pathname.startsWith('/e2e/srv-scope');
 /** The VAR routes render under the core's scope too, with the catalog the core fetches from `SRV_API`. */
-const isVarRoute = (url: URL) => url.pathname === '/fixture/var' || url.pathname === '/fixture/var-plain';
+const isVarRoute = (url: URL) => ['/fixture/var', '/fixture/var-plain', '/fixture/var/move'].includes(url.pathname);
 
 /**
  * For the post-response flush (SRV-3) the SDK needs a key and a write lane, so a run that tests

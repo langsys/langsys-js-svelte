@@ -29,6 +29,8 @@ export interface Clone {
     update(c: Case, fields: Record<string, unknown>): Promise<void>;
     /** The phrases a project's catalog serves at a locale, read with `key`. */
     phrases(key: string, project: string, locale: string): Promise<string[]>;
+    /** A project's catalog at a locale as the API serves it, by category: each phrase's translation, and each block's phrases by its id. */
+    catalog(key: string, project: string, locale: string): Promise<Record<string, Record<string, unknown>>>;
     stop(): void;
 }
 
@@ -73,23 +75,26 @@ export async function startClone(): Promise<Clone> {
         if (!res.ok) throw new Error(`the forwarder refused a setup: ${res.status} ${await res.text()}`);
     };
     for (const c of cases.allCases()) await post(cases.setupOf(c));
+    const catalog = async (key: string, project: string, locale: string) => {
+        const res = await directFetch(`${base}/translations?project_id=${encodeURIComponent(project)}&locale=${encodeURIComponent(locale)}`, {
+            headers: { accept: 'application/json', 'x-authorization': key },
+        });
+        const body = (await res.json().catch(() => null)) as { data?: Record<string, Record<string, unknown>> } | null;
+        if (!res.ok || !body) throw new Error(`the catalog read answered ${res.status}`);
+        return body.data && !Array.isArray(body.data) ? body.data : {};
+    };
 
     return {
         base,
         caseOf: cases.caseOf,
         update: (c, fields) => post({ keys: Object.values(c.keys).map((k) => k.key), ...fields }),
-        phrases: async (key, project, locale) => {
-            const res = await directFetch(`${base}/translations?project_id=${encodeURIComponent(project)}&locale=${encodeURIComponent(locale)}`, {
-                headers: { accept: 'application/json', 'x-authorization': key },
-            });
-            const body = (await res.json().catch(() => null)) as { data?: Record<string, Record<string, unknown>> } | null;
-            if (!res.ok || !body) throw new Error(`the catalog read answered ${res.status}`);
-            return Object.values(body.data && !Array.isArray(body.data) ? body.data : {}).flatMap((entries) =>
+        phrases: async (key, project, locale) =>
+            Object.values(await catalog(key, project, locale)).flatMap((entries) =>
                 Object.entries(entries ?? {})
                     .filter(([, value]) => !value || typeof value !== 'object')
                     .map(([phrase]) => phrase)
-            );
-        },
+            ),
+        catalog,
         stop: () => child.kill(),
     };
 }

@@ -44,6 +44,13 @@ describe('surface — re-exported by reference', () => {
         expect(binding.resolveServerMessages).toBe(core.resolveServerMessages);
         expect(binding.renderServerMessage).toBe(core.renderServerMessage);
     });
+
+    it('inCategory and isCategoryRef are the core functions themselves', () => {
+        // `t()` reads a category move by the core's own brand (MOVE-1), so a ref built here must be one the core built.
+        expect(binding.inCategory).toBe(core.inCategory);
+        expect(binding.isCategoryRef).toBe(core.isCategoryRef);
+        expect(core.isCategoryRef(binding.inCategory('Checkout', { previousCategory: 'Header' }))).toBe(true);
+    });
 });
 
 describe('surface — the one deliberate non-re-export', () => {

@@ -865,7 +865,7 @@ function readsValue(n: Node): boolean | undefined {
 
 /**
  * The names written in a unit's text or a `$t` template's: the developer's, so taken (VAR-2). A
- * `%name%`, and the core's own `{name}` or ICU argument (`{count, plural, …}`), which markup holds
+ * `%name%`, and the core's own `{name}` or the name an ICU argument opens with, which markup holds
  * as text only through a character reference (`&lbrace;name&rbrace;`).
  */
 function takeWritten(text: string, into: Set<string>): void {

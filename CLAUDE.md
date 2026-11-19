@@ -60,7 +60,7 @@ That's the entire surface. Every other concern — HTTP, missing-token registrat
 
 ```typescript
 // Main entry point — wraps init to accept Writable, delegates everything else
-LangsysApp.init({ projectid, key, UserLocaleStore, baseLocale?, apiUrl?, requireCredentials?, debug?, ssrTokenStrategy?, legacyKeys?, messagesCategory?, initialTranslations?, initialTranslationsLocale?, writeGrant? })
+LangsysApp.init({ projectid, key, UserLocaleStore, baseLocale?, apiUrl?, requireCredentials?, debug?, ssrTokenStrategy?, legacyKeys?, messagesCategory?, messagesPreviousCategory?, initialTranslations?, initialTranslationsLocale?, writeGrant? })
 LangsysApp.setWriteGrant(grant)  // async — re-authorizes so the server re-evaluates the session
 LangsysApp.t                     // current TFunction (snapshot — not reactive on its own)
 LangsysApp.getCountries() / getCurrencies() / getDialCodes() / getLocales*() / ...
@@ -173,7 +173,7 @@ to erode:
 
 ## Local development setup
 
-This package depends on the **published** `langsys-js-typescript` from npm (a caret range, `^0.7.3` today), exactly as an end user would — never a `file:`/symlink/`npm link` dep. A local link has bitten us before (a stale local build silently shadowing the real package), so the dependency stays de-linked at all times.
+This package depends on the **published** `langsys-js-typescript` from npm (a caret range, `^0.7.4` today), exactly as an end user would — never a `file:`/symlink/`npm link` dep. A local link has bitten us before (a stale local build silently shadowing the real package), so the dependency stays de-linked at all times.
 
 To pick up base-SDK changes:
 

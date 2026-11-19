@@ -255,7 +255,7 @@ $t('You have {count} new messages', 'Notifications', { count: 3, extra: 'x' });
 // ❌ Object literal may only specify known properties, and 'extra' does not exist
 ```
 
-Allowed value types: `string | number | Date | boolean`. `number` and `Date` values are formatted for the active locale via CLDR — `1234.5` renders as `1,234.5` in `en-US` and `1.234,5` in `de-DE`; a `Date` renders in medium date style (`Mar 14, 2026` / `14.03.2026`), and a `boolean` as `true` or `false`. `string` values pass through untouched. In a translation Langsys made into a plural or select, a `Date` and a `boolean` in a plain argument render the same way, but a `number` there is written as it is (`1234.5` in every locale).
+Allowed value types: `string | number | Date | boolean`. `number` and `Date` values are formatted for the active locale via CLDR — `1234.5` renders as `1,234.5` in `en-US` and `1.234,5` in `de-DE`; a `Date` renders in medium date style (`Mar 14, 2026` / `14.03.2026`), and a `boolean` as `true` or `false`. `string` values pass through untouched. A plain argument renders the same way in a translation Langsys made into a plural or select. Pass a number as a string to keep it as written, such as an ID or a code that must not get grouping separators.
 
 **Plurals and gender: write the sentence flat, never ICU.** Write the sentence as it reads, with the count as a placeholder, and Langsys makes each language's plural and gender forms, the base language included: Langsys runs the same plural check on the base-language text, so English renders `You have 1 new message` with no ICU in English either, and Russian picks among its four forms and Arabic among its six. Langsys makes them once it has checked the phrase: a translation run checks its own phrases, and an hourly check covers the rest. Until then the base language shows the sentence as written.
 
@@ -353,7 +353,7 @@ With the transform, write values as you would anywhere in Svelte — `{name}`, `
 
 - Values interpolate into translated text **and** translatable attributes, after the lookup — translators translate the phrase and the values drop in per locale.
 - A number reaches the translation as a number, so a plural form a translation grows (`{count, plural, one {…} other {…}}`) selects correctly.
-- `number` and `Date` values are formatted for the active locale via the base SDK's CLDR rules; `string` values pass through untouched. In a translation Langsys made into a plural, a `number` in a plain argument is written as it is, while the plural's `#` is formatted for the locale, as in `$t()`.
+- `number` and `Date` values are formatted for the active locale via the base SDK's CLDR rules, in a plain argument and in a plural's `#` alike, as in `$t()`; `string` values pass through untouched.
 - Unknown keys stay visible in canonical form (`%missing%` renders as `{missing}`) rather than blanked — matching `$t()`'s unknown-key behavior.
 - The values are **reactive**: a changed `count` re-renders the block.
 - **`debug: true`** warns when `params` has keys that match no placeholder in the content, and names each block the transform could not read.
@@ -462,6 +462,11 @@ maps your own error shape to entries — and throws if given neither. It never s
 when the catalog has one, and the entry's `message` otherwise. `message` is never used as a
 lookup key. Templates are looked up under one category, `Errors` unless you set
 `messagesCategory` in `init()`; it must match the category the server registers them under.
+When the server renames that category, set `messagesPreviousCategory` in `init()` to the one it
+registered the templates under before (`''` for none), as the server's own setting says: a template
+not yet translated under the new category renders the old category's translation, and shows
+`message` only when neither has one. Once the catalog holds the templates' translations under the
+new category, the option has no effect and can be removed.
 `code` is your framework's own identifier for the failure, passed through unchanged: branch your
 logic on it, never on the text.
 

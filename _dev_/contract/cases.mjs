@@ -65,6 +65,31 @@ const RACE_CATALOG = {
     target_locales: ['fr-fr', 'de-de', 'it-it', 'pt-pt'],
     phrases: [{ category: 'FX', phrase: RACE, translations: { 'fr-fr': 'Bonjour', 'de-de': 'Hallo', 'it-it': 'Ciao', 'pt-pt': 'Olá' } }],
 };
+// What the move suite renders (`src/ssr-measure/var/VarMoveClone.svelte`): content registered under
+// `Header`, and one phrase with no category, translated; nothing under `Checkout`, where the page now
+// writes it. Machine translation is off, so a translation the API holds under `Checkout` afterwards
+// can only have been copied by the move.
+const MOVED_BLOCK = ['Moved block', 'Second paragraph'];
+const MOVE_CATALOG = {
+    target_locales: ['es-es'],
+    phrases: [
+        { category: 'Header', phrase: 'Buy now', translations: { 'es-es': 'Comprá ya' } },
+        { category: 'Header', phrase: 'Sign in', translations: { 'es-es': 'Ingresá' } },
+        { category: 'Header', phrase: 'Not moved', translations: { 'es-es': 'No movido' } },
+        { phrase: 'Plain buy', translations: { 'es-es': 'Compra simple' } },
+    ],
+    blocks: [
+        {
+            category: 'Header',
+            custom_id: generateCustomId('Header', MOVED_BLOCK),
+            content: '<p>Moved block</p><p>Second paragraph</p>',
+            phrases: [
+                { phrase: 'Moved block', translations: { 'es-es': 'Bloque movido' } },
+                { phrase: 'Second paragraph', translations: { 'es-es': 'Segundo párrafo' } },
+            ],
+        },
+    ],
+};
 const hello = (label) => ({
     target_locales: ['de-de', 'it-it'],
     website_url: `https://${label}.local`,
@@ -195,6 +220,22 @@ const SUITES = {
             1: {
                 name: 'REF-1: the binding forwards the core’s reference lists',
                 projects: { app: { target_locales: ['fr-fr'], locale_code_format: 'lowercase-hyphen' } },
+                keys: { read: { project: 'app', type: 'read' } },
+            },
+        },
+    },
+    8: {
+        name: 'move-categories',
+        harness: 'src/ssr-measure/var/move.contract.test.ts (case 1), _dev_/contract/move-hydrate.mjs (case 2)',
+        cases: {
+            1: {
+                name: 'MOVE-1, MOVE-3, MOVE-4: content moved from Header to Checkout keeps its translations and registers once',
+                projects: { app: MOVE_CATALOG },
+                keys: { write: { project: 'app', type: 'write' } },
+            },
+            2: {
+                name: 'MOVE-5: a page served from the previous category hydrates against a catalog without the current one and keeps its translations',
+                projects: { app: MOVE_CATALOG },
                 keys: { read: { project: 'app', type: 'read' } },
             },
         },

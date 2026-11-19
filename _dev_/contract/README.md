@@ -37,13 +37,14 @@ export LANGSYS_CONTRACT_CLONE_ROOT=~/Documents/dev/langsys5
 export NODE_EXTRA_CA_CERTS=~/.config/valet/CA/LaravelValetCASelfSigned.pem
 export LANGSYS_FX_PORT=8787
 
-LANGSYS_CONTRACT_SUITE=1 npx vitest run          # the *.contract.test.ts files: SRV-2 credentials, REF-1 lists
+LANGSYS_CONTRACT_SUITE=1 npx vitest run          # the *.contract.test.ts files: SRV-2 credentials, REF-1 lists, MOVE-1, MOVE-3, MOVE-4
 
 eval "$(node _dev_/e2e/srv-flush.mjs --env write)"
 SRV_API=http://127.0.0.1:8787/api SRV_PROJECT=$SRV_PROJECT SRV_KEY=$SRV_KEY npm run dev     # fresh
 node _dev_/e2e/srv-flush.mjs --expect write      # SRV-3
 node _dev_/e2e/var.mjs                           # SRV-1, VAR-6, and corroboration for VAR-1, VAR-7, SRV-4
 node _dev_/contract/srv-hydrate.mjs              # SRV-7, SRV-1
+node _dev_/contract/move-hydrate.mjs             # MOVE-4, MOVE-5
 node _dev_/contract/verify-contract.mjs          # HINT-13
 node _dev_/e2e/locale-race.mjs                   # CACHE-1, CACHE-2 through the binding
 # restart the dev server with `--env read`'s values, then:
