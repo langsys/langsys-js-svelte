@@ -2,7 +2,7 @@
 
 ### Fixed (documentation)
 
-- **The README documents the migration from i18n keys.** `legacyKeys` reached the base SDK through `init()` since 4.0.0, but only the base SDK's README described it, so a Svelte developer couldn't find it. The new "Migrating from i18n keys" section shows the setup, what is converted, that number params are formatted for the locale (pass a year or an ID as a string to keep it as written), and how to keep the translations an app already has before deleting its other language files. Only documentation changed.
+- **The README documents the migration from i18n keys.** `legacyKeys` reached the base SDK through `init()` since 4.0.0, but only the base SDK's README described it, so a Svelte developer couldn't find it. The new "Migrating from i18n keys" section shows the setup, what is converted, that a key's number params print as plain digits from core 0.7.5 (pass a year or an ID as a string on an earlier core), and how to keep the translations an app already has before deleting its other language files. Only documentation changed.
 
 ## 4.1.0 - 2026-11-09
 
