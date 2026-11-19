@@ -20,6 +20,16 @@ export interface Case {
     caller: string;
 }
 
+/** A row of the catalog's data form: a phrase, or a content block with a row per phrase. */
+export interface DataRow {
+    type?: string;
+    phrase?: string;
+    custom_id?: string;
+    translation?: string | null;
+    memory_translated?: boolean;
+    translations?: DataRow[];
+}
+
 export interface Clone {
     /** The API base URL to hand the core. */
     base: string;
@@ -29,8 +39,12 @@ export interface Clone {
     update(c: Case, fields: Record<string, unknown>): Promise<void>;
     /** The phrases a project's catalog serves at a locale, read with `key`. */
     phrases(key: string, project: string, locale: string): Promise<string[]>;
-    /** A project's catalog at a locale as the API serves it, by category: each phrase's translation, and each block's phrases by its id. */
-    catalog(key: string, project: string, locale: string): Promise<Record<string, Record<string, unknown>>>;
+    /**
+     * A project's catalog at a locale in its data form (`GET /translations/data`), by category: a row
+     * per phrase and per content block. A row says whether its translation is the item's own or a
+     * translation-memory match of the same text elsewhere in the project (`memory_translated`).
+     */
+    data(key: string, project: string, locale: string): Promise<Record<string, DataRow[]>>;
     stop(): void;
 }
 
@@ -83,6 +97,14 @@ export async function startClone(): Promise<Clone> {
         if (!res.ok || !body) throw new Error(`the catalog read answered ${res.status}`);
         return body.data && !Array.isArray(body.data) ? body.data : {};
     };
+    const data = async (key: string, project: string, locale: string) => {
+        const res = await directFetch(`${base}/translations/data?project_id=${encodeURIComponent(project)}&locale=${encodeURIComponent(locale)}`, {
+            headers: { accept: 'application/json', 'x-authorization': key },
+        });
+        const body = (await res.json().catch(() => null)) as { data?: Record<string, DataRow[]> } | null;
+        if (!res.ok || !body) throw new Error(`the catalog's data form answered ${res.status}`);
+        return body.data && !Array.isArray(body.data) ? body.data : {};
+    };
 
     return {
         base,
@@ -94,7 +116,7 @@ export async function startClone(): Promise<Clone> {
                     .filter(([, value]) => !value || typeof value !== 'object')
                     .map(([phrase]) => phrase)
             ),
-        catalog,
+        data,
         stop: () => child.kill(),
     };
 }

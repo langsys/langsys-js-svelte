@@ -67,8 +67,9 @@ const RACE_CATALOG = {
 };
 // What the move suite renders (`src/ssr-measure/var/VarMoveClone.svelte`): content registered under
 // `Header`, and one phrase with no category, translated; nothing under `Checkout`, where the page now
-// writes it. Machine translation is off, so a translation the API holds under `Checkout` afterwards
-// can only have been copied by the move.
+// writes it. The API fills a phrase registered under `Checkout` from translation memory when the same
+// text is translated elsewhere, and the catalog's data form flags that (`memory_translated`); a move
+// copies the translation onto the new item as its own.
 const MOVED_BLOCK = ['Moved block', 'Second paragraph'];
 const MOVE_CATALOG = {
     target_locales: ['es-es'],
