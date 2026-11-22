@@ -666,6 +666,32 @@ When changing locale mid-session, you may want to re-run dependent code once the
 > 50 ms ago are indistinguishable from outside: both have a resolved promise and an
 > un-updated locale. If you need an error state, supply your own timeout.
 
+## Migrating from i18n keys
+
+An app keyed on i18next or plain JSON files (`$t('checkout.submit')`) can move to Langsys without rewriting its call sites. Keep the source-language file and hand it to `init()` as `legacyKeys`:
+
+```svelte
+<script lang="ts">
+    import en from '$lib/locales/en.json';
+
+    const config: iLangsysInitConfig = {
+        projectid, key, UserLocaleStore: userLocale,
+        legacyKeys: [{ name: 'en.json', format: 'i18next', data: en }],
+    };
+</script>
+
+{$t('checkout.submit')}   <!-- "Pay now", registered under the category "checkout" -->
+{$t('Welcome back!')}     <!-- not a key: literal source text, as always -->
+```
+
+`$t()` resolves its argument as a key first. A key the file holds becomes its value, and that value, never the key, is the phrase Langsys registers and translates, so a later codemod can inline the English and delete the file without moving an id. The key's first segment is the category unless the call passes one. An argument the file doesn't hold is literal source text.
+
+Values are converted to Langsys syntax as they are read: `{{name}}` becomes `{name}`, and i18next's `items_one` / `items_other` keys become one plural under `items`, whose argument is `count`, so pass `{ count }`. Formats are `i18next`, `vue-i18n` and `plain` (the default); any other makes `init()` throw a `LegacyFormatError` naming the file. A value the conversion can't express registers exactly as written and logs a warning naming the file and key. `namespace` makes a per-namespace file answer only keys under that prefix, with the namespace as their category, and with several files the first that holds a key answers. Leave `legacyKeys` unset once the migration is done, and `$t()` does no key lookup at all. The full rules are in [langsys-js-typescript's README](https://github.com/langsys/langsys-js-typescript#migrating-from-i18n-keys).
+
+**Numbers are formatted for the locale.** i18next prints a number param as it is; Langsys formats it with the locale's grouping, so `$t('footer.copyright', { year: 2026 })` on `© {{year}} …` shows `© 2,026` in English and `© 2 026` in French. Pass a year, an ID or an order number as a string (`{ year: '2026' }`) to keep it as written.
+
+**Keep the translations you already have.** Before deleting `es.json`, `fr.json` and the rest, send them to Langsys as human translations, so they show at once and aren't machine-translated again. No JavaScript package does this yet: register each phrase with its translations through `POST /api/translatable-items` (each item's `translations` list, one `{ locale, translation }` per language), or use the PHP SDK's `importLegacyTranslations()`. The answer counts the translations saved and those skipped for the plan's human-translation word limit (`human_translations_saved`, `human_translations_skipped`).
+
 ## Upgrading from 3.x
 
 4.0.0 runs on `langsys-js-typescript` 0.7, which `npm install` brings with it. What follows was measured against an app on 3.6.17, which runs on core 0.6.5.
