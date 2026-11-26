@@ -5,7 +5,19 @@
      * `Checkout`. The same page `move.contract.test.ts` renders on the server, compiled WITH the
      * transform. Driven by `_dev_/contract/move-hydrate.mjs`.
      */
+    import { onMount, tick } from 'svelte';
+    import { LangsysApp } from '$lib/index.js';
     import VarMoveClone from '../../../../ssr-measure/var/VarMoveClone.svelte';
+
+    // For the harness, once the layout's init() has resolved: resolves when the locale init() settles
+    // is in place (the served catalog, which hydrateFromServer() marked loaded) and Svelte has
+    // rendered whatever that changed.
+    onMount(() => {
+        (window as unknown as { __lsSettled: () => Promise<void> }).__lsSettled = async () => {
+            await LangsysApp.translationsLoadingPromise;
+            await tick();
+        };
+    });
 </script>
 
 <VarMoveClone />

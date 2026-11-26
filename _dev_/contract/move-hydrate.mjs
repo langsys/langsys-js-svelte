@@ -2,8 +2,8 @@
  * MOVE-4, MOVE-5 — content moved to another category is served from its previous category's
  * entries, its hosts stamped with where it was filled from, and a client hydrating it against a
  * catalog with nothing under the new category keeps the translated text: from the first paint to
- * after `init()` has fetched the catalog. Through `createLangsysHandle`, in Chromium, against an SDK
- * test clone through the contract fixture's forwarder.
+ * after `init()` has settled the locale on the served catalog. Through `createLangsysHandle`, in
+ * Chromium, against an SDK test clone through the contract fixture's forwarder.
  *
  *     SRV_API=http://127.0.0.1:8787/api SRV_PROJECT=… SRV_KEY=… LANGSYS_FX_PORT=8787 npm run dev   # fresh
  *     node _dev_/contract/move-hydrate.mjs          # starts the forwarder on 8787 itself
@@ -24,7 +24,6 @@ const BASE = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173';
 
 const results = [];
 const check = (c, n, d) => results.push({ ok: !!c, n, d });
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const strip = (html) => html.replace(/<!--[^]*?-->/g, '');
 
 const fx = await startClone();
@@ -86,13 +85,14 @@ await page.addInitScript((source) => {
 await page.route(url, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: raw }));
 await page.goto(url);
 await page.waitForFunction(() => document.querySelector('[data-testid=fx-status]')?.textContent === 'ready', null, { timeout: 60_000 });
-// Past init(): its catalog fetch has published, and whatever it re-renders has rendered.
-await sleep(3000);
+// Past init(): the locale it settles is in place and whatever that changed has rendered (the page's
+// __lsSettled awaits the core's translationsLoadingPromise, then Svelte's tick()).
+await page.evaluate(() => window.__lsSettled());
 
 const text = await page.evaluate(() => document.body.textContent ?? '');
 check(
     ['Comprá ya', 'Ingresá', 'Bloque movido', 'Segundo párrafo', 'Compra simple'].every((s) => text.includes(s)),
-    "MOVE-5: after hydration and init()'s catalog, the moved content still shows Header's translations",
+    "MOVE-5: after hydration and once init() has settled the locale, the moved content still shows Header's translations",
     text.replace(/\s+/g, ' ').slice(0, 400)
 );
 const seen = await page.evaluate(() => [...window.__sourceSeen]);

@@ -38,8 +38,12 @@ const SURFACES = Object.fromEntries(
         .filter(([path]) => !OUTSIDE.has(path))
 );
 
-/** An ICU argument that selects a branch: `{count, plural, …}`, `{name_gender, select, …}`. */
-const ICU_CONSTRUCT = /\{\s*[A-Za-z_][\w.]*\s*,\s*(?:plural|select|selectordinal)\b/g;
+/**
+ * An ICU argument that selects a branch: `{count, plural, …}`, `{name_gender, select, …}`. Its `{` may
+ * be a character reference (`&lbrace;`, `&lcub;`, `&#123;`, `&#x7b;`): in Svelte markup a literal `{`
+ * opens an expression, so ICU in a `<Translate>` or `<Phrase>`'s text can only be written that way.
+ */
+const ICU_CONSTRUCT = /(?:\{|&(?:lbrace|lcub);|&#0*123;?|&#[xX]0*7[bB];?)\s*[A-Za-z_][\w.]*\s*,\s*(?:plural|select|selectordinal)\b/g;
 
 type Role = 'catalog' | 'mig-4' | 'counter-example';
 interface ExemptPassage {
@@ -159,6 +163,14 @@ describe('ICU-7: the check fails on what it exists to catch', () => {
         ['a $t() argument', "{$t('{count, plural, one {# item} other {# items}}', 'Cart', { count })}"],
         ['a $t() argument with no spaces', "{$t('{n,plural,one{# item}other{# items}}', 'Cart', { n })}"],
         ['<Translate> content', '<Translate category="Cart">{count, plural, one {# item} other {# items}}</Translate>'],
+        // In Svelte markup a `{` opens an expression, so ICU written in a unit's text takes character references.
+        [
+            '<Translate> content through &lbrace;',
+            '<Translate category="Cart">You have &lbrace;count, plural, one &lbrace;# item&rbrace; other &lbrace;# items&rbrace;&rbrace;</Translate>',
+        ],
+        ['<Phrase> content through &#123;', '<Phrase>&#123;gender, select, female &#123;She&#125; other &#123;They&#125;&#125; replied</Phrase>'],
+        ['<Phrase> content through &#x7B;', '<Phrase>&#x7B;n,plural,one&#x7B;# file&#x7D;other&#x7B;# files&#x7D;&#x7D;</Phrase>'],
+        ['<Translate> content through &lcub;', '<Translate>&lcub; place , selectordinal, one &lcub;#st&rcub; other &lcub;#th&rcub;&rcub;</Translate>'],
         ['<Phrase> content', '<Phrase>{gender, select, female {She} other {They}} replied</Phrase>'],
         ['a phrase in prose', 'Write `{place, selectordinal, one {#st} two {#nd} other {#th}}` and it works.'],
         ['a doc comment', " * e.g. t('{who_gender, select, male {He} other {They}} left')"],

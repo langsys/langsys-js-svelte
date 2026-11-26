@@ -40,6 +40,11 @@ const blockRow = (rows: DataRow[], id: string) => rows.find((r) => r.type === 'c
 const own = (row: DataRow | undefined) =>
     !row || row.memory_translated ? null : typeof row.translation === 'string' && row.translation !== '' ? row.translation : null;
 const MOVED = ['Buy now', 'Sign in', 'Plain buy', 'Not moved'];
+/** Whether Checkout serves every item the first request registered, and what it serves. */
+async function landed(): Promise<{ ok: boolean; rows: DataRow[] }> {
+    const rows = await served('Checkout');
+    return { ok: MOVED.every((p) => phraseRow(rows, p)) && !!blockRow(rows, CHECKOUT_BLOCK), rows };
+}
 /** The core shares a fetched catalog across request scopes for this long (`SHARE_MS` in its request scope). */
 const SHARE_MS = 60_000;
 const HEADER_BLOCK = generateCustomId('Header', ['Moved block', 'Second paragraph']);
@@ -115,11 +120,12 @@ describe('MOVE-1: the previous category travels as previous_category, and the AP
 
     it("lands each moved item under Checkout holding its previous category's translation as its own, and the control none", async () => {
         let checkout: DataRow[] = [];
-        const landed = await until(async () => {
-            checkout = await served('Checkout');
-            return MOVED.every((p) => phraseRow(checkout, p)) && !!blockRow(checkout, CHECKOUT_BLOCK);
+        const ok = await until(async () => {
+            const now = await landed();
+            checkout = now.rows;
+            return now.ok;
         }, 15_000);
-        expect(landed, `Checkout serves every registered item: ${JSON.stringify(checkout)}`).toBe(true);
+        expect(ok, `Checkout serves every registered item: ${JSON.stringify(checkout)}`).toBe(true);
         expect(own(phraseRow(checkout, 'Buy now'))).toBe('Comprá ya');
         expect(own(phraseRow(checkout, 'Sign in'))).toBe('Ingresá');
         expect(own(phraseRow(checkout, 'Plain buy')), "'' moved it from the entries with no category").toBe('Compra simple');
@@ -137,11 +143,15 @@ describe('MOVE-1: the previous category travels as previous_category, and the AP
 
 describe('MOVE-3: once the catalog holds the moved content, it is neither filled from Header nor registered again', () => {
     it('renders the moved content from Checkout, its hosts unmarked, and sends no registration', async () => {
+        // Its own premise, so it holds run alone too: what the first request registered has landed.
+        expect(await until(async () => (await landed()).ok, 15_000), 'premise: Checkout serves every moved item').toBe(true);
         // A new request fetches the catalog once the one the first request fetched is no longer shared.
         await sleep(Math.max(0, firstAt + SHARE_MS + 1_000 - Date.now()));
         items = [];
         const again = await request();
         expect(again).toMatch(/<p(?![^>]*data-ls-previous)[^>]*>Comprá ya<\/p>/);
+        // `$t()` marks no host and reads the same text from either category, so this line shows only
+        // that it still renders; the phrases and the block, their hosts unmarked, carry the rule.
         expect(again).toContain('<p id="call">Ingresá</p>');
         expect(again).toMatch(/<div(?![^>]*data-ls-previous)[^>]*><p>Bloque movido<\/p>\s*<p>Segundo párrafo<\/p><\/div>/);
         expect(again).toMatch(/<p(?![^>]*data-ls-previous)[^>]*>Compra simple<\/p>/);

@@ -1,7 +1,9 @@
 import { createRequestScope, generateCustomId, type iCategories, type iContentBlock, type RenderedNode } from 'langsys-js-typescript';
 import RenderedNodes from '$lib/components/RenderedNodes.svelte';
 import { prepareNodes } from '$lib/components/transform.js';
+import { t } from '$lib/index.js';
 import { render } from 'svelte/server';
+import { get } from 'svelte/store';
 import { describe, expect, it } from 'vitest';
 import VarContent from './VarContent.svelte';
 
@@ -156,6 +158,21 @@ describe('a nested unit inside a block (VAR-2)', () => {
         expect(translated).toMatch(/<p data-ls-phrase[^>]*>2 modifiche dal 18 ott 2026<\/p>/);
         expect(translated).toMatch(/<p data-ls-phrase[^>]*>18 ott 2026<\/p>/);
         expect(translated).toMatch(/<p data-ls-phrase[^>]*>12\.345 file per 67\.890,5, ovvero 67\.890,5<\/p>/);
+    });
+
+    it('writes a number as given where the translation also selects on its name, and formats it beside a plural (README)', async () => {
+        const selected = 'Selected {n} files';
+        const found = 'Found {n} files';
+        const catalog = {
+            NAMES: {
+                [selected]: '{n, select, other {{n} file selezionati}}',
+                [found]: '{n, plural, one {# file trovato} other {{n} file trovati}}',
+            },
+        } as unknown as iCategories;
+        const scope = await createRequestScope({ locale: 'it-it', catalog });
+        let texts: string[] = [];
+        scope.run(() => (texts = [get(t)(selected, 'NAMES', { n: 12345 }), get(t)(found, 'NAMES', { n: 12345 })]));
+        expect(texts).toEqual(['12345 file selezionati', '12.345 file trovati']);
     });
 
     it('quotes a value or an element an apostrophe opens in a phrase holding an ICU argument, as ICU does, as source as it does translated', async () => {

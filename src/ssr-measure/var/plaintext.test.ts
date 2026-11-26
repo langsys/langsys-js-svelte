@@ -53,4 +53,17 @@ describe('TOK-1: the text inside a <plaintext> is never translated', () => {
         expect(body).toMatch(/<div data-ls-contentblock[^>]*><p>Ciao Ana<\/p>\s*<plaintext>Hello Ana<\/plaintext><\/div>/);
         expect(body).toMatch(/<p data-ls-phrase[^>]*>Leggi i termini <plaintext>Read the terms<\/plaintext><\/p>/);
     });
+
+    it('keeps rendering a <Phrase> from the translation stored under the key it had before, and sends only its new key (the 4.2.0 upgrade note)', async () => {
+        // Through 4.1 (core 0.7.3) a <plaintext>'s text was a slot of the phrase's key.
+        const earlier = 'Read the terms {m0o}Read the terms{m0c}';
+        const { body, sent } = await inScope({ PT: { [earlier]: 'Leggi i termini {m0o}Leggi i termini{m0c}' } } as unknown as iCategories, 'it-it');
+        expect(body).toMatch(/<p data-ls-phrase[^>]*>Leggi i termini <plaintext>Read the terms<\/plaintext><\/p>/);
+        const phrases = sent.filter((s) => s.category === 'PT').map((s) => s.phrase);
+        expect(phrases).toContain('Read the terms {m0o}{m0c}');
+        expect(phrases).not.toContain(earlier);
+        // Control: a translation under any other key is not one of the phrase's, so the source shows.
+        const other = await inScope({ PT: { 'Read the terms {m0o}Other{m0c}': 'Leggi i termini {m0o}Altro{m0c}' } } as unknown as iCategories, 'it-it');
+        expect(other.body).toMatch(/<p data-ls-phrase[^>]*>Read the terms <plaintext>Read the terms<\/plaintext><\/p>/);
+    });
 });

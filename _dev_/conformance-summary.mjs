@@ -14,9 +14,12 @@
  *
  * The spec is read from git by blob, never from a working copy. Set LANGSYS2_DIR if the
  * langsys2 clone is not at ../langsys2.
+ *
+ * Every blob the file cites for a vendored vector file (`<name>.json`, blob `<sha or prefix>`) must be
+ * the blob of `vectors/<name>.json` in this tree, so a row cannot cite a fixture the tree no longer holds.
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -52,8 +55,16 @@ export function specIds(spec) {
     return [...spec.matchAll(/<a id="([a-z]+-\d+)"><\/a>\s*\n###\s/g)].map((m) => m[1].toUpperCase());
 }
 
-export function audit(md, loadSpec) {
+export function audit(md, loadSpec, vectorBlob = () => null) {
     const problems = [];
+
+    for (const [i, text] of md.split('\n').entries()) {
+        for (const m of text.matchAll(/([a-z][a-z-]*\.json)`[^|`]{0,40}?\bblob `([0-9a-f]{7,40})`/g)) {
+            const actual = vectorBlob(m[1]);
+            if (actual === null) problems.push(`line ${i + 1}: cites ${m[1]} blob ${m[2]}, and vectors/ holds no ${m[1]}`);
+            else if (!actual.startsWith(m[2])) problems.push(`line ${i + 1}: cites ${m[1]} blob ${m[2]}; vectors/${m[1]} is blob ${actual}`);
+        }
+    }
 
     const blob = md.match(/^\|\s*\*\*Spec revision read\*\*\s*\|[^\n]*\bblob ([0-9a-f]{40})\b/m)?.[1];
     if (!blob) problems.push('header: no `| **Spec revision read** | … blob <40-hex sha> |` row');
@@ -109,6 +120,12 @@ export function audit(md, loadSpec) {
 }
 
 const gitSpec = (blob) => execFileSync('git', ['-C', LANGSYS2, 'cat-file', '-p', blob], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+/** The blob of `vectors/<name>` in this tree, as `git hash-object` computes it; null when there is no such file. */
+const vendoredBlob = (name) => {
+    const path = join(ROOT, 'vectors', name);
+    if (!existsSync(path)) return null;
+    return execFileSync('git', ['hash-object', path], { encoding: 'utf8' }).trim();
+};
 
 function selfTest() {
     const blob = readFileSync(join(ROOT, 'CONFORMANCE.md'), 'utf8').match(/\bblob ([0-9a-f]{40})\b/)?.[1];
@@ -139,11 +156,19 @@ function selfTest() {
         ['a second status table', `${passing}\n\n| Rule | Status | Tier | Evidence |\n| --- | --- | --- | --- |`, 'expected exactly one'],
         ['a blob that does not resolve', passing.replace(blob, '0'.repeat(40)), 'does not resolve'],
         ['no Profiles row', passing.replace('| **Profiles** | binding |', ''), 'Profiles'],
+        ['a vector blob cited as vendored passes', `${passing}\nVendored \`vectors/x-vectors.json\`, blob \`abcdef12\`.`, null],
+        [
+            'a cited vector blob the vendored file is not',
+            `${passing}\nVendored \`vectors/x-vectors.json\`, blob \`0bcdef12\`.`,
+            'vectors/x-vectors.json is blob',
+        ],
+        ['a cited vector file vectors/ does not hold', `${passing}\nVendored \`y-vectors.json\` (blob \`abcdef12\`).`, 'holds no y-vectors.json'],
     ];
 
+    const fakeVectors = (name) => (name === 'x-vectors.json' ? 'abcdef1234567890abcdef1234567890abcdef12' : null);
     let bad = 0;
     for (const [name, doc, expected] of cases) {
-        const { problems } = audit(doc, gitSpec);
+        const { problems } = audit(doc, gitSpec, fakeVectors);
         const ok = expected === null ? problems.length === 0 : problems.some((p) => p.includes(expected));
         if (!ok) bad++;
         console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${ok ? '' : `  — problems: ${JSON.stringify(problems.slice(0, 3))}`}`);
@@ -154,7 +179,7 @@ function selfTest() {
 
 if (process.argv.includes('--self-test')) selfTest();
 
-const { blob, ids, rows, tally, problems } = audit(readFileSync(join(ROOT, 'CONFORMANCE.md'), 'utf8'), gitSpec);
+const { blob, ids, rows, tally, problems } = audit(readFileSync(join(ROOT, 'CONFORMANCE.md'), 'utf8'), gitSpec, vendoredBlob);
 console.log(`spec     blob ${blob ?? '(none)'} in ${LANGSYS2} — ${ids.length} rule ids`);
 console.log(`file     ${rows} status rows`);
 console.log('');

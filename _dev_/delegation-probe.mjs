@@ -19,7 +19,9 @@
  *
  *   node _dev_/delegation-probe.mjs              # table, plus which core checkout was read
  *   node _dev_/delegation-probe.mjs --check      # exit 1 on any binding hit, dead control,
- *                                                # or mismatch with CONFORMANCE.md's delegated rows
+ *                                                # or mismatch with CONFORMANCE.md's rows: the
+ *                                                # delegated ids, the cited core grade, and each
+ *                                                # row's stated pattern and counts
  *   node _dev_/delegation-probe.mjs --self-test  # prove the counter and the stripper can fail
  */
 import { execFileSync } from 'node:child_process';
@@ -148,6 +150,15 @@ export function count(src, pattern) {
     return (stripComments(src).match(new RegExp(pattern, 'g')) ?? []).length;
 }
 
+/**
+ * What a CONFORMANCE.md evidence cell says its probe found: "probe `/PATTERN/` binding N, core M"
+ * (or "Own-rule probe …"), the pattern's `\|` unescaped back to `|`. Null when the cell states none.
+ */
+export function statedProbe(cell) {
+    const m = cell?.match(/probe `\/((?:[^`\\]|\\.)*)\/` binding (\d+), core (\d+)/i);
+    return m ? { pattern: m[1].replace(/\\\|/g, '|'), binding: Number(m[2]), core: Number(m[3]) } : null;
+}
+
 function walk(dir, exts) {
     const out = [];
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -207,6 +218,13 @@ function selfTest() {
         // The exclusion is doing work: the transform does match a probe the runtime binding does not.
         ['… which does match a probe pattern (WIRE-3)', count(read(walk(BUILD_TIME, ['.ts'])), 'toLowerCase') > 0, true],
         ['core walker reads real files', walk(coreCheckout().src, ['.ts']).length > 10, true],
+        [
+            "a row's stated probe is read, escaped pipes unescaped",
+            JSON.stringify(statedProbe('core row X-1 (implemented, n/a (pure)) · probe `/a\\|b\\(/` binding 0, core 7 · more')),
+            JSON.stringify({ pattern: 'a|b\\(', binding: 0, core: 7 }),
+        ],
+        ['… in the own-rule wording too', statedProbe('Own-rule probe `/x/` binding 0, core 35 (comments stripped)')?.core, 35],
+        ['… and a cell stating no probe reads as none', statedProbe('core row X-1 (implemented, contract)'), null],
     ];
     let bad = 0;
     for (const [name, got, want] of cases) {
@@ -230,9 +248,12 @@ console.log('');
 
 const problems = [];
 const seen = new Set();
+/** What each probe measured, by rule id, for comparing with what its row states. */
+const measured = new Map();
 const probe = (id, pattern) => {
     const b = count(bindingText, pattern);
     const c = count(coreText, pattern);
+    measured.set(id, { pattern, binding: b, core: c });
     const verdict = b !== 0 ? 'BINDING HIT' : c === 0 ? 'DEAD CONTROL' : 'ok';
     if (verdict !== 'ok') problems.push(`${id}: ${verdict} (binding ${b}, core ${c})`);
     console.log(`${id.padEnd(8)} binding ${String(b).padStart(2)}  core ${String(c).padStart(3)}  ${verdict.padEnd(12)} /${pattern}/`);
@@ -264,6 +285,20 @@ for (const line of readFileSync(join(ROOT, 'CONFORMANCE.md'), 'utf8').split('\n'
     const cited = c[4]?.match(/^core row ([A-Z]+-\d+) \(([^,)]+(?: \([^)]*\))?)/);
     if (!cited || cited[1] !== c[1]) problems.push(`${c[1]}: delegated row does not open with "core row ${c[1]} (<grade>…"`);
     else if (coreGrades.get(c[1]) !== cited[2]) problems.push(`${c[1]}: cites the core row as \`${cited[2]}\`, the core grades it \`${coreGrades.get(c[1])}\``);
+}
+
+// Each probed row states its pattern and both counts; they must be what this run measured over
+// the core checkout resolved above, so a row cannot keep the counts of a core it no longer cites.
+for (const line of readFileSync(join(ROOT, 'CONFORMANCE.md'), 'utf8').split('\n')) {
+    const c = cells(line);
+    const got = measured.get(c[1]);
+    // The status table's rows only: the mutation table below it also opens rows with a rule id.
+    if (!got || (c[2] !== 'delegated' && c[2] !== 'implemented')) continue;
+    const stated = statedProbe(c[4]);
+    if (!stated) problems.push(`${c[1]}: the row states no "probe \`/…/\` binding N, core M"`);
+    else if (stated.pattern !== got.pattern) problems.push(`${c[1]}: the row states the probe /${stated.pattern}/, the probe here is /${got.pattern}/`);
+    else if (stated.binding !== got.binding || stated.core !== got.core)
+        problems.push(`${c[1]}: the row states binding ${stated.binding}, core ${stated.core}; this run measures binding ${got.binding}, core ${got.core}`);
 }
 
 const delegated = new Set(delegatedRows());
